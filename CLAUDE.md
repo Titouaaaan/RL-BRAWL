@@ -15,7 +15,7 @@ Toolchain: MSVC from Visual Studio 2026 (it must match python.org Python's compi
 - Build/rebuild Python module after any C++ change: `python -m pip install --no-build-isolation .`
 - Tests: `python -m pytest -q`
 - Benchmark: `python tools/bench.py`
-- Train: `python -u train/ppo.py --opponent dummy|random|scripted|selfplay` (logs/checkpoints in `runs/`, replays in `replays/`, both gitignored). Owner-facing guide: `docs/training.md`.
+- Train: `python -u train/ppo.py --opponent dummy|random|scripted|selfplay`; continue a stopped run with `--resume runs/<run>` (logs/checkpoints in `runs/`, replays in `replays/`, both gitignored). Owner-facing guide: `docs/training.md`.
 - Watch the newest replay: `play.bat replay`. Headless replay check: `<godot_console.exe> --headless --path godot -- --replay=FILE --verify`.
 - ASan debug smoke test: `python -m cmake -S . -B build/debug && python -m cmake --build build/debug --config Debug && build/debug/Debug/smoke.exe`
 

@@ -22,6 +22,8 @@
 #      leaving only the +-1 KO reward.
 #   6. Logging/eval: win rates vs fixed bots, button usage, checkpoints,
 #      replays for watching in Godot.
+#   8. --resume runs/<run> continues a run from its last resume.pt (saved at
+#      every eval): weights, optimizer, iteration, self-play opponents.
 #   7. Self-play is gated: the opponent is a frozen copy of the agent, replaced
 #      only once the learner beats it (like AlphaGo Zero's 55% gate). Retired
 #      opponents form a pool that plays pool_frac of the games.
@@ -104,6 +106,10 @@ class Args:
     """games per bot in each evaluation"""
     hidden: int = 256
     """MLP width"""
+    pool_max: int = 50
+    """selfplay: most retired opponents kept (a random one is dropped when full)"""
+    resume: str = ""
+    """continue a run: path to its folder (runs/<run>); all other options come from that run"""
 
     # Algorithm specific arguments
     total_timesteps: int = 20_000_000  # OURS: was 500000; counted in learner decisions
@@ -208,10 +214,17 @@ def evaluate(policy, opponent, args, n_games):  # OURS
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
+    resume = None  # OURS: continue an earlier run with its own settings
+    if args.resume:
+        resume_dir = Path(args.resume)
+        resume = torch.load(resume_dir / "resume.pt", map_location="cpu", weights_only=False)
+        args = Args(**{**resume["args"], "resume": args.resume})
     args.batch_size = int(args.num_envs * args.num_steps)
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
     args.num_iterations = args.total_timesteps // args.batch_size
     run_name = f"{args.opponent}__{args.exp_name}__{args.seed}__{int(time.time())}"  # OURS: opponent, not env_id
+    if resume is not None:  # OURS: same folder, so TensorBoard continues the same curves
+        run_name = resume_dir.name
     if args.track:
         import wandb
 
@@ -297,12 +310,23 @@ if __name__ == "__main__":
 
     # TRY NOT TO MODIFY: start the game
     global_step = 0
+    start_iteration = 1  # OURS
+    if resume is not None:  # OURS: restore everything the next iterations depend on
+        agent.load_state_dict(resume["agent"])
+        optimizer.load_state_dict(resume["optimizer"])
+        frozen.load_state_dict(resume["frozen"])
+        pool = resume["pool"]
+        generation, gen_start_iter, gate_games, gate_wins = resume["gate"]
+        start_iteration = resume["iteration"] + 1
+        global_step = resume["global_step"]
+        print(f"resumed {run_name} at iteration {start_iteration}")
+    start_step = global_step  # OURS: for SPS after a resume
     start_time = time.time()
     envs.reset()  # OURS
     next_obs = torch.Tensor(envs.obs[:, 0].copy()).to(device)  # OURS: learner = player 0
     next_done = torch.zeros(args.num_envs).to(device)
 
-    for iteration in range(1, args.num_iterations + 1):
+    for iteration in range(start_iteration, args.num_iterations + 1):  # OURS: start_iteration
         # Annealing the rate if instructed to do so.
         if args.anneal_lr:
             frac = 1.0 - (iteration - 1.0) / args.num_iterations
@@ -444,8 +468,8 @@ if __name__ == "__main__":
         writer.add_scalar("losses/approx_kl", approx_kl.item(), global_step)
         writer.add_scalar("losses/clipfrac", np.mean(clipfracs), global_step)
         writer.add_scalar("losses/explained_variance", explained_var, global_step)
-        print("SPS:", int(global_step / (time.time() - start_time)))
-        writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+        print("SPS:", int((global_step - start_step) / (time.time() - start_time)))  # OURS: - start_step
+        writer.add_scalar("charts/SPS", int((global_step - start_step) / (time.time() - start_time)), global_step)
 
         # OURS: game stats, action usage, self-play pool, periodic eval.
         if ep_stats:
@@ -480,6 +504,8 @@ if __name__ == "__main__":
             beaten = gate_games >= args.gate_min_games and gate_rate >= args.gate_win_rate
             if beaten or iteration - gen_start_iter >= args.gate_max_iters:
                 pool.append({k: v.detach().cpu().clone() for k, v in frozen.state_dict().items()})
+                if len(pool) > args.pool_max:  # keep checkpoints small; random drop keeps old and new
+                    pool.pop(random.randrange(len(pool)))
                 frozen.load_state_dict(agent.state_dict())
                 generation += 1
                 print(f"  new opponent: generation {generation} ({'beaten' if beaten else 'timed out'} "
@@ -493,6 +519,13 @@ if __name__ == "__main__":
                 writer.add_scalar(f"eval/win_vs_{name}", w, global_step)
                 print(f"  eval vs {name:7s} win {w:.2f} loss {l:.2f} draw {d:.2f}")
             torch.save(agent.state_dict(), run_dir / "agent_latest.pt")
+            torch.save({  # everything --resume needs
+                "args": {k: v for k, v in vars(args).items() if k != "resume"},
+                "agent": agent.state_dict(), "optimizer": optimizer.state_dict(),
+                "frozen": frozen.state_dict(), "pool": pool,
+                "gate": (generation, gen_start_iter, gate_games, gate_wins),
+                "iteration": iteration, "global_step": global_step,
+            }, run_dir / "resume.pt")
             if iteration % args.keep_every == 0:
                 torch.save(agent.state_dict(), run_dir / f"agent_{iteration:05d}.pt")
 

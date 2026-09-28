@@ -100,6 +100,11 @@ terms give a denser learning signal early on, then fade out:
 
 ## Useful options
 
+**Continuing a run** after a crash, a reboot or Ctrl+C:
+`python train/ppo.py --resume runs\<run>`. It restarts from the last
+evaluation (at most 25 iterations lost) with the run's own settings, and
+TensorBoard continues the same curves.
+
 `python train/ppo.py --help` lists them all. Common ones: `--total-timesteps`
 (learner decisions, default 20M), `--seed`, `--num-envs`, `--ent-coef`,
 `--damage-reward`, `--approach-reward`, `--shaping-anneal` (0 turns shaping
