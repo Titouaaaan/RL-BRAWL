@@ -55,9 +55,14 @@ header lists them; `git log -p train/ppo.py` shows the exact diff).
 *jabber* walks up and jabs, *spacer* keeps its distance and punishes whiffs
 with the heavy, plus dummy and random. (Training against jabber and spacer
 only produced an agent that waited for the opponent to come to it, and
-stood idle against a dummy.) `selfplay`: 80% of games against the current weights, 20% against a
-random past snapshot (one is added every 20 iterations), so the agent
-doesn't forget how to beat older versions of itself.
+stood idle against a dummy.) `selfplay`: 80% of games against the current opponent, 20% against a
+random retired opponent, so the agent doesn't forget how to beat older
+versions of itself. The 80% opponent is a **frozen** copy of the agent
+("gated" self-play): it stays fixed while the learner trains against it,
+and is replaced by the current weights once the learner wins ≥ 55% of at
+least 200 games against it (or after 100 iterations at most). With the live
+weights on both sides, the two players mirrored each other and settled into
+standoffs. `selfplay/win_rate_vs_frozen` and `selfplay/generation` track it.
 
 **Actions** are 45 discrete choices: stick x (3) × stick y (3) × button
 (none, jump, light, heavy, dodge). **Observations** are 121 numbers from the

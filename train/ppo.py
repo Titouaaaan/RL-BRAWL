@@ -22,7 +22,10 @@
 #      Both scale linearly from 1 to 0 over the first shaping_anneal of training,
 #      leaving only the +-1 KO reward.
 #   6. Logging/eval: win rates vs fixed bots, button usage, checkpoints,
-#      snapshot pool for self-play, replays for watching in Godot.
+#      replays for watching in Godot.
+#   7. Self-play is gated: the opponent is a frozen copy of the agent, replaced
+#      only once the learner beats it (like AlphaGo Zero's 55% gate). Retired
+#      opponents form a pool that plays pool_frac of the games.
 import copy  # OURS
 import os
 import random
@@ -82,10 +85,14 @@ class Args:
     """potential-based shaping: reward per 10 units of distance closed, at the start (annealed)"""
     shaping_anneal: float = 0.5
     """fraction of training over which both shaping terms fade to 0 (0 = no shaping at all)"""
-    snapshot_every: int = 20
-    """selfplay: add the current weights to the opponent pool every N iterations"""
+    gate_win_rate: float = 0.55
+    """selfplay: replace the frozen opponent once the learner wins this often against it..."""
+    gate_min_games: int = 200
+    """...measured over at least this many finished games"""
+    gate_max_iters: int = 100
+    """selfplay: replace it anyway after this many iterations, so a stuck learner moves on"""
     pool_frac: float = 0.2
-    """selfplay: fraction of envs that face a pool snapshot instead of the latest weights"""
+    """selfplay: fraction of envs that face an older (retired) opponent instead of the current one"""
     eval_every: int = 25
     """every N iterations: win rate vs the fixed bots, and agent_latest.pt"""
     keep_every: int = 250
@@ -238,27 +245,33 @@ if __name__ == "__main__":
     agent = Agent(fightcore.OBS_DIM, n_actions, args.hidden).to(device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
-    # OURS: the opponent (player 1). Bots are plain functions; self-play uses
-    # the live agent (frozen for the rollout: weights only change in the update
-    # phase) plus a pool of past snapshots for pool_frac of the envs.
+    # OURS: the opponent (player 1). Bots are plain functions. Self-play uses a
+    # frozen copy of the agent ("gated" self-play): it stays fixed while the
+    # learner trains against it, so the learner has a stable target to beat
+    # (with the live weights on both sides, the two sides mirrored each other
+    # and settled into standoffs). Retired opponents join a pool that plays
+    # pool_frac of the games, so older strategies aren't forgotten.
     # "scripted" mixes all four bots: training only against bots that attack taught
     # an agent to wait for them, and it then stood idle against a passive dummy.
     opp_bots = {"dummy": [bots.dummy], "random": [bots.random],
                 "scripted": [bots.jabber, bots.spacer, bots.dummy, bots.random]}
-    pool = []  # past agent weights (CPU state_dicts)
-    pool_agent = copy.deepcopy(agent)  # holds whichever snapshot is being played
+    frozen = copy.deepcopy(agent)  # the current opponent; starts as the untrained agent
+    generation, gen_start_iter, gate_games, gate_wins = 0, 1, 0, 0
+    pool = []  # retired opponents' weights (CPU state_dicts)
+    pool_agent = copy.deepcopy(agent)  # holds whichever retired opponent is being played
     n_pool = int(args.num_envs * args.pool_frac) if args.opponent == "selfplay" else 0
+    n_frozen = args.num_envs - n_pool  # envs [0, n_frozen) face the frozen opponent
 
     def opponent_actions(o):
         if args.opponent in opp_bots:
             groups = opp_bots[args.opponent]  # envs split evenly between the bots
             splits = np.array_split(np.arange(args.num_envs), len(groups))
             return np.concatenate([bot(o[idx]) for bot, idx in zip(groups, splits)])
-        latest = net_policy(agent, device)(o[: args.num_envs - n_pool])
+        current = net_policy(frozen, device)(o[:n_frozen])
         if n_pool == 0:
-            return latest
-        past = net_policy(pool_agent if pool else agent, device)(o[args.num_envs - n_pool :])
-        return np.concatenate([latest, past])
+            return current
+        past = net_policy(pool_agent if pool else frozen, device)(o[n_frozen:])
+        return np.concatenate([current, past])
 
     run_dir.mkdir(parents=True, exist_ok=True)  # OURS
     ep_return = np.zeros(args.num_envs)  # OURS: running episode stats for player 0
@@ -338,6 +351,9 @@ if __name__ == "__main__":
             ep_len += 1
             for i in np.flatnonzero(terminations | truncations):
                 ep_stats.append((ep_return[i], ep_len[i], envs.winner[i] == 0))
+                if i < n_frozen:  # the gate only counts games against the frozen opponent
+                    gate_games += 1
+                    gate_wins += int(envs.winner[i] == 0)
                 ep_return[i], ep_len[i] = 0, 0
 
         # bootstrap value if not done
@@ -460,8 +476,18 @@ if __name__ == "__main__":
         for name, frac_used in zip(("none", "jump", "light", "heavy", "dodge"), buttons):
             writer.add_scalar(f"actions/{name}", frac_used, global_step)
 
-        if args.opponent == "selfplay" and iteration % args.snapshot_every == 0:
-            pool.append({k: v.detach().cpu().clone() for k, v in agent.state_dict().items()})
+        if args.opponent == "selfplay":  # OURS: the gate
+            gate_rate = gate_wins / max(gate_games, 1)
+            writer.add_scalar("selfplay/win_rate_vs_frozen", gate_rate, global_step)
+            writer.add_scalar("selfplay/generation", generation, global_step)
+            beaten = gate_games >= args.gate_min_games and gate_rate >= args.gate_win_rate
+            if beaten or iteration - gen_start_iter >= args.gate_max_iters:
+                pool.append({k: v.detach().cpu().clone() for k, v in frozen.state_dict().items()})
+                frozen.load_state_dict(agent.state_dict())
+                generation += 1
+                print(f"  new opponent: generation {generation} ({'beaten' if beaten else 'timed out'} "
+                      f"at {gate_rate:.0%} over {gate_games} games)")
+                gen_start_iter, gate_games, gate_wins = iteration, 0, 0
 
         if iteration % args.eval_every == 0 or iteration == args.num_iterations:
             me = net_policy(agent, device)
@@ -476,8 +502,8 @@ if __name__ == "__main__":
         if iteration % args.replay_every == 0 or iteration == args.num_iterations:
             # A replay against the training opponent, to watch in Godot (play.bat replay).
             me = net_policy(agent, device)
-            opp = me if args.opponent == "selfplay" else opp_bots[args.opponent][0]
-            opp_name = "self" if args.opponent == "selfplay" else opp_bots[args.opponent][0].__name__
+            opp = net_policy(frozen, device) if args.opponent == "selfplay" else opp_bots[args.opponent][0]
+            opp_name = f"generation {generation}" if args.opponent == "selfplay" else opp_bots[args.opponent][0].__name__
             rep = replay.play_and_record(args.moves_dir, me, opp, args.frame_skip, args.reaction_delay,
                                          meta={"run": run_name, "iteration": iteration, "p1": "agent", "p2": opp_name})
             replay.save(rep, ROOT / "replays" / run_name / f"iter_{iteration:05d}.json")
