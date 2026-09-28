@@ -102,3 +102,17 @@ def test_move_stats_count_player0_moves():
     env.step(acts(1, p1=(0, 1, 2), p2=(0, 0, 2)))  # P1 up-tilt, P2 jab (not counted)
     assert env.move_uses[fightcore.MOVE_NAMES.index("up_tilt")] == 1
     assert env.move_uses.sum() == 1
+
+
+def test_timeout_tie_breaker_rewards_the_player_ahead():
+    env = fightcore.VecEnv(1, MOVES, frame_skip=1, timeout_reward=0.3, damage_reward=0.0)
+    while env.fighter(0, 1)["x"] - env.fighter(0, 0)["x"] > 3.2:
+        env.step(acts(1, p1=(1, 0, 0)))  # run into jab range
+    for _ in range(12):
+        env.step(acts(1))
+    for _ in range(10):
+        env.step(acts(1, p1=(0, 0, 2)))  # land a jab: P1 is ahead on damage
+    while not env.truncated[0]:
+        env.step(acts(1))  # then both wait for the time limit
+    assert env.winner[0] == 0
+    assert np.allclose(env.reward[0], [0.3, -0.3])

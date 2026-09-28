@@ -1,13 +1,16 @@
 // Down-heavy (heavy + down, on the ground): sweeps both sides at once (a
 // negative x means behind you). Low launch angle, so at high % it sends the
 // opponent sideways off the stage. Good when you're not sure where they are.
+// Covering both sides costs it: slower (12 startup) and much longer recovery
+// than the forward heavy, and a bit weaker. (It was 61% of moves vs the bots
+// when it was as fast as the forward heavy.)
 {
-    "total_frames": 38,
+    "total_frames": 46,
     "landing_lag": 0,
     "hitboxes": [
-        {"start": 10, "end": 13, "x": 1.7, "y": 0.5, "radius": 1.1,
-         "damage": 13, "base_kb": 0.6, "kb_growth": 0.013, "angle": 25},
-        {"start": 10, "end": 13, "x": -1.7, "y": 0.5, "radius": 1.1,
-         "damage": 13, "base_kb": 0.6, "kb_growth": 0.013, "angle": 155}
+        {"start": 13, "end": 16, "x": 1.7, "y": 0.5, "radius": 1.1,
+         "damage": 11, "base_kb": 0.55, "kb_growth": 0.012, "angle": 25},
+        {"start": 13, "end": 16, "x": -1.7, "y": 0.5, "radius": 1.1,
+         "damage": 11, "base_kb": 0.55, "kb_growth": 0.012, "angle": 155}
     ]
 }

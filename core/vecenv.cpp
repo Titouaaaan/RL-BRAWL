@@ -166,17 +166,21 @@ void VecEnv::step(const int8_t* actions) {
             if (ev.move_started[0] >= 0) move_uses[ev.move_started[0]] += 1;
             if (ev.hit_move[0] >= 0) move_hits[ev.hit_move[0]] += 1;
         }
-        reward[i * 2] = r[0];
-        reward[i * 2 + 1] = r[1];
-
         float* dst = &obs[size_t(i) * 2 * OBS_DIM];
         if (g.over) {
-            // Stocks ran out = terminated (the value of what follows is 0).
-            // Time ran out = truncated (the game was cut short; PPO should
-            // bootstrap from V(final_obs) instead of treating it as an end).
+            // terminated = someone ran out of stocks, truncated = time ran out.
+            // Both are real endings of the game (the time left is in the
+            // observation), the flags just say which kind.
             terminated[i] = (g.f[0].stocks == 0 || g.f[1].stocks == 0);
             truncated[i] = !terminated[i];
             winner[i] = static_cast<int8_t>(::winner(g));
+            // Tie-breaker: at the time limit, whoever is ahead (see winner():
+            // more stocks, then less damage) gets a small bonus, so
+            // stalling until time runs out is worse than dealing damage.
+            if (truncated[i] && winner[i] >= 0) {
+                r[winner[i]] += params.timeout_reward;
+                r[1 - winner[i]] -= params.timeout_reward;
+            }
             final_hash[i] = hash_state(g);
             write_game_obs(i, &final_obs[size_t(i) * 2 * OBS_DIM]);
             reset_game(i);
@@ -184,6 +188,8 @@ void VecEnv::step(const int8_t* actions) {
             terminated[i] = 0;
             truncated[i] = 0;
         }
+        reward[i * 2] = r[0];
+        reward[i * 2 + 1] = r[1];
         write_game_obs(i, dst);
     }
 }

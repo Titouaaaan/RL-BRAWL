@@ -29,6 +29,7 @@ struct EnvParams {
     int frame_skip = 4;          // sim frames per decision; the action repeats for each
     int reaction_delay = 0;      // observe the state from this many frames ago
     float damage_reward = 0.01f; // reward per % dealt (and penalty per % taken)
+    float timeout_reward = 0.0f; // at the time limit: + for the player with less damage, - for the other
 };
 
 // Writes player `player`'s view of `s` into out[0..OBS_DIM).
@@ -49,7 +50,7 @@ struct VecEnv {
     std::vector<float> final_obs;    // like obs; for games that just ended, their last obs
     std::vector<float> reward;       // [num_envs][2], summed over the frame-skip frames
     std::vector<uint8_t> terminated; // [num_envs] game ended by stocks (a real ending)
-    std::vector<uint8_t> truncated;  // [num_envs] game ended by the time limit (cut short)
+    std::vector<uint8_t> truncated;  // [num_envs] game ended by the time limit
     std::vector<int8_t> winner;      // [num_envs] if it ended: 0, 1, or -1 = draw
     std::vector<uint64_t> final_hash; // [num_envs] if it ended: hash_state of the last state (replay check)
     // Player 0's move statistics summed over all games, for logging. They

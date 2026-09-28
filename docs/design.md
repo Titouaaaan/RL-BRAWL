@@ -80,7 +80,7 @@ Actions are controller inputs and moves are observed through their properties, s
 | Action space | stick x ∈ {−1,0,1}, stick y ∈ {−1,0,1}, button ∈ {none, jump, light, heavy, dodge}: 45 discrete | Fixed (dodge added Sep 28, 2026; changing it again means retraining); the game decides which move comes out |
 | Frame skip | Decide every 4 frames (15 Hz), repeat action between; configurable | Human-like input rate, 4× shorter horizon |
 | Reaction delay | Observe the state k frames ago via a ring buffer; k = 0 in v0 | Nearly free now, painful to retrofit; needed later for fairness |
-| Episode | One game: stocks out or 3 min (10,800 frames, 2,700 decisions) | Time limit = truncation, bootstrap from V |
+| Episode | One game: stocks out or 3 min (10,800 frames, 2,700 decisions) | Time limit is a real ending (time left is observed) with a small tie-breaker reward |
 | Discount | γ ≈ 0.995 (about 13 s horizon at 15 Hz); sweep it | Roughly one stock's worth of planning |
 
 ### Observation (v0: flat vector, egocentric)
@@ -164,7 +164,8 @@ Step 0 is done at the end of phase 4; each phase has a gate that must pass befor
 - Actions are egocentric like observations: player 1's world is mirrored, so its stick x is negated before reaching the game.
 - Action space implemented as Discrete(36), so CleanRL's PPO is used unchanged apart from marked adaptations (`train/ppo.py`).
 - Learner is always player 0; only its experience is trained on (both sides of latest-vs-latest games could be added later for 2x data).
-- Timeouts are truncations: PPO bootstraps with γ·V(final observation).
+- Timeouts: first implemented as truncations (bootstrap from V), then changed to real endings, since the time left is in the observation, plus a ±0.3 tie-breaker for the player ahead so stalling loses to dealing damage.
+- Reaction delay 6 frames (0.1 s) by default in training: with 0, the agent could dodge every attack on reaction, so attacking first never paid and self-play stalled.
 - Reward shaping: potential-based approach shaping (Φ = −distance) plus a damage term, both annealed linearly to 0 over the first half of training, leaving KO-only reward. No per-step time penalty: γ already favors fast KOs, and a penalty invites self-destructing when behind.
 - The `scripted` rung trains against all four bots mixed; jabber+spacer only produced an agent that never attacked a passive opponent.
 - Replays are JSON: per-frame inputs of both players, a copy of the move files, and the final state hash. Godot re-simulates and verifies the hash, which also checks that the Python and Godot builds of the core agree.

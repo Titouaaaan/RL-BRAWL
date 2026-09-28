@@ -11,10 +11,9 @@
 #   2. Actions: Discrete(45), decoded to (stick_x, stick_y, button) by ACTIONS.
 #   3. Opponent: player 1 is a frozen bot or network. Only the learner's
 #      experience is stored and trained on.
-#   4. Truncation bootstrap: when a game hits the time limit, add
-#      gamma * V(final_obs) to that step's reward (CleanRL treats timeouts as
-#      real endings; with 3-minute games that are often timeouts early on,
-#      that would teach the critic the wrong values).
+#   4. Time limit: a real ending, like CleanRL does (the time left is in the
+#      observation, so the 3-minute limit is part of the game, not a cutoff),
+#      with a small tie-breaker reward for whoever is ahead at the limit.
 #   5. Hyperparameters: gamma 0.995 (design doc), 256-unit MLP, 256 envs.
 #   5b. Reward shaping, annealed to zero: potential-based approach shaping
 #      (F = gamma*phi(s') - phi(s), phi = -distance; Ng et al. 1999, doesn't
@@ -77,8 +76,10 @@ class Args:
     """folder with the move JSON files"""
     frame_skip: int = 4
     """sim frames per decision"""
-    reaction_delay: int = 0
-    """observe the game this many frames late"""
+    reaction_delay: int = 6
+    """observe the game this many frames late (6 = 0.1 s, like a quick human reaction)"""
+    timeout_reward: float = 0.3
+    """at the 3-minute limit: + for the player ahead (stocks, then damage), - for the other"""
     damage_reward: float = 0.02
     """reward per % of damage dealt (and penalty per % taken), at the start (annealed)"""
     approach_reward: float = 0.1
@@ -239,7 +240,8 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
     # OURS: env setup. envs.obs etc. are NumPy views that step() updates in place.
-    envs = fightcore.VecEnv(args.num_envs, args.moves_dir, args.frame_skip, args.reaction_delay, args.damage_reward)
+    envs = fightcore.VecEnv(args.num_envs, args.moves_dir, args.frame_skip, args.reaction_delay,
+                            args.damage_reward, args.timeout_reward)
     obs_shape, n_actions = (fightcore.OBS_DIM,), len(ACTIONS)
 
     agent = Agent(fightcore.OBS_DIM, n_actions, args.hidden).to(device)
@@ -334,14 +336,9 @@ if __name__ == "__main__":
             reward = envs.reward[:, 0].copy()
             terminations, truncations = envs.terminated.astype(bool), envs.truncated.astype(bool)
             if shaping > 0:  # OURS: potential-based approach shaping
-                phi_after = phi(envs.obs[:, 0])  # for finished games this is already the NEXT game...
-                phi_after[truncations] = phi(envs.final_obs[truncations, 0])  # ...so use its last obs
-                phi_after[terminations] = 0.0  # a real ending has potential 0 by convention
+                phi_after = phi(envs.obs[:, 0])  # for finished games this is already the NEXT game,
+                phi_after[terminations | truncations] = 0.0  # but an ending has potential 0 anyway
                 reward += shaping * (args.gamma * phi_after - phi_before)
-            if truncations.any():  # OURS: bootstrap through time-limit cutoffs
-                with torch.no_grad():
-                    final_v = agent.get_value(torch.Tensor(envs.final_obs[truncations, 0].copy()).to(device))
-                reward[truncations] += args.gamma * final_v.flatten().cpu().numpy()
             next_done = np.logical_or(terminations, truncations)
             rewards[step] = torch.tensor(reward).to(device).view(-1)
             next_obs, next_done = torch.Tensor(envs.obs[:, 0].copy()).to(device), torch.Tensor(next_done).to(device)

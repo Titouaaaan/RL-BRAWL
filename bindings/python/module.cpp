@@ -46,14 +46,14 @@ NB_MODULE(fightcore, m) {
         // we build the VecEnv inside it with "placement new" (new (ptr) T(...)).
         .def("__init__",
              [](VecEnv* self, int num_envs, const std::string& moves_dir, int frame_skip, int reaction_delay,
-                float damage_reward) {
+                float damage_reward, float timeout_reward) {
                  GameConfig cfg;
                  std::string err = load_moves(cfg, moves_dir);
                  if (!err.empty()) throw std::invalid_argument(err);
-                 new (self) VecEnv(num_envs, cfg, EnvParams{frame_skip, reaction_delay, damage_reward});
+                 new (self) VecEnv(num_envs, cfg, EnvParams{frame_skip, reaction_delay, damage_reward, timeout_reward});
              },
              nb::arg("num_envs"), nb::arg("moves_dir"), nb::arg("frame_skip") = 4, nb::arg("reaction_delay") = 0,
-             nb::arg("damage_reward") = 0.01f)
+             nb::arg("damage_reward") = 0.01f, nb::arg("timeout_reward") = 0.0f)
 
         .def("step",
              [](VecEnv& e, ActionArray actions) {

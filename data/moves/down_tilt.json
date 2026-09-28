@@ -1,11 +1,14 @@
-// Down-tilt (light + down, on the ground): a quick, low poke along the floor.
-// Low angle, so it pushes the opponent away rather than up: good for keeping
-// someone out, and safe-ish because it recovers fast.
+// Down-tilt (light + down, on the ground): a low poke along the floor.
+// Low angle, so it pushes the opponent away rather than up.
+// Balanced against the jab: slower (4 startup vs 2), shorter reach (2.5 vs
+// 2.7) and more recovery (22 frames vs 14), in exchange for a bit more
+// damage. A first training run used it for 78% of all moves when it beat
+// the jab on every stat.
 {
-    "total_frames": 16,
+    "total_frames": 22,
     "landing_lag": 0,
     "hitboxes": [
-        {"start": 4, "end": 6, "x": 1.9, "y": 0.4, "radius": 0.9,
-         "damage": 5, "base_kb": 0.4, "kb_growth": 0.004, "angle": 20}
+        {"start": 5, "end": 7, "x": 1.7, "y": 0.4, "radius": 0.8,
+         "damage": 4, "base_kb": 0.4, "kb_growth": 0.004, "angle": 20}
     ]
 }

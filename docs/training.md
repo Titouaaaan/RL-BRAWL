@@ -36,10 +36,11 @@ header lists them; `git log -p train/ppo.py` shows the exact diff).
    current policy for every game, player 1 (the opponent) picks its own, and
    the game advances 4 frames (frame skip). Only player 0's observations,
    actions, log-probs, values and rewards are stored. That's 32,768 steps.
-2. **Advantages.** GAE (γ = 0.995, λ = 0.95) over the rollout. When a game
-   hits the 3-minute limit, it was cut short rather than finished, so
-   γ·V(last observation) is added to that step's reward (the "truncation
-   bootstrap").
+2. **Advantages.** GAE (γ = 0.995, λ = 0.95) over the rollout.
+   The 3-minute limit is a real ending (the time left is part of the
+   observation), and whoever is ahead then gets a small tie-breaker reward
+   (±0.3, `--timeout-reward`), so waiting out the clock is worse than
+   landing hits.
 3. **Update.** 4 epochs over the rollout in 4 minibatches: the clipped PPO
    objective, clipped value loss, entropy bonus, gradient clipping. Then the
    rollout is thrown away (PPO is on-policy: no replay buffer).
@@ -102,7 +103,9 @@ terms give a denser learning signal early on, then fade out:
 `python train/ppo.py --help` lists them all. Common ones: `--total-timesteps`
 (learner decisions, default 20M), `--seed`, `--num-envs`, `--ent-coef`,
 `--damage-reward`, `--approach-reward`, `--shaping-anneal` (0 turns shaping
-off), `--frame-skip`, `--reaction-delay`, `--eval-every`.
+off), `--timeout-reward`, `--frame-skip`, `--reaction-delay` (default 6
+frames = 0.1 s: the agent sees the game slightly late, so it can't simply
+dodge every attack on reaction), `--eval-every`.
 
 ## Watching games
 
