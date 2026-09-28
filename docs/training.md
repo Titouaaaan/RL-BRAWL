@@ -44,8 +44,11 @@ header lists them; `git log -p train/ppo.py` shows the exact diff).
    objective, clipped value loss, entropy bonus, gradient clipping. Then the
    rollout is thrown away (PPO is on-policy: no replay buffer).
 4. **Every 25 iterations:** 32 games each against dummy, random, jabber and
-   spacer (the `eval/win_vs_*` charts), a checkpoint (`runs/<run>/agent_*.pt`)
-   and one recorded game (`replays/<run>/iter_*.json`).
+   spacer (the `eval/win_vs_*` charts) and `runs/<run>/agent_latest.pt`.
+   A permanent checkpoint every 250 iterations (`agent_*.pt`, ~1 MB each)
+   and a recorded game every 100 (`replays/<run>/iter_*.json`), so a long
+   run stays around 20-40 MB. `runs/` and `replays/` are not in git; delete
+   old runs freely.
 
 **Opponents:** `dummy` never moves. `random` presses random buttons.
 `scripted` splits the games evenly between four bots in `train/bots.py`:
@@ -106,7 +109,7 @@ builds of the core disagree: a bug worth reporting).
 To watch a specific checkpoint against a specific opponent:
 
 ```
-python train/record.py runs\<run>gent_00600.pt --opponent jabber   # dummy, random, jabber, spacer, or self
+python train/record.py runs\<run>\agent_latest.pt --opponent jabber   # dummy, random, jabber, spacer, or self
 play.bat replay
 ```
 
