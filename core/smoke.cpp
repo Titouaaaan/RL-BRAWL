@@ -12,7 +12,7 @@ static GameConfig cfg;
 
 static uint64_t run(int frames) {
     std::mt19937 rng(1234);  // fixed seed, so both runs see the same inputs
-    std::uniform_int_distribution<int> stick(-1, 1), button(0, 3);
+    std::uniform_int_distribution<int> stick(-1, 1), button(0, 4);
     GameState s;
     reset(s, cfg);
     for (int t = 0; t < frames; ++t) {
@@ -46,7 +46,7 @@ int main(int argc, char** argv) {
     // the likeliest place for an out-of-bounds bug) with delay and frame skip.
     VecEnv env(16, cfg, EnvParams{4, 3, 0.01f});
     std::mt19937 rng(7);
-    std::uniform_int_distribution<int> stick(-1, 1), button(0, 3);
+    std::uniform_int_distribution<int> stick(-1, 1), button(0, 4);
     std::vector<int8_t> actions(16 * 2 * 3);
     for (int t = 0; t < 20000; ++t) {
         for (size_t k = 0; k < actions.size(); ++k) actions[k] = int8_t(k % 3 == 2 ? button(rng) : stick(rng));

@@ -41,7 +41,7 @@ One engine-free C++ core, two front ends:
 
 These are deliberate choices; don't change them without revisiting the design doc.
 
-- **Action space is controller-level and fixed forever:** stick x, stick y in {-1,0,1}, button in {none, jump, light, heavy}. The game decides which move comes out.
+- **Action space is controller-level and fixed:** stick x, stick y in {-1,0,1}, button in {none, jump, light, heavy, dodge} (Discrete(45) in PPO). The game decides which move comes out. Dodge was added Sep 28, 2026, which invalidated older checkpoints; changing the button set again means retraining from scratch.
 - **Observations are egocentric:** agent is always player 0, x mirrored to a consistent side. Hitboxes are a padded entity list (N=4) described by properties, never by move ID.
 - **Reaction delay ring buffer** (observe state k frames ago, k=0 in v0) and **frame skip** (default 4) must stay configurable.
 - **Rewards come from `StepEvents`** (hits, damage, KOs) emitted by `step()`, not from diffing state. No positional shaping.

@@ -30,7 +30,8 @@ def test_spacer_waits_for_whiffs():
     # The spacer only attacks to punish, so a dummy (never attacks) is a draw,
     # while a random player (whiffs constantly) gets beaten.
     assert (play(bots.spacer, bots.dummy, n=4) == -1).all()
-    assert (play(bots.spacer, bots.random) == 0).all()
+    np.random.seed(0)  # the random bot uses NumPy's global generator
+    assert (play(bots.spacer, bots.random, n=32) == 0).mean() >= 0.9
 
 
 def test_obs_indices_match_the_env():

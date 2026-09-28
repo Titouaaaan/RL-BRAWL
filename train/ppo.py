@@ -8,7 +8,7 @@
 #   1. Env: our C++ fightcore.VecEnv instead of gym.vector (no gymnasium).
 #      The learner is always player 0 (observations and actions are egocentric,
 #      so both sides are equivalent).
-#   2. Actions: Discrete(36), decoded to (stick_x, stick_y, button) by ACTIONS.
+#   2. Actions: Discrete(45), decoded to (stick_x, stick_y, button) by ACTIONS.
 #   3. Opponent: player 1 is a frozen bot or network. Only the learner's
 #      experience is stored and trained on.
 #   4. Truncation bootstrap: when a game hits the time limit, add
@@ -41,8 +41,8 @@ import bots  # noqa: E402  OURS
 import replay  # noqa: E402  OURS
 
 ROOT = Path(__file__).resolve().parent.parent  # OURS
-# OURS: the 36 discrete actions. Index a = sx*12 + sy*4 + b over sx, sy in {-1,0,1}, b in {0..3}.
-ACTIONS = np.array([(sx, sy, b) for sx in (-1, 0, 1) for sy in (-1, 0, 1) for b in range(4)], dtype=np.int8)
+# OURS: the 45 discrete actions: stick x (3) x stick y (3) x button (none, jump, light, heavy, dodge).
+ACTIONS = np.array([(sx, sy, b) for sx in (-1, 0, 1) for sy in (-1, 0, 1) for b in range(5)], dtype=np.int8)
 
 
 @dataclass
@@ -409,8 +409,8 @@ if __name__ == "__main__":
             print(f"iter {iteration}/{args.num_iterations}  games {len(r)}  return {r.mean():.2f}  "
                   f"win {win.mean():.2f}  length {length.mean():.0f}")
             ep_stats.clear()
-        buttons = np.bincount(ACTIONS[b_actions.long().cpu().numpy()][:, 2], minlength=4) / args.batch_size
-        for name, frac_used in zip(("none", "jump", "light", "heavy"), buttons):
+        buttons = np.bincount(ACTIONS[b_actions.long().cpu().numpy()][:, 2], minlength=5) / args.batch_size
+        for name, frac_used in zip(("none", "jump", "light", "heavy", "dodge"), buttons):
             writer.add_scalar(f"actions/{name}", frac_used, global_step)
 
         if args.opponent == "selfplay" and iteration % args.snapshot_every == 0:

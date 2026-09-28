@@ -103,6 +103,7 @@ public:
         d["move"] = f.move;
         d["hitstun"] = f.hitstun;
         d["invuln"] = f.invuln;
+        d["intangible"] = intangible(f, cfg);
         return d;
     }
 

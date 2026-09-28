@@ -24,6 +24,8 @@ v0 is one character in a mirror match on one flat stage. This is enough to produ
 - **Heavy attack:** slow startup, high damage, KO-capable knockback.
 - **Aerial attack:** one attack usable in the air.
 
+- **Dodge:** on the ground a spot dodge (i-frames, short recovery); in the air an air dodge (i-frames, then helpless until landing, as in Smash).
+
 Left out of v0: shield, grabs, ledges, specials, multiple characters.
 
 ## Simulation core (C++)
@@ -74,7 +76,7 @@ Actions are controller inputs and moves are observed through their properties, s
 
 | Element | v0 choice | Why |
 | --- | --- | --- |
-| Action space | stick x ∈ {−1,0,1}, stick y ∈ {−1,0,1}, button ∈ {none, jump, light, heavy}: 36 discrete, or MultiDiscrete(\[3,3,4\]) | Fixed forever; the game decides which move comes out |
+| Action space | stick x ∈ {−1,0,1}, stick y ∈ {−1,0,1}, button ∈ {none, jump, light, heavy, dodge}: 45 discrete | Fixed (dodge added Sep 28, 2026; changing it again means retraining); the game decides which move comes out |
 | Frame skip | Decide every 4 frames (15 Hz), repeat action between; configurable | Human-like input rate, 4× shorter horizon |
 | Reaction delay | Observe the state k frames ago via a ring buffer; k = 0 in v0 | Nearly free now, painful to retrofit; needed later for fairness |
 | Episode | One game: stocks out or 3 min (10,800 frames, 2,700 decisions) | Time limit = truncation, bootstrap from V |

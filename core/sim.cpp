@@ -39,7 +39,7 @@ static void set_state(Fighter& f, FighterState st) {
 static Input sanitize(Input in) {
     in.stick_x = std::clamp<int8_t>(in.stick_x, -1, 1);
     in.stick_y = std::clamp<int8_t>(in.stick_y, -1, 1);
-    if (in.button > BTN_HEAVY) in.button = BTN_NONE;
+    if (in.button > BTN_DODGE) in.button = BTN_NONE;
     return in;
 }
 
@@ -75,6 +75,9 @@ static void land(Fighter& f, const GameConfig& cfg) {
     } else if (f.state == ST_AIRBORNE) {
         f.landing_lag = static_cast<int16_t>(cfg.landing_lag);
         set_state(f, ST_LANDING);
+    } else if (f.state == ST_AIRDODGE || f.state == ST_HELPLESS) {
+        f.landing_lag = static_cast<int16_t>(cfg.dodge_landing_lag);
+        set_state(f, ST_LANDING);  // touching the ground is what ends helpless
     }
     // In hitstun you keep sliding along the floor until the hitstun ends.
 }
@@ -103,6 +106,13 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
     case ST_LANDING:
         if (f.state_frame >= f.landing_lag) set_state(f, ST_IDLE);
         break;
+    case ST_SPOTDODGE:
+        if (f.state_frame >= cfg.spotdodge_frames) set_state(f, f.grounded ? ST_IDLE : ST_AIRBORNE);
+        break;
+    case ST_AIRDODGE:
+        // An air dodge doesn't end in freedom: you stay helpless until you land.
+        if (f.state_frame >= cfg.airdodge_frames) set_state(f, ST_HELPLESS);
+        break;
     case ST_JUMPSQUAT:
         if (f.state_frame >= cfg.jumpsquat_frames) {
             f.vy = cfg.jump_velocity;
@@ -125,6 +135,8 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
             } else if (in.button == BTN_LIGHT || in.button == BTN_HEAVY) {
                 if (in.stick_x != 0) f.facing = in.stick_x;  // attack the way the stick points
                 start_attack(f, in.button == BTN_LIGHT ? MOVE_JAB : MOVE_HEAVY);
+            } else if (in.button == BTN_DODGE) {
+                set_state(f, ST_SPOTDODGE);
             } else {
                 if (in.stick_x != 0) f.facing = in.stick_x;
                 set_state(f, in.stick_x != 0 ? ST_WALK : ST_IDLE);
@@ -140,6 +152,9 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
                 f.fastfall = false;
             } else if (in.button == BTN_LIGHT || in.button == BTN_HEAVY) {
                 start_attack(f, MOVE_AERIAL);
+            } else if (in.button == BTN_DODGE) {
+                f.fastfall = false;
+                set_state(f, ST_AIRDODGE);
             }
         }
     }
@@ -148,7 +163,7 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
     if (f.grounded) {
         if (f.state == ST_WALK) f.vx = cfg.walk_speed * in.stick_x;
         else f.vx = approach(f.vx, 0.0f, cfg.ground_friction);
-    } else if (f.state != ST_HITSTUN) {  // no drifting while in hitstun
+    } else if (f.state != ST_HITSTUN && f.state != ST_AIRDODGE) {  // no drift in hitstun or mid-dodge
         if (in.stick_x != 0) f.vx = approach(f.vx, cfg.air_speed * in.stick_x, cfg.air_accel);
         else f.vx = approach(f.vx, 0.0f, cfg.air_friction);
     }
@@ -156,7 +171,7 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
     // 4. Vertical velocity: gravity, capped fall speed, fast-fall. Fast-fall
     //    = holding down once you're falling: you drop at a higher fixed speed.
     if (!f.grounded) {
-        if (f.state != ST_HITSTUN && in.stick_y < 0 && f.vy <= 0) f.fastfall = true;
+        if (f.state != ST_HITSTUN && f.state != ST_AIRDODGE && in.stick_y < 0 && f.vy <= 0) f.fastfall = true;
         f.vy = f.fastfall ? -cfg.fastfall_speed : std::max(f.vy - cfg.gravity, -cfg.max_fall_speed);
     }
 
@@ -211,7 +226,7 @@ static bool circle_hits_box(float cx, float cy, float r, float left, float botto
 // Returns the hitbox of attacker `a` that hits victim `v` this frame, or
 // nullptr. If several overlap, the first one listed in the JSON wins.
 static const HitboxDef* find_hit(const Fighter& a, const Fighter& v, const GameConfig& cfg) {
-    if (a.state != ST_ATTACK || a.move_hit || v.invuln > 0) return nullptr;
+    if (a.state != ST_ATTACK || a.move_hit || intangible(v, cfg)) return nullptr;
     for (const HitboxDef& hb : cfg.moves[a.move].hitboxes) {
         if (a.state_frame < hb.start || a.state_frame > hb.end) continue;
         float cx = a.x + a.facing * hb.x;
@@ -290,6 +305,15 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
 
     s.frame += 1;
     if (s.frame >= cfg.time_limit_frames) s.over = true;
+}
+
+bool intangible(const Fighter& f, const GameConfig& cfg) {
+    if (f.invuln > 0) return true;
+    if (f.state == ST_SPOTDODGE)
+        return f.state_frame >= cfg.spotdodge_iframe_start && f.state_frame <= cfg.spotdodge_iframe_end;
+    if (f.state == ST_AIRDODGE)
+        return f.state_frame >= cfg.airdodge_iframe_start && f.state_frame <= cfg.airdodge_iframe_end;
+    return false;
 }
 
 int winner(const GameState& s) {

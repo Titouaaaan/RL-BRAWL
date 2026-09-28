@@ -27,7 +27,7 @@ static void write_fighter(const Fighter& f, const GameConfig& cfg, float m, floa
     *o++ = f.fastfall;
     *o++ = f.jumps_left / 2.0f;
     *o++ = m * f.facing;
-    for (int st = 0; st < NUM_STATES; ++st) *o++ = (f.state == st);  // one-hot, 7 values
+    for (int st = 0; st < NUM_STATES; ++st) *o++ = (f.state == st);  // one-hot, NUM_STATES values
     *o++ = std::min(f.state_frame, 120) / 60.0f;
     *o++ = f.hitstun / 60.0f;
     // Frames until the current move / landing lag ends. The move itself is
@@ -38,6 +38,7 @@ static void write_fighter(const Fighter& f, const GameConfig& cfg, float m, floa
     *o++ = move_left / 60.0f;
     *o++ = lag_left / 60.0f;
     *o++ = f.invuln / float(std::max(cfg.respawn_invuln, 1));
+    *o++ = intangible(f, cfg);  // hits would pass through right now
     // Distances to the blast zones and stage edges. They're linear in x/y,
     // but handing them over directly makes "near the edge" easy to learn.
     *o++ = (cfg.blast_x - x) / cfg.blast_x;

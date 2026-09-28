@@ -12,7 +12,7 @@ N, STEPS, FRAME_SKIP = 4096, 300, 4
 env = fightcore.VecEnv(N, "data/moves", frame_skip=FRAME_SKIP)
 rng = np.random.default_rng(0)
 actions = rng.integers(-1, 2, size=(STEPS, N, 2, 3)).astype(np.int8)  # sticks
-actions[..., 2] = rng.integers(0, 4, size=(STEPS, N, 2))  # buttons
+actions[..., 2] = rng.integers(0, 5, size=(STEPS, N, 2))  # buttons
 
 t = time.perf_counter()
 for a in actions:

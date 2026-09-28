@@ -55,7 +55,7 @@ def save(replay, path):
 def random_policy(obs):
     n = len(obs)
     a = np.random.randint(-1, 2, size=(n, 3))
-    a[:, 2] = np.random.randint(0, 4, size=n)
+    a[:, 2] = np.random.randint(0, 5, size=n)
     return a.astype(np.int8)
 
 

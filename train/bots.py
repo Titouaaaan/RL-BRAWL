@@ -7,16 +7,20 @@ sign(dx) for both players; the env un-mirrors player 1 by itself.
 """
 import numpy as np
 
+import fightcore
+
 # Observation indices, from write_fighter / write_obs in core/vecenv.cpp.
-# If that layout changes, update these (tests/test_bots.py catches most slips).
-ME, OPP = 0, 30  # start of my / the opponent's fighter block
+# Offsets after the state one-hot come from the module's constants, so adding
+# a state doesn't silently shift them (tests/test_bots.py checks the rest).
+F = fightcore.OBS_FIGHTER
+ME, OPP = 0, F  # start of my / the opponent's fighter block
 X, VY, GROUNDED, JUMPS = 0, 3, 8, 10
-STATE = 12  # 7-way one-hot starts here: IDLE WALK JUMPSQUAT AIRBORNE LANDING ATTACK HITSTUN
+STATE = 12  # the state one-hot starts here (order: FighterState in core/sim.h)
 ST_ATTACK, ST_LANDING, ST_HITSTUN = 5, 4, 6
-EDGE_RIGHT, EDGE_LEFT = 28, 29  # distance to the stage edges, / stage_half_width
-DX = 60  # opponent x - my x, / blast_x
+EDGE_RIGHT, EDGE_LEFT = F - 2, F - 1  # distance to the stage edges, / stage_half_width
+DX = 2 * F  # opponent x - my x, / blast_x
 BLAST_X, STAGE_HALF = 55.0, 30.0  # GameConfig values, to turn scaled obs back into units
-NONE, JUMP, LIGHT, HEAVY = 0, 1, 2, 3
+NONE, JUMP, LIGHT, HEAVY, DODGE = 0, 1, 2, 3, 4
 
 
 def dummy(obs):
@@ -26,7 +30,7 @@ def dummy(obs):
 def random(obs):
     n = len(obs)
     a = np.random.randint(-1, 2, size=(n, 3))
-    a[:, 2] = np.random.randint(0, 4, size=n)
+    a[:, 2] = np.random.randint(0, 5, size=n)
     return a.astype(np.int8)
 
 

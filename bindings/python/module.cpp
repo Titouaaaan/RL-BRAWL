@@ -30,7 +30,13 @@ static nb::ndarray<nb::numpy, T> view(std::vector<T>& buf, Dims... dims) {
 
 NB_MODULE(fightcore, m) {
     m.attr("OBS_DIM") = OBS_DIM;
+    m.attr("OBS_FIGHTER") = OBS_FIGHTER;
+    m.attr("NUM_STATES") = (int)NUM_STATES;
     m.attr("ST_HITSTUN") = (int)ST_HITSTUN;
+    m.attr("ST_SPOTDODGE") = (int)ST_SPOTDODGE;
+    m.attr("ST_AIRDODGE") = (int)ST_AIRDODGE;
+    m.attr("ST_HELPLESS") = (int)ST_HELPLESS;
+    m.attr("ST_LANDING") = (int)ST_LANDING;
 
     nb::class_<VecEnv>(m, "VecEnv")
         // A custom __init__: nanobind hands us raw memory for the object and
@@ -95,6 +101,7 @@ NB_MODULE(fightcore, m) {
                  d["hitstun"] = (int)f.hitstun;
                  d["stocks"] = (int)f.stocks;
                  d["invuln"] = (int)f.invuln;
+                 d["intangible"] = intangible(f, e.cfg);
                  d["grounded"] = f.grounded;
                  return d;
              },

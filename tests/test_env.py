@@ -30,7 +30,7 @@ def test_same_egocentric_action_gives_identical_obs():
     assert np.array_equal(env.obs[0, 0], env.obs[0, 1])
     rng = np.random.default_rng(0)
     for _ in range(300):
-        a = (rng.integers(-1, 2), rng.integers(-1, 2), rng.integers(0, 4))
+        a = (rng.integers(-1, 2), rng.integers(-1, 2), rng.integers(0, 5))
         env.step(acts(1, p1=a, p2=a))
         assert np.array_equal(env.obs[0, 0], env.obs[0, 1])
 
@@ -83,7 +83,7 @@ def test_time_limit_is_truncation_and_draw():
 def test_reaction_delay_shows_the_past():
     rng = np.random.default_rng(1)
     seq = rng.integers(-1, 2, size=(50, 1, 2, 3)).astype(np.int8)
-    seq[..., 2] = rng.integers(0, 4, size=(50, 1, 2))
+    seq[..., 2] = rng.integers(0, 5, size=(50, 1, 2))
     now = fightcore.VecEnv(1, MOVES, frame_skip=1)
     late = fightcore.VecEnv(1, MOVES, frame_skip=1, reaction_delay=3)
     history = [now.obs.copy()]

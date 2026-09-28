@@ -10,7 +10,7 @@ MOVES = str(Path(__file__).parent.parent / "data" / "moves")
 def random_actions(steps, num_envs, seed=0):
     rng = np.random.default_rng(seed)
     sticks = rng.integers(-1, 2, size=(steps, num_envs, 2, 2))
-    buttons = rng.integers(0, 4, size=(steps, num_envs, 2, 1))
+    buttons = rng.integers(0, 5, size=(steps, num_envs, 2, 1))
     return np.concatenate([sticks, buttons], axis=-1).astype(np.int8)
 
 

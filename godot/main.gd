@@ -4,17 +4,17 @@ extends Node2D
 
 const COLORS := [Color(0.35, 0.6, 1.0), Color(1.0, 0.45, 0.35)]
 # Same order as the enums in core/sim.h.
-const STATE_NAMES := ["IDLE", "WALK", "JUMPSQUAT", "AIRBORNE", "LANDING", "ATTACK", "HITSTUN"]
+const STATE_NAMES := ["IDLE", "WALK", "JUMPSQUAT", "AIRBORNE", "LANDING", "ATTACK", "HITSTUN", "SPOTDODGE", "AIRDODGE", "HELPLESS"]
 const MOVE_NAMES := ["jab", "heavy", "aerial"]
 const ST_HITSTUN := 6
 
 # Keys are *physical* positions (US layout names), so on AZERTY "WASD" is ZQSD.
-# Player 1: WASD stick, Space jump, J light, K heavy.
-# Player 2: arrow keys stick, Enter jump, the two keys left of right Shift
-#           (. and / on US, : and ! on AZERTY) light and heavy.
+# Player 1: WASD stick, Space jump, J light, K heavy, L dodge.
+# Player 2: arrow keys stick, Enter jump, and the three keys left of right
+#           Shift: , dodge  . light  / heavy (on AZERTY: ; : !).
 const KEYS := [
-	{left = KEY_A, right = KEY_D, down = KEY_S, up = KEY_W, jump = KEY_SPACE, light = KEY_J, heavy = KEY_K},
-	{left = KEY_LEFT, right = KEY_RIGHT, down = KEY_DOWN, up = KEY_UP, jump = KEY_ENTER, light = KEY_PERIOD, heavy = KEY_SLASH},
+	{left = KEY_A, right = KEY_D, down = KEY_S, up = KEY_W, jump = KEY_SPACE, light = KEY_J, heavy = KEY_K, dodge = KEY_L},
+	{left = KEY_LEFT, right = KEY_RIGHT, down = KEY_DOWN, up = KEY_UP, jump = KEY_ENTER, light = KEY_PERIOD, heavy = KEY_SLASH, dodge = KEY_COMMA},
 ]
 
 var game := FightGame.new()
@@ -174,6 +174,7 @@ func read_input(k: Dictionary) -> Array:
 	if held(k.jump): button = 1
 	elif held(k.light): button = 2
 	elif held(k.heavy): button = 3
+	elif held(k.dodge): button = 4
 	return [sx, sy, button]
 
 
@@ -220,7 +221,11 @@ func draw_fighter(i: int, f: Dictionary, font: Font) -> void:
 		color = color.lerp(Color.WHITE, 0.6)  # flash pale while stunned
 	if f.invuln > 0 and (f.invuln / 6) % 2 == 0:
 		color.a = 0.35  # blink while invulnerable after respawning
+	if f.intangible and f.invuln == 0:
+		color.a = 0.3  # see-through while dodging: hits pass through
 	draw_rect(rect, color)
+	if f.intangible:
+		draw_rect(rect, Color.WHITE, false, 2.0)  # white outline = intangible (i-frames)
 	# White "eye" on the side the fighter is facing.
 	draw_circle(to_screen(f.x + f.facing * hw * 0.6, f.y + cfg.hurtbox_h * 0.8), px * 0.25, Color.WHITE)
 	# Small player number above the head.
@@ -241,7 +246,7 @@ func draw_hud(font: Font) -> void:
 	draw_string(font, Vector2(size.x / 2 - 30, 30), "%d:%02d" % [seconds_left / 60, seconds_left % 60], HORIZONTAL_ALIGNMENT_LEFT, -1, 24)
 	var dim := Color(1, 1, 1, 0.6)
 	if replay.is_empty():
-		draw_string(font, Vector2(16, 24), "P1: WASD, Space jump, J light, K heavy   |   P2: arrows, Enter jump, . light, / heavy", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
+		draw_string(font, Vector2(16, 24), "P1: WASD, Space jump, J light, K heavy, L dodge   |   P2: arrows, Enter jump, . light, / heavy, , dodge", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
 		draw_string(font, Vector2(16, 44), "R: reload moves + restart   Esc: quit", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
 	else:
 		var status := "PAUSED" if paused else "%sx" % SPEEDS[speed_i]

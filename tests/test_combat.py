@@ -68,3 +68,33 @@ def test_can_turn_in_air_but_not_mid_aerial():
     for _ in range(3):
         act(env, p1=(1, 0, 0))  # stick right during the aerial...
     assert env.fighter(0, 0)["facing"] == -1  # ...doesn't flip the move
+
+
+def test_spot_dodge_makes_a_jab_whiff():
+    env = fightcore.VecEnv(1, str(MOVES), frame_skip=1)
+    for _ in range(66):
+        act(env, p1=(1, 0, 0))  # walk into jab range
+    act(env, p2=(0, 0, 4))  # P2 starts a spot dodge...
+    for _ in range(4):
+        act(env, p1=(0, 0, 2), p2=(0, 0, 4))  # ...and P1 jabs into it
+    assert env.fighter(0, 1)["intangible"]
+    assert env.fighter(0, 1)["percent"] == 0  # the jab passed through
+
+
+def test_air_dodge_leaves_you_helpless_until_landing():
+    env = fightcore.VecEnv(1, str(MOVES), frame_skip=1)
+    act(env, p1=(0, 0, 1))  # jump
+    for _ in range(4):
+        act(env)  # jumpsquat, then airborne
+    act(env, p1=(0, 0, 4))  # air dodge
+    for _ in range(30):
+        act(env)
+    f = env.fighter(0, 0)
+    assert f["state"] == fightcore.ST_HELPLESS and not f["grounded"]
+    act(env, p1=(0, 0, 1))  # jump is ignored while helpless
+    assert env.fighter(0, 0)["state"] == fightcore.ST_HELPLESS
+    for _ in range(200):
+        act(env, p1=(0, 0, 2))  # attacks are ignored too, all the way down
+        if env.fighter(0, 0)["grounded"]:
+            break
+    assert env.fighter(0, 0)["state"] == fightcore.ST_LANDING  # landing lag, then free

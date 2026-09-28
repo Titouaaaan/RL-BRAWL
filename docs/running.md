@@ -20,6 +20,7 @@ Keys are matched by **position** on the keyboard, so on AZERTY, "WASD" is really
 | Jump | Space | Enter |
 | Light attack | J | `.` (`:` on AZERTY) |
 | Heavy attack | K | `/` (`!` on AZERTY) |
+| Dodge | L | `,` (`;` on AZERTY) |
 
 **R** reloads the move files and restarts. **Esc** quits.
 
@@ -27,6 +28,9 @@ Keys are matched by **position** on the keyboard, so on AZERTY, "WASD" is really
 - Light or heavy in the air: **aerial**. You can turn around in the air, so hold the stick backward to hit behind you. Facing locks once the aerial starts. Landing during it costs landing lag.
 - Holding the attack button repeats the move. Jumping needs a fresh press.
 - Hold **down** while falling to **fast-fall** (drop faster).
+- **Dodge** on the ground: a *spot dodge*. You're intangible (hits pass through you) for frames 3-15 of 26, then stuck for a moment.
+- **Dodge** in the air: an *air dodge*. Intangible for frames 3-18, and afterwards you're **helpless**: you can drift but can't jump, attack or dodge until you touch the ground (then 10 frames of landing lag). Careful off the stage: an air dodge there usually means falling to your doom.
+- While intangible, a fighter is drawn see-through with a white outline.
 - Leave the faint blast-zone area and you lose a stock. You respawn above the stage, blinking and invulnerable for 2 seconds.
 
 **Reading the screen:** hitboxes are circles with a red rim, faded once the move has already hit. A fighter flashes pale while in hitstun. The text next to the stocks is the state machine's state, e.g. `ATTACK heavy 12` = frame 12 of the heavy, `HITSTUN 3 (17 left)`.
@@ -47,7 +51,7 @@ Each move is a file in `data/moves/` (`jab.json`, `heavy.json`, `aerial.json`). 
 | `base_kb`, `kb_growth` | Knockback (launch speed) = `base_kb + kb_growth * victim %`. Hitstun frames = knockback * 25. |
 | `angle` | Launch direction in degrees: 0 = straight forward, 90 = straight up. |
 
-Movement numbers (walk speed, gravity, blast zones and so on) live in `GameConfig` in `core/sim.h`. Those do need a rebuild, which `play.bat` does for you.
+Movement and dodge numbers (walk speed, gravity, dodge frames, blast zones and so on) live in `GameConfig` in `core/sim.h`. Those do need a rebuild, which `play.bat` does for you.
 
 ## What happens when you run it
 

@@ -15,8 +15,8 @@
 // ---------------------------------------------------------------------------
 
 // Only one button can be pressed per frame. That matches the RL action space,
-// which is button in {none, jump, light, heavy}.
-enum Button : uint8_t { BTN_NONE = 0, BTN_JUMP = 1, BTN_LIGHT = 2, BTN_HEAVY = 3 };
+// which is button in {none, jump, light, heavy, dodge}.
+enum Button : uint8_t { BTN_NONE = 0, BTN_JUMP = 1, BTN_LIGHT = 2, BTN_HEAVY = 3, BTN_DODGE = 4 };
 
 // One player's controller input for a single frame.
 struct Input {
@@ -70,7 +70,10 @@ enum FighterState : uint8_t {
     ST_LANDING = 4,    // landing lag: stuck for a few frames after touching down
     ST_ATTACK = 5,     // doing a move (see Fighter::move)
     ST_HITSTUN = 6,    // got hit: can't act until `hitstun` runs out
-    NUM_STATES = 7,
+    ST_SPOTDODGE = 7,  // dodge on the ground: briefly intangible, then a short recovery
+    ST_AIRDODGE = 8,   // dodge in the air: briefly intangible, then helpless
+    ST_HELPLESS = 9,   // after an air dodge: can only drift until touching the ground
+    NUM_STATES = 10,
 };
 
 struct Fighter {
@@ -121,6 +124,11 @@ struct GameConfig {
     float fastfall_speed = 1.6f;
     int jumpsquat_frames = 3;
     int landing_lag = 3;  // after a normal landing (aerials use their own)
+    // Dodges. "Intangible" (i-frames) = hitboxes pass through you. Frames
+    // count from 1 like move frames: intangible on frames start..end.
+    int spotdodge_frames = 26, spotdodge_iframe_start = 3, spotdodge_iframe_end = 15;
+    int airdodge_frames = 30, airdodge_iframe_start = 3, airdodge_iframe_end = 18;
+    int dodge_landing_lag = 10;  // landing during/after an air dodge
     // Body
     float hurtbox_w = 2.0f, hurtbox_h = 3.0f;
     // Combat
@@ -176,6 +184,10 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
 
 // Writes up to `max` currently active hitboxes into `out`; returns how many.
 int active_hitboxes(const GameState& s, const GameConfig& cfg, ActiveHitbox out[], int max);
+
+// True if hits pass through this fighter right now (respawn invulnerability
+// or the i-frames of a dodge).
+bool intangible(const Fighter& f, const GameConfig& cfg);
 
 // Who is winning: 0 or 1, or -1 for a draw. More stocks wins; with equal
 // stocks (a timeout), less damage wins.
