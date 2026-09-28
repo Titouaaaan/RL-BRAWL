@@ -292,6 +292,13 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
     if (s.frame >= cfg.time_limit_frames) s.over = true;
 }
 
+int winner(const GameState& s) {
+    const Fighter &a = s.f[0], &b = s.f[1];
+    if (a.stocks != b.stocks) return a.stocks > b.stocks ? 0 : 1;
+    if (a.percent != b.percent) return a.percent < b.percent ? 0 : 1;
+    return -1;
+}
+
 int active_hitboxes(const GameState& s, const GameConfig& cfg, ActiveHitbox out[], int max) {
     int n = 0;
     for (int p = 0; p < 2; ++p) {

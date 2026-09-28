@@ -21,7 +21,7 @@ def act(env, p1=(0, 0, 0), p2=(0, 0, 0)):
 
 
 def test_jab_damage_knockback_hitstun():
-    env = fightcore.VecEnv(1, str(MOVES))
+    env = fightcore.VecEnv(1, str(MOVES), frame_skip=1)
     for _ in range(66):  # walk P1 right until P2 is in jab range
         act(env, p1=(1, 0, 0))
     for _ in range(10):  # hold light until the jab connects
@@ -39,7 +39,7 @@ def test_jab_damage_knockback_hitstun():
 
 
 def test_walk_off_stage_loses_stock_and_respawns():
-    env = fightcore.VecEnv(1, str(MOVES))
+    env = fightcore.VecEnv(1, str(MOVES), frame_skip=1)
     for _ in range(600):
         act(env, p2=(-1, 0, 0))  # P2 walks left off the stage
         if env.fighter(0, 1)["stocks"] < 3:
@@ -58,7 +58,7 @@ def test_bad_move_file_gives_readable_error(tmp_path):
 
 
 def test_can_turn_in_air_but_not_mid_aerial():
-    env = fightcore.VecEnv(1, str(MOVES))
+    env = fightcore.VecEnv(1, str(MOVES), frame_skip=1)
     act(env, p1=(0, 0, 1))  # jump (P1 starts facing right)
     for _ in range(5):  # jumpsquat, then airborne, holding left
         act(env, p1=(-1, 0, 0))

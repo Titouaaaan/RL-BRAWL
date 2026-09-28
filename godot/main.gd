@@ -163,10 +163,5 @@ func state_label(f: Dictionary) -> String:
 
 
 func winner_text() -> String:
-	var a: Dictionary = game.get_fighter(0)
-	var b: Dictionary = game.get_fighter(1)
-	if a.stocks != b.stocks:
-		return "P1 wins!" if a.stocks > b.stocks else "P2 wins!"
-	if a.percent != b.percent:  # time out with equal stocks: lower damage wins
-		return "P1 wins!" if a.percent < b.percent else "P2 wins!"
-	return "Draw"
+	var w: int = game.get_winner()  # same rule the RL side uses, from core/sim.cpp
+	return "Draw" if w < 0 else "P%d wins!" % (w + 1)

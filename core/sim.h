@@ -174,6 +174,10 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
 // Writes up to `max` currently active hitboxes into `out`; returns how many.
 int active_hitboxes(const GameState& s, const GameConfig& cfg, ActiveHitbox out[], int max);
 
+// Who is winning: 0 or 1, or -1 for a draw. More stocks wins; with equal
+// stocks (a timeout), less damage wins.
+int winner(const GameState& s);
+
 // The combat formulas, exposed so tests can check them directly.
 float knockback(const HitboxDef& hb, float victim_percent);
 int hitstun_frames(float knockback, const GameConfig& cfg);

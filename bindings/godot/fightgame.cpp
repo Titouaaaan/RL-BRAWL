@@ -37,6 +37,7 @@ protected:
         ClassDB::bind_method(D_METHOD("get_hitboxes"), &FightGame::get_hitboxes);
         ClassDB::bind_method(D_METHOD("get_frame"), &FightGame::get_frame);
         ClassDB::bind_method(D_METHOD("is_over"), &FightGame::is_over);
+        ClassDB::bind_method(D_METHOD("get_winner"), &FightGame::get_winner);
         ClassDB::bind_method(D_METHOD("get_config"), &FightGame::get_config);
     }
 
@@ -104,6 +105,7 @@ public:
 
     int64_t get_frame() const { return state.frame; }
     bool is_over() const { return state.over; }
+    int64_t get_winner() const { return winner(state); }  // 0, 1, or -1 = draw
 
     // The numbers the drawing code needs, so sizes on screen always match the sim.
     Dictionary get_config() const {
