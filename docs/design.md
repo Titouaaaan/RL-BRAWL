@@ -156,6 +156,16 @@ Step 0 is done at the end of phase 4; each phase has a gate that must pass befor
 
 &#91;embedded content: phases 0–5 · each with its gate\]
 
+**Decisions made during phases 1-3 (Sep 28, 2026):**
+
+- Actions are egocentric like observations: player 1's world is mirrored, so its stick x is negated before reaching the game.
+- Action space implemented as Discrete(36), so CleanRL's PPO is used unchanged apart from marked adaptations (`train/ppo.py`).
+- Learner is always player 0; only its experience is trained on (both sides of latest-vs-latest games could be added later for 2x data).
+- Timeouts are truncations: PPO bootstraps with γ·V(final observation).
+- Replays are JSON: per-frame inputs of both players, a copy of the move files, and the final state hash. Godot re-simulates and verifies the hash, which also checks that the Python and Godot builds of the core agree.
+- No Gymnasium wrapper: two-player self-play doesn't fit its single-agent API.
+- A move's hitboxes each have a start..end frame window (instead of a list per active frame); respawn uses an invulnerability timer instead of a Respawning state.
+
 **Plan change (Sep 28, 2026):** the Godot front end moves from phase 5 to right after phase 0 and grows alongside the core, so that every phase can be followed visually. Phase 5 keeps only the player-facing work (playing against a trained bot, polish).
 
 Phase 0 is small but, for a C++ beginner, it is where the most frustrating hours go (build systems, not the language), so it is kept separate. Claude Code is well suited to it.

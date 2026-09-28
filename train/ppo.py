@@ -1,10 +1,31 @@
 # docs and experiment results can be found at https://docs.cleanrl.dev/rl-algorithms/ppo/#ppopy
+#
+# OURS: adapted from CleanRL's ppo.py (MIT license, see train/LICENSE-cleanrl),
+# commit fe8d8a03c41a7ef5b523e2e354bd01c363e786bb. The unmodified file is the
+# previous git commit, so `git log -p train/ppo.py` shows every change. Every
+# changed or added line is marked "OURS". The PPO update itself is untouched.
+# Changes:
+#   1. Env: our C++ fightcore.VecEnv instead of gym.vector (no gymnasium).
+#      The learner is always player 0 (observations and actions are egocentric,
+#      so both sides are equivalent).
+#   2. Actions: Discrete(36), decoded to (stick_x, stick_y, button) by ACTIONS.
+#   3. Opponent: player 1 is a frozen bot or network. Only the learner's
+#      experience is stored and trained on.
+#   4. Truncation bootstrap: when a game hits the time limit, add
+#      gamma * V(final_obs) to that step's reward (CleanRL treats timeouts as
+#      real endings; with 3-minute games that are often timeouts early on,
+#      that would teach the critic the wrong values).
+#   5. Hyperparameters: gamma 0.995 (design doc), 256-unit MLP, 256 envs.
+#   6. Logging/eval: win rates vs fixed bots, button usage, checkpoints,
+#      snapshot pool for self-play, replays for watching in Godot.
+import copy  # OURS
 import os
 import random
+import sys  # OURS
 import time
 from dataclasses import dataclass
+from pathlib import Path  # OURS
 
-import gymnasium as gym
 import numpy as np
 import torch
 import torch.nn as nn
@@ -12,6 +33,16 @@ import torch.optim as optim
 import tyro
 from torch.distributions.categorical import Categorical
 from torch.utils.tensorboard import SummaryWriter
+
+import fightcore  # OURS
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # OURS: import train/ siblings
+import bots  # noqa: E402  OURS
+import replay  # noqa: E402  OURS
+
+ROOT = Path(__file__).resolve().parent.parent  # OURS
+# OURS: the 36 discrete actions. Index a = sx*12 + sy*4 + b over sx, sy in {-1,0,1}, b in {0..3}.
+ACTIONS = np.array([(sx, sy, b) for sx in (-1, 0, 1) for sy in (-1, 0, 1) for b in range(4)], dtype=np.int8)
 
 
 @dataclass
@@ -30,23 +61,41 @@ class Args:
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
-    capture_video: bool = False
-    """whether to capture videos of the agent performances (check out `videos` folder)"""
+
+    # OURS: environment and opponent
+    opponent: str = "dummy"
+    """who player 1 is: dummy, random, scripted (jabber + spacer), or selfplay"""
+    moves_dir: str = str(ROOT / "data" / "moves")
+    """folder with the move JSON files"""
+    frame_skip: int = 4
+    """sim frames per decision"""
+    reaction_delay: int = 0
+    """observe the game this many frames late"""
+    damage_reward: float = 0.01
+    """reward per % of damage dealt (and penalty per % taken)"""
+    snapshot_every: int = 20
+    """selfplay: add the current weights to the opponent pool every N iterations"""
+    pool_frac: float = 0.2
+    """selfplay: fraction of envs that face a pool snapshot instead of the latest weights"""
+    eval_every: int = 25
+    """every N iterations: win rate vs the fixed bots, a replay, a checkpoint"""
+    eval_games: int = 32
+    """games per bot in each evaluation"""
+    hidden: int = 256
+    """MLP width"""
 
     # Algorithm specific arguments
-    env_id: str = "CartPole-v1"
-    """the id of the environment"""
-    total_timesteps: int = 500000
+    total_timesteps: int = 20_000_000  # OURS: was 500000; counted in learner decisions
     """total timesteps of the experiments"""
     learning_rate: float = 2.5e-4
     """the learning rate of the optimizer"""
-    num_envs: int = 4
+    num_envs: int = 256  # OURS: was 4
     """the number of parallel game environments"""
     num_steps: int = 128
     """the number of steps to run in each environment per policy rollout"""
     anneal_lr: bool = True
     """Toggle learning rate annealing for policy and value networks"""
-    gamma: float = 0.99
+    gamma: float = 0.995  # OURS: was 0.99; ~13 s horizon at 15 decisions/s
     """the discount factor gamma"""
     gae_lambda: float = 0.95
     """the lambda for the general advantage estimation"""
@@ -78,19 +127,6 @@ class Args:
     """the number of iterations (computed in runtime)"""
 
 
-def make_env(env_id, idx, capture_video, run_name):
-    def thunk():
-        if capture_video and idx == 0:
-            env = gym.make(env_id, render_mode="rgb_array")
-            env = gym.wrappers.RecordVideo(env, f"videos/{run_name}")
-        else:
-            env = gym.make(env_id)
-        env = gym.wrappers.RecordEpisodeStatistics(env)
-        return env
-
-    return thunk
-
-
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     torch.nn.init.orthogonal_(layer.weight, std)
     torch.nn.init.constant_(layer.bias, bias_const)
@@ -98,21 +134,21 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
 
 
 class Agent(nn.Module):
-    def __init__(self, envs):
+    def __init__(self, obs_dim, n_actions, hidden):  # OURS: sizes passed in (no gym spaces)
         super().__init__()
         self.critic = nn.Sequential(
-            layer_init(nn.Linear(np.array(envs.single_observation_space.shape).prod(), 64)),
+            layer_init(nn.Linear(obs_dim, hidden)),
             nn.Tanh(),
-            layer_init(nn.Linear(64, 64)),
+            layer_init(nn.Linear(hidden, hidden)),
             nn.Tanh(),
-            layer_init(nn.Linear(64, 1), std=1.0),
+            layer_init(nn.Linear(hidden, 1), std=1.0),
         )
         self.actor = nn.Sequential(
-            layer_init(nn.Linear(np.array(envs.single_observation_space.shape).prod(), 64)),
+            layer_init(nn.Linear(obs_dim, hidden)),
             nn.Tanh(),
-            layer_init(nn.Linear(64, 64)),
+            layer_init(nn.Linear(hidden, hidden)),
             nn.Tanh(),
-            layer_init(nn.Linear(64, envs.single_action_space.n), std=0.01),
+            layer_init(nn.Linear(hidden, n_actions), std=0.01),
         )
 
     def get_value(self, x):
@@ -126,12 +162,35 @@ class Agent(nn.Module):
         return action, probs.log_prob(action), probs.entropy(), self.critic(x)
 
 
+# OURS: helpers for playing games outside the training rollout.
+def net_policy(net, device):
+    """Wraps a network as a bot-style policy: obs (n, OBS_DIM) -> actions (n, 3)."""
+
+    def policy(o):
+        with torch.no_grad():
+            a, _, _, _ = net.get_action_and_value(torch.as_tensor(o, device=device))
+        return ACTIONS[a.cpu().numpy()]
+
+    return policy
+
+
+def evaluate(policy, opponent, args, n_games):  # OURS
+    """Plays n_games to the end; returns (win, loss, draw) fractions for player 0."""
+    env = fightcore.VecEnv(n_games, args.moves_dir, args.frame_skip, args.reaction_delay)
+    winner = np.full(n_games, -2)
+    while (winner == -2).any():
+        env.step(np.stack([policy(env.obs[:, 0]), opponent(env.obs[:, 1])], axis=1))
+        done = (env.terminated | env.truncated).astype(bool) & (winner == -2)
+        winner[done] = env.winner[done]
+    return (winner == 0).mean(), (winner == 1).mean(), (winner == -1).mean()
+
+
 if __name__ == "__main__":
     args = tyro.cli(Args)
     args.batch_size = int(args.num_envs * args.num_steps)
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
     args.num_iterations = args.total_timesteps // args.batch_size
-    run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
+    run_name = f"{args.opponent}__{args.exp_name}__{args.seed}__{int(time.time())}"  # OURS: opponent, not env_id
     if args.track:
         import wandb
 
@@ -144,7 +203,8 @@ if __name__ == "__main__":
             monitor_gym=True,
             save_code=True,
         )
-    writer = SummaryWriter(f"runs/{run_name}")
+    run_dir = ROOT / "runs" / run_name  # OURS: absolute, so it works from any folder
+    writer = SummaryWriter(str(run_dir))
     writer.add_text(
         "hyperparameters",
         "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
@@ -158,18 +218,40 @@ if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
-    # env setup
-    envs = gym.vector.SyncVectorEnv(
-        [make_env(args.env_id, i, args.capture_video, run_name) for i in range(args.num_envs)],
-    )
-    assert isinstance(envs.single_action_space, gym.spaces.Discrete), "only discrete action space is supported"
+    # OURS: env setup. envs.obs etc. are NumPy views that step() updates in place.
+    envs = fightcore.VecEnv(args.num_envs, args.moves_dir, args.frame_skip, args.reaction_delay, args.damage_reward)
+    obs_shape, n_actions = (fightcore.OBS_DIM,), len(ACTIONS)
 
-    agent = Agent(envs).to(device)
+    agent = Agent(fightcore.OBS_DIM, n_actions, args.hidden).to(device)
     optimizer = optim.Adam(agent.parameters(), lr=args.learning_rate, eps=1e-5)
 
+    # OURS: the opponent (player 1). Bots are plain functions; self-play uses
+    # the live agent (frozen for the rollout: weights only change in the update
+    # phase) plus a pool of past snapshots for pool_frac of the envs.
+    opp_bots = {"dummy": [bots.dummy], "random": [bots.random], "scripted": [bots.jabber, bots.spacer]}
+    pool = []  # past agent weights (CPU state_dicts)
+    pool_agent = copy.deepcopy(agent)  # holds whichever snapshot is being played
+    n_pool = int(args.num_envs * args.pool_frac) if args.opponent == "selfplay" else 0
+
+    def opponent_actions(o):
+        if args.opponent in opp_bots:
+            groups = opp_bots[args.opponent]  # envs split evenly between the bots
+            splits = np.array_split(np.arange(args.num_envs), len(groups))
+            return np.concatenate([bot(o[idx]) for bot, idx in zip(groups, splits)])
+        latest = net_policy(agent, device)(o[: args.num_envs - n_pool])
+        if n_pool == 0:
+            return latest
+        past = net_policy(pool_agent if pool else agent, device)(o[args.num_envs - n_pool :])
+        return np.concatenate([latest, past])
+
+    run_dir.mkdir(parents=True, exist_ok=True)  # OURS
+    ep_return = np.zeros(args.num_envs)  # OURS: running episode stats for player 0
+    ep_len = np.zeros(args.num_envs, dtype=np.int64)
+    ep_stats = []  # (return, length, win) of games finished since the last log
+
     # ALGO Logic: Storage setup
-    obs = torch.zeros((args.num_steps, args.num_envs) + envs.single_observation_space.shape).to(device)
-    actions = torch.zeros((args.num_steps, args.num_envs) + envs.single_action_space.shape).to(device)
+    obs = torch.zeros((args.num_steps, args.num_envs) + obs_shape).to(device)  # OURS: obs_shape
+    actions = torch.zeros((args.num_steps, args.num_envs)).to(device)  # OURS: Discrete -> scalar per env
     logprobs = torch.zeros((args.num_steps, args.num_envs)).to(device)
     rewards = torch.zeros((args.num_steps, args.num_envs)).to(device)
     dones = torch.zeros((args.num_steps, args.num_envs)).to(device)
@@ -178,8 +260,8 @@ if __name__ == "__main__":
     # TRY NOT TO MODIFY: start the game
     global_step = 0
     start_time = time.time()
-    next_obs, _ = envs.reset(seed=args.seed)
-    next_obs = torch.Tensor(next_obs).to(device)
+    envs.reset()  # OURS
+    next_obs = torch.Tensor(envs.obs[:, 0].copy()).to(device)  # OURS: learner = player 0
     next_done = torch.zeros(args.num_envs).to(device)
 
     for iteration in range(1, args.num_iterations + 1):
@@ -188,6 +270,9 @@ if __name__ == "__main__":
             frac = 1.0 - (iteration - 1.0) / args.num_iterations
             lrnow = frac * args.learning_rate
             optimizer.param_groups[0]["lr"] = lrnow
+
+        if pool:  # OURS: a fresh pool opponent for this rollout
+            pool_agent.load_state_dict(random.choice(pool))
 
         for step in range(0, args.num_steps):
             global_step += args.num_envs
@@ -201,18 +286,25 @@ if __name__ == "__main__":
             actions[step] = action
             logprobs[step] = logprob
 
-            # TRY NOT TO MODIFY: execute the game and log data.
-            next_obs, reward, terminations, truncations, infos = envs.step(action.cpu().numpy())
+            # OURS: execute the game. Both players act; only player 0's step is stored.
+            joint = np.stack([ACTIONS[action.cpu().numpy()], opponent_actions(envs.obs[:, 1])], axis=1)
+            envs.step(joint)
+            reward = envs.reward[:, 0].copy()
+            terminations, truncations = envs.terminated.astype(bool), envs.truncated.astype(bool)
+            if truncations.any():  # OURS: bootstrap through time-limit cutoffs
+                with torch.no_grad():
+                    final_v = agent.get_value(torch.Tensor(envs.final_obs[truncations, 0].copy()).to(device))
+                reward[truncations] += args.gamma * final_v.flatten().cpu().numpy()
             next_done = np.logical_or(terminations, truncations)
             rewards[step] = torch.tensor(reward).to(device).view(-1)
-            next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(next_done).to(device)
+            next_obs, next_done = torch.Tensor(envs.obs[:, 0].copy()).to(device), torch.Tensor(next_done).to(device)
 
-            if "final_info" in infos:
-                for info in infos["final_info"]:
-                    if info and "episode" in info:
-                        print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
-                        writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
-                        writer.add_scalar("charts/episodic_length", info["episode"]["l"], global_step)
+            # OURS: episode stats (replaces gym's RecordEpisodeStatistics)
+            ep_return += envs.reward[:, 0]
+            ep_len += 1
+            for i in np.flatnonzero(terminations | truncations):
+                ep_stats.append((ep_return[i], ep_len[i], envs.winner[i] == 0))
+                ep_return[i], ep_len[i] = 0, 0
 
         # bootstrap value if not done
         with torch.no_grad():
@@ -231,9 +323,9 @@ if __name__ == "__main__":
             returns = advantages + values
 
         # flatten the batch
-        b_obs = obs.reshape((-1,) + envs.single_observation_space.shape)
+        b_obs = obs.reshape((-1,) + obs_shape)  # OURS: obs_shape
         b_logprobs = logprobs.reshape(-1)
-        b_actions = actions.reshape((-1,) + envs.single_action_space.shape)
+        b_actions = actions.reshape(-1)  # OURS: Discrete -> scalar per env
         b_advantages = advantages.reshape(-1)
         b_returns = returns.reshape(-1)
         b_values = values.reshape(-1)
@@ -308,5 +400,34 @@ if __name__ == "__main__":
         print("SPS:", int(global_step / (time.time() - start_time)))
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
-    envs.close()
-    writer.close()
+        # OURS: game stats, action usage, self-play pool, periodic eval.
+        if ep_stats:
+            r, length, win = map(np.array, zip(*ep_stats))
+            writer.add_scalar("charts/episodic_return", r.mean(), global_step)
+            writer.add_scalar("charts/episodic_length", length.mean(), global_step)
+            writer.add_scalar("charts/win_rate_train", win.mean(), global_step)
+            print(f"iter {iteration}/{args.num_iterations}  games {len(r)}  return {r.mean():.2f}  "
+                  f"win {win.mean():.2f}  length {length.mean():.0f}")
+            ep_stats.clear()
+        buttons = np.bincount(ACTIONS[b_actions.long().cpu().numpy()][:, 2], minlength=4) / args.batch_size
+        for name, frac_used in zip(("none", "jump", "light", "heavy"), buttons):
+            writer.add_scalar(f"actions/{name}", frac_used, global_step)
+
+        if args.opponent == "selfplay" and iteration % args.snapshot_every == 0:
+            pool.append({k: v.detach().cpu().clone() for k, v in agent.state_dict().items()})
+
+        if iteration % args.eval_every == 0 or iteration == args.num_iterations:
+            me = net_policy(agent, device)
+            for name in ("dummy", "random", "jabber", "spacer"):
+                w, l, d = evaluate(me, bots.BOTS[name], args, args.eval_games)
+                writer.add_scalar(f"eval/win_vs_{name}", w, global_step)
+                print(f"  eval vs {name:7s} win {w:.2f} loss {l:.2f} draw {d:.2f}")
+            torch.save(agent.state_dict(), run_dir / f"agent_{iteration:05d}.pt")
+            # A replay against the training opponent, to watch in Godot (play.bat replay).
+            opp = me if args.opponent == "selfplay" else opp_bots[args.opponent][0]
+            opp_name = "self" if args.opponent == "selfplay" else opp_bots[args.opponent][0].__name__
+            rep = replay.play_and_record(args.moves_dir, me, opp, args.frame_skip, args.reaction_delay,
+                                         meta={"run": run_name, "iteration": iteration, "p1": "agent", "p2": opp_name})
+            replay.save(rep, ROOT / "replays" / run_name / f"iter_{iteration:05d}.json")
+
+    writer.close()  # OURS: no envs.close() needed

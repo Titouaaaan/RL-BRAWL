@@ -8,6 +8,8 @@ It rebuilds the C++ (only what changed, usually a few seconds) and opens the gam
 
 `.\play.bat edit` opens the project in the Godot editor instead.
 
+`.\play.bat replay` plays back the newest recorded game (from training, see `docs/training.md`): Space pauses, the right arrow steps one frame while paused, up/down change speed, R restarts.
+
 ## Controls
 
 Keys are matched by **position** on the keyboard, so on AZERTY, "WASD" is really ZQSD.
@@ -72,6 +74,7 @@ This machine already has everything installed. On another PC you would need:
 | Rebuild the Python module after a C++ change | `python -m pip install --no-build-isolation .` |
 | Run the tests | `python -m pytest -q` |
 | Speed benchmark | `python tools/bench.py` |
+| Train an agent | `python train/ppo.py --opponent dummy` (see `docs/training.md`) |
 | Memory-bug check (AddressSanitizer) | `python -m cmake -S . -B build/debug` then `python -m cmake --build build/debug --config Debug` then `build\debug\Debug\smoke.exe` |
 
 Always use `python -m cmake`, not plain `cmake`: the Strawberry Perl install on this PC puts an old CMake 3.29 on the PATH, and it doesn't know Visual Studio 2026.
@@ -84,4 +87,5 @@ Always use `python -m cmake`, not plain `cmake`: the Strawberry Perl install on 
 | `Could not find Godot` | play.bat didn't find `Godot_v4*_win64.exe` under Downloads. | Set `GODOT` to the full path of Godot's .exe. |
 | Godot says `FightGame` is not declared / "Identifier not found" | Godot doesn't know about the extension. Either the DLL didn't build, or the project was never imported. | Delete the `godot/.godot` folder and run `play.bat` again; it re-imports. |
 | `could not create CMAKE_GENERATOR "Visual Studio 18 2026"` | The old Strawberry CMake was used. | Use `python -m cmake ...`. |
+| `DESYNC` at the end of a replay | Godot's re-simulation didn't end in the recorded state: the Python module and the Godot DLL disagree. Usually one of them is stale. | Rebuild both (`pip install --no-build-isolation .` and `play.bat`), record again. `tests/test_replay_godot.py` checks this automatically. |
 | The build is weird after pulling big changes | Stale build folder. | Delete `build/godot` (it's safe; it's all generated) and rerun. |

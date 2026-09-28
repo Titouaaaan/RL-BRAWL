@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Phases 0-2 done: build plumbing; game mechanics (full v0 fighter state machine, moves from JSON, hitboxes/knockback/hitstun, blast zones/stocks/respawn, `StepEvents`); RL interface (`core/vecenv.*`: egocentric obs of `OBS_DIM`=107 with layout documented in `vecenv.h`, rewards from events, frame skip, reaction-delay ring buffer, auto-reset, terminated vs truncated, winner, zero-copy NumPy views). Next: phase 3, PPO up the sanity ladder. Also: Godot debug view (`bindings/godot/` + `godot/`, godot-cpp pinned as a submodule in `extern/`, nlohmann/json vendored in `extern/nlohmann/`). Read `docs/design.md` before starting any phase.
+Phases 0-2 done (build plumbing; game mechanics; RL interface in `core/vecenv.*`: egocentric obs of `OBS_DIM`=107, layout in `vecenv.h`, actions egocentric too, player 1's stick_x mirrored). Phase 3 in progress: `train/ppo.py` (CleanRL ppo.py vendored at commit fe8d8a0, changes marked `# OURS`, never modify the PPO update itself), `train/bots.py` (dummy/random/jabber/spacer, obs indices named at the top), `train/replay.py` (game recordings = per-frame inputs + move files + final hash; Godot verifies the hash). Godot debug view in `bindings/godot/` + `godot/` (godot-cpp submodule in `extern/`, nlohmann/json vendored in `extern/nlohmann/`). Read `docs/design.md` before starting any phase.
 
 ## Commands
 
@@ -15,6 +15,8 @@ Toolchain: MSVC from Visual Studio 2026 (it must match python.org Python's compi
 - Build/rebuild Python module after any C++ change: `python -m pip install --no-build-isolation .`
 - Tests: `python -m pytest -q`
 - Benchmark: `python tools/bench.py`
+- Train: `python -u train/ppo.py --opponent dummy|random|scripted|selfplay` (logs/checkpoints in `runs/`, replays in `replays/`, both gitignored). Owner-facing guide: `docs/training.md`.
+- Watch the newest replay: `play.bat replay`. Headless replay check: `<godot_console.exe> --headless --path godot -- --replay=FILE --verify`.
 - ASan debug smoke test: `python -m cmake -S . -B build/debug && python -m cmake --build build/debug --config Debug && build/debug/Debug/smoke.exe`
 
 Root `CMakeLists.txt` builds the Python module when driven by pip (`SKBUILD` set) and the native `smoke` exe otherwise.
@@ -31,8 +33,8 @@ One engine-free C++ core, two front ends:
 - **`bindings/python/`**: nanobind module exposing a batched `VecEnv` (N games stepped in one C++ call, auto-reset inside, writes obs/reward/done into preallocated NumPy buffers zero-copy). Output buffers (`obs`, `final_obs`, `reward`, `terminated`, `truncated`, `winner`) are NumPy views of C++ memory, updated in place by `step()`; every per-player output has a player axis (`obs[i, p]` = game i from p's view). No Gymnasium wrapper (skipped: two-player self-play doesn't fit its single-agent API; PPO uses `VecEnv` directly). Never loop over environments in Python.
 - **`bindings/godot/`**: GDExtension exposing the same core to Godot. It's the visual debug view (keyboard play, later replays), and it moved up from phase 5 so each phase can be checked visually. Keep it building whenever the core changes.
 - **`data/moves/`**: one JSON file per move (`total_frames`, `landing_lag`, and up to 4 hitboxes, each active on a `start`..`end` frame window; field reference in `docs/running.md`). Loaded by `core/moves.cpp`, which must never throw (the Godot build has exceptions off). Godot gets them through the core too, so visuals never drift from simulation. Tune the game here, not by recompiling. Broken mechanics (spammed moves, jab locks, infinite combos) are fixed in these files, not in RL code.
-- **`train/`**: single-file CleanRL-style PPO, shared weights for both players, opponent sampled ~80% latest / ~20% from a snapshot pool. Only the learning side's experience is used for updates.
-- **`tools/`**: replay tools, throughput benchmarks. (No separate Python viewer; Godot is the viewer.)
+- **`train/`**: CleanRL ppo.py adapted (Discrete(36) actions, learner always player 0, frozen opponent = bot or network, truncation bootstrap via `final_obs`). Self-play: ~80% of envs vs latest weights, ~20% vs a pool snapshot. Only the learner's experience is used (using both sides in latest-vs-latest games is a possible later speedup).
+- **`tools/`**: throughput benchmark. (No separate Python viewer; Godot plays replays.)
 - **`tests/`**: pytest through the bindings.
 
 ## Invariants that later goals depend on
