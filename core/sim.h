@@ -164,6 +164,9 @@ struct ActiveHitbox {
 // Reads jab.json, heavy.json and aerial.json from `dir` into cfg.moves.
 // Returns "" on success, otherwise an error message naming the file and field.
 std::string load_moves(GameConfig& cfg, const std::string& dir);
+// Same, but from the files' contents (jab, heavy, aerial). Replays carry their
+// own copy of the move files, so they still play back after the files change.
+std::string load_moves_from_text(GameConfig& cfg, const std::string texts[NUM_MOVES]);
 
 void reset(GameState& s, const GameConfig& cfg);
 

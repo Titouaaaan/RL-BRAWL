@@ -51,6 +51,7 @@ struct VecEnv {
     std::vector<uint8_t> terminated; // [num_envs] game ended by stocks (a real ending)
     std::vector<uint8_t> truncated;  // [num_envs] game ended by the time limit (cut short)
     std::vector<int8_t> winner;      // [num_envs] if it ended: 0, 1, or -1 = draw
+    std::vector<uint64_t> final_hash; // [num_envs] if it ended: hash_state of the last state (replay check)
 
     VecEnv(int num_envs, const GameConfig& cfg, const EnvParams& params);
 

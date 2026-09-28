@@ -2,6 +2,7 @@
 rem play.bat: builds the C++ game code (only what changed) and starts the game.
 rem   play.bat        -> play the game
 rem   play.bat edit   -> open the project in the Godot editor instead
+rem   play.bat replay [file.json] -> watch a recorded game (default: the newest one)
 rem Double-clicking this file in Explorer also works.
 setlocal
 cd /d "%~dp0"
@@ -46,6 +47,13 @@ if not exist godot\.godot\extension_list.cfg (
 
 if /i "%~1"=="edit" (
     start "" "%GODOT%" --path godot -e
+) else if /i "%~1"=="replay" (
+    if "%~2"=="" (
+        echo [play] Playing the newest replay. Space pauses, Up/Down change speed.
+        "%GODOT%" --path godot -- --replay=latest
+    ) else (
+        "%GODOT%" --path godot -- "--replay=%~f2"
+    )
 ) else (
     echo [play] Starting the game. Esc quits.
     "%GODOT%" --path godot

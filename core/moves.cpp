@@ -8,6 +8,7 @@
 // file would kill Godot. Instead every field is checked by hand and problems
 // come back as an error message.
 #include <fstream>
+#include <iterator>  // std::istreambuf_iterator
 
 #include "../extern/nlohmann/json.hpp"
 #include "sim.h"
@@ -36,12 +37,11 @@ static bool read_int(const json& obj, const char* key, int& out, std::string& er
     return true;
 }
 
-static std::string load_move(const std::string& path, MoveDef& out) {
-    std::ifstream file(path);
-    if (!file) return "cannot open file";
+// Parses one move from the text of its JSON file.
+static std::string parse_move(const std::string& text, MoveDef& out) {
     // allow_exceptions = false: on a syntax error we get a "discarded" value
     // instead of an exception. ignore_comments = true: // comments are allowed.
-    json j = json::parse(file, nullptr, /*allow_exceptions=*/false, /*ignore_comments=*/true);
+    json j = json::parse(text, nullptr, /*allow_exceptions=*/false, /*ignore_comments=*/true);
     if (j.is_discarded()) return "not valid JSON (check commas and brackets)";
 
     MoveDef m;
@@ -73,11 +73,23 @@ static std::string load_move(const std::string& path, MoveDef& out) {
     return "";
 }
 
-std::string load_moves(GameConfig& cfg, const std::string& dir) {
+std::string load_moves_from_text(GameConfig& cfg, const std::string texts[NUM_MOVES]) {
     for (int m = 0; m < NUM_MOVES; ++m) {
-        std::string path = dir + "/" + MOVE_FILES[m];
-        std::string err = load_move(path, cfg.moves[m]);
-        if (!err.empty()) return path + ": " + err;
+        std::string err = parse_move(texts[m], cfg.moves[m]);
+        if (!err.empty()) return std::string(MOVE_FILES[m]) + ": " + err;
     }
     return "";
+}
+
+std::string load_moves(GameConfig& cfg, const std::string& dir) {
+    std::string texts[NUM_MOVES];
+    for (int m = 0; m < NUM_MOVES; ++m) {
+        std::string path = dir + "/" + MOVE_FILES[m];
+        std::ifstream file(path);
+        if (!file) return path + ": cannot open file";
+        // Read the whole file into a string: istreambuf_iterator walks it char by char.
+        texts[m].assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+    }
+    std::string err = load_moves_from_text(cfg, texts);
+    return err.empty() ? "" : dir + "/" + err;
 }

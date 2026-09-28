@@ -1,6 +1,6 @@
 extends Node2D
 ## Draws the C++ simulation. All game logic lives in core/; this script only
-## reads the keyboard, calls step() once per frame, and draws the result.
+## reads the keyboard (or a replay), calls step() once per frame, and draws.
 
 const COLORS := [Color(0.35, 0.6, 1.0), Color(1.0, 0.45, 0.35)]
 # Same order as the enums in core/sim.h.
@@ -24,9 +24,87 @@ var load_error := ""
 var cam_center := Vector2(0, 5)  # sim coordinates
 var px := 14.0  # zoom: pixels per sim unit
 
+# Replay mode (play.bat replay): inputs come from a recording, not the keyboard.
+const SPEEDS := [0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
+var replay := {}  # empty = normal keyboard play
+var replay_name := ""
+var replay_frame := 0
+var replay_result := ""  # when the recording ends: "verified" or "DESYNC"
+var paused := false
+var speed_i := 2  # index into SPEEDS: 1x
+var speed_acc := 0.0  # fractional frames owed, for speeds below 1x
+
 
 func _ready() -> void:
-	reload()
+	var args := OS.get_cmdline_user_args()  # whatever came after "--" on the command line
+	var path := ""
+	for a in args:
+		if a.begins_with("--replay="):
+			path = a.trim_prefix("--replay=")
+	if path == "":
+		reload()
+		return
+	if path == "latest":
+		path = find_latest_replay()
+	load_replay(path)
+	if "--verify" in args:
+		# Headless check: run the whole recording at once, report, quit.
+		while replay_step():
+			pass
+		var result := replay_result if replay_result != "" else "FAILED " + load_error
+		print("REPLAY %s: %s" % [result, replay_name])
+		get_tree().quit(0 if replay_result == "verified" else 1)
+
+
+func load_replay(path: String) -> void:
+	replay_name = path.get_file()
+	var data = JSON.parse_string(FileAccess.get_file_as_string(path)) if path != "" else null
+	if typeof(data) != TYPE_DICTIONARY:
+		reload()
+		load_error = "could not read replay '%s' (none recorded yet?)" % path
+		return
+	replay = data
+	restart_replay()
+
+
+# Loads the move files stored in the replay (not the current ones in
+# data/moves), so old replays still play back after you tune the moves.
+func restart_replay() -> void:
+	load_error = game.load_moves_from_text(replay.moves.jab, replay.moves.heavy, replay.moves.aerial)
+	cfg = game.get_config()
+	replay_frame = 0
+	replay_result = ""
+
+
+# Feeds the next recorded frame to the sim. Returns false once the recording is over.
+func replay_step() -> bool:
+	var inputs: Array = replay.inputs
+	if replay_frame >= inputs.size():
+		return false
+	var i: Array = inputs[replay_frame]
+	game.step(int(i[0]), int(i[1]), int(i[2]), int(i[3]), int(i[4]), int(i[5]))
+	replay_frame += 1
+	if replay_frame == inputs.size():
+		# Same inputs + same code must give the exact same final state.
+		replay_result = "verified" if game.get_hash() == replay.final_hash else "DESYNC"
+	return true
+
+
+# The newest .json anywhere under replays/.
+func find_latest_replay() -> String:
+	var best := ""
+	var best_time := 0
+	var stack := [ProjectSettings.globalize_path("res://").path_join("../replays").simplify_path()]
+	while not stack.is_empty():
+		var dir: String = stack.pop_back()
+		for sub in DirAccess.get_directories_at(dir):
+			stack.append(dir.path_join(sub))
+		for f in DirAccess.get_files_at(dir):
+			var t := FileAccess.get_modified_time(dir.path_join(f))
+			if f.ends_with(".json") and t >= best_time:
+				best = dir.path_join(f)
+				best_time = t
+	return best
 
 
 # Re-reads data/moves/*.json and restarts. Bound to R, so you can edit a move
@@ -38,18 +116,37 @@ func reload() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo:
-		if event.physical_keycode == KEY_R:
+	if not (event is InputEventKey and event.pressed):
+		return
+	var key: Key = event.physical_keycode
+	if key == KEY_ESCAPE:
+		get_tree().quit()
+	elif replay.is_empty():
+		if key == KEY_R and not event.echo:
 			reload()
-		elif event.physical_keycode == KEY_ESCAPE:
-			get_tree().quit()
+	elif key == KEY_R and not event.echo:
+		restart_replay()
+	elif key == KEY_SPACE and not event.echo:
+		paused = not paused
+	elif key == KEY_RIGHT and paused:  # holding it repeats, to scrub forward
+		replay_step()
+	elif key == KEY_UP and not event.echo:
+		speed_i = min(speed_i + 1, SPEEDS.size() - 1)
+	elif key == KEY_DOWN and not event.echo:
+		speed_i = max(speed_i - 1, 0)
 
 
 func _physics_process(_delta: float) -> void:
-	# Runs exactly 60 times per second: one call = one sim frame.
-	var a := read_input(KEYS[0])
-	var b := read_input(KEYS[1])
-	game.step(a[0], a[1], a[2], b[0], b[1], b[2])
+	# Runs exactly 60 times per second: one call = one sim frame at 1x speed.
+	if replay.is_empty():
+		var a := read_input(KEYS[0])
+		var b := read_input(KEYS[1])
+		game.step(a[0], a[1], a[2], b[0], b[1], b[2])
+	elif not paused:
+		speed_acc += SPEEDS[speed_i]
+		while speed_acc >= 1.0:
+			speed_acc -= 1.0
+			replay_step()
 	update_camera()
 	queue_redraw()  # ask Godot to call _draw() again
 
@@ -142,8 +239,20 @@ func draw_hud(font: Font) -> void:
 
 	var seconds_left: int = max(0, cfg.time_limit_frames - game.get_frame()) / 60
 	draw_string(font, Vector2(size.x / 2 - 30, 30), "%d:%02d" % [seconds_left / 60, seconds_left % 60], HORIZONTAL_ALIGNMENT_LEFT, -1, 24)
-	draw_string(font, Vector2(16, 24), "P1: WASD, Space jump, J light, K heavy   |   P2: arrows, Enter jump, . light, / heavy", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 1, 1, 0.6))
-	draw_string(font, Vector2(16, 44), "R: reload moves + restart   Esc: quit", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 1, 1, 0.6))
+	var dim := Color(1, 1, 1, 0.6)
+	if replay.is_empty():
+		draw_string(font, Vector2(16, 24), "P1: WASD, Space jump, J light, K heavy   |   P2: arrows, Enter jump, . light, / heavy", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
+		draw_string(font, Vector2(16, 44), "R: reload moves + restart   Esc: quit", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
+	else:
+		var status := "PAUSED" if paused else "%sx" % SPEEDS[speed_i]
+		var line := "REPLAY  frame %d / %d   %s" % [replay_frame, replay.inputs.size(), status]
+		draw_string(font, Vector2(16, 24), line, HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
+		draw_string(font, Vector2(16, 44), "Space: pause   Right: next frame (paused)   Up/Down: speed   R: restart   Esc: quit", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
+		draw_string(font, Vector2(16, 64), "%s   %s" % [replay_name, JSON.stringify(replay.meta)], HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
+		if replay_result == "verified":
+			draw_string(font, Vector2(16, 84), "Replay verified: final state hash matches the recording", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.5, 1, 0.5))
+		elif replay_result == "DESYNC":
+			draw_string(font, Vector2(16, 84), "DESYNC: final state differs from the recording (see docs/running.md)", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1, 0.3, 0.3))
 
 	if load_error != "":
 		draw_string(font, Vector2(16, 80), "Move file error: " + load_error, HORIZONTAL_ALIGNMENT_LEFT, size.x - 32, 18, Color(1, 0.3, 0.3))

@@ -13,6 +13,8 @@
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 
+#include <cstdio>  // std::snprintf
+
 #include "../../core/sim.h"
 
 using namespace godot;
@@ -29,6 +31,8 @@ protected:
     // Godot calls this once, to learn which methods scripts may call.
     static void _bind_methods() {
         ClassDB::bind_method(D_METHOD("load_moves", "dir"), &FightGame::load_moves);
+        ClassDB::bind_method(D_METHOD("load_moves_from_text", "jab", "heavy", "aerial"), &FightGame::load_moves_from_text);
+        ClassDB::bind_method(D_METHOD("get_hash"), &FightGame::get_hash);
         ClassDB::bind_method(D_METHOD("reset"), &FightGame::reset);
         ClassDB::bind_method(
             D_METHOD("step", "p1_stick_x", "p1_stick_y", "p1_button", "p2_stick_x", "p2_stick_y", "p2_button"),
@@ -50,6 +54,22 @@ public:
         std::string err = ::load_moves(cfg, dir.utf8().get_data());
         ::reset(state, cfg);
         return String::utf8(err.c_str());
+    }
+
+    // Same, from the files' contents (replays carry their own copy).
+    String load_moves_from_text(const String& jab, const String& heavy, const String& aerial) {
+        std::string texts[NUM_MOVES] = {jab.utf8().get_data(), heavy.utf8().get_data(), aerial.utf8().get_data()};
+        std::string err = ::load_moves_from_text(cfg, texts);
+        ::reset(state, cfg);
+        return String::utf8(err.c_str());
+    }
+
+    // The state hash as 16 hex digits. (A string, because GDScript integers
+    // are signed and JSON numbers can't hold 64 bits exactly.)
+    String get_hash() const {
+        char buf[17];
+        std::snprintf(buf, sizeof buf, "%016llx", (unsigned long long)hash_state(state));
+        return String(buf);
     }
 
     void reset() { ::reset(state, cfg); }

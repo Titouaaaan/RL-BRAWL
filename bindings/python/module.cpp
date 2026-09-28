@@ -68,6 +68,8 @@ NB_MODULE(fightcore, m) {
                      nb::rv_policy::reference_internal)
         .def_prop_ro("winner", [](VecEnv& e) { return view(e.winner, e.num_envs); },
                      nb::rv_policy::reference_internal)
+        .def_prop_ro("final_hash", [](VecEnv& e) { return view(e.final_hash, e.num_envs); },
+                     nb::rv_policy::reference_internal)
         .def_prop_ro("num_envs", [](const VecEnv& e) { return e.num_envs; })
 
         // Debug helpers, used by the tests. Not for the training loop.
