@@ -140,7 +140,12 @@ void VecEnv::step(const int8_t* actions) {
         Input in[2];
         for (int p = 0; p < 2; ++p) {
             const int8_t* a = actions + (size_t(i) * 2 + p) * 3;
-            in[p] = Input{a[0], a[1], static_cast<uint8_t>(a[2])};
+            // Actions are egocentric like observations: player 1 lives in a
+            // mirrored world, so its "right" is the real game's left. Clamp
+            // first so negating can't overflow (-(-128) doesn't fit in int8).
+            int8_t sx = std::clamp<int8_t>(a[0], -1, 1);
+            if (p == 1) sx = -sx;
+            in[p] = Input{sx, a[1], static_cast<uint8_t>(a[2])};
         }
 
         float r[2] = {0, 0};

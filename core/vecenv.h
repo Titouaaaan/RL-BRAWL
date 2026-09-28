@@ -18,7 +18,8 @@
 //   [63, 107)  4 hitbox slots x 11 features (the opponent's hitboxes first)
 // "Me" is always the observing player, and x is mirrored for player 1, so
 // both players see themselves start on the left. That's the egocentric
-// canonicalization from the design doc.
+// canonicalization from the design doc. Actions are mirrored the same way:
+// player 1's stick_x is negated before it reaches the game.
 const int OBS_FIGHTER = 30;
 const int OBS_HITBOXES = 4;
 const int OBS_HITBOX = 11;
@@ -54,7 +55,8 @@ struct VecEnv {
     VecEnv(int num_envs, const GameConfig& cfg, const EnvParams& params);
 
     void reset_all();
-    // actions: [num_envs][2][3] = (stick_x, stick_y, button). Games that end
+    // actions: [num_envs][2][3] = (stick_x, stick_y, button), egocentric
+    // (player 1's stick_x is mirrored). Games that end
     // are reset right away, and obs then holds the new game's first observation.
     void step(const int8_t* actions);
 

@@ -22,16 +22,24 @@ def test_obs_buffers_are_live_views():
     assert np.isfinite(obs).all()
 
 
-def test_mirrored_actions_give_identical_egocentric_obs():
-    # The start is symmetric, and player 1's view is mirrored. So if both
-    # players do mirror-image things, both must see exactly the same obs.
+def test_same_egocentric_action_gives_identical_obs():
+    # Observations AND actions are egocentric (player 1's world is mirrored).
+    # The start is symmetric, so if both players send the same action, both
+    # must see exactly the same observation, every step.
     env = fightcore.VecEnv(1, MOVES)
     assert np.array_equal(env.obs[0, 0], env.obs[0, 1])
     rng = np.random.default_rng(0)
     for _ in range(300):
-        sx, sy, b = rng.integers(-1, 2), rng.integers(-1, 2), rng.integers(0, 4)
-        env.step(acts(1, p1=(sx, sy, b), p2=(-sx, sy, b)))
+        a = (rng.integers(-1, 2), rng.integers(-1, 2), rng.integers(0, 4))
+        env.step(acts(1, p1=a, p2=a))
         assert np.array_equal(env.obs[0, 0], env.obs[0, 1])
+
+
+def test_player1_stick_is_mirrored():
+    env = fightcore.VecEnv(1, MOVES, frame_skip=1)
+    x0 = env.fighter(0, 1)["x"]
+    env.step(acts(1, p2=(1, 0, 0)))  # "forward" in P1's own view...
+    assert env.fighter(0, 1)["x"] < x0  # ...is toward the left in the real game
 
 
 def test_damage_reward_is_zero_sum():
@@ -50,7 +58,7 @@ def test_ko_reward_termination_winner_and_autoreset():
     fresh = env.obs.copy()
     kos = 0
     for _ in range(3000):
-        env.step(acts(1, p2=(-1, 0, 0)))  # P2 keeps walking off the left edge
+        env.step(acts(1, p2=(1, 0, 0)))  # P2 walks "forward" (its mirrored right = real left), off the edge
         r = env.reward[0]
         if r[1] <= -1:
             kos += 1
