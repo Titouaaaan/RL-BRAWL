@@ -3,7 +3,9 @@
 // 3 startup, hits on frames 4-8, 6 frames of landing lag.
 {
     "total_frames": 24,
-    "landing_lag": 6,
+    "landing_lag": 5,
+    "autocancel_before": 3,
+    "autocancel_after": 16,
     "hitboxes": [
         {"start": 4, "end": 8, "x": 0.3, "y": 3.8, "radius": 1.3,
          "damage": 8, "base_kb": 0.45, "kb_growth": 0.009, "angle": 85}

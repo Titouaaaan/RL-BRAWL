@@ -33,6 +33,7 @@ protected:
         ClassDB::bind_method(D_METHOD("load_moves", "dir"), &FightGame::load_moves);
         ClassDB::bind_method(D_METHOD("load_moves_from_text", "texts"), &FightGame::load_moves_from_text);
         ClassDB::bind_method(D_METHOD("get_move_names"), &FightGame::get_move_names);
+        ClassDB::bind_method(D_METHOD("get_state_names"), &FightGame::get_state_names);
         ClassDB::bind_method(D_METHOD("get_hash"), &FightGame::get_hash);
         ClassDB::bind_method(D_METHOD("reset"), &FightGame::reset);
         ClassDB::bind_method(
@@ -81,6 +82,12 @@ public:
         return out;
     }
 
+    PackedStringArray get_state_names() const {
+        PackedStringArray out;
+        for (const char* n : STATE_NAMES) out.push_back(n);
+        return out;
+    }
+
     void reset() { ::reset(state, cfg); }
 
     // GDScript integers are 64-bit. We narrow them to the sim's small types;
@@ -113,7 +120,9 @@ public:
         d["hitstun"] = f.hitstun;
         d["invuln"] = f.invuln;
         d["intangible"] = intangible(f, cfg);
-        d["air_attack_locked"] = f.air_attack_locked;
+        d["air_attack_locked"] = f.air_whiffs >= cfg.air_whiff_limit;
+        d["shield_hp"] = f.shield_hp;
+        d["hitlag"] = f.hitlag;
         return d;
     }
 
@@ -129,6 +138,7 @@ public:
             d["y"] = boxes[i].y;
             d["radius"] = boxes[i].def->radius;
             d["spent"] = boxes[i].spent;
+            d["grab"] = boxes[i].def->grab;
             out.push_back(d);
         }
         return out;
@@ -149,6 +159,17 @@ public:
         d["hurtbox_h"] = cfg.hurtbox_h;
         d["time_limit_frames"] = cfg.time_limit_frames;
         d["dash_frames"] = cfg.dash_frames;
+        d["shield_max"] = cfg.shield_max;
+        d["knockdown_frames"] = cfg.knockdown_frames;
+        Array surfaces;  // [x0, x1, y] per floor; the first is the main stage
+        for (const Surface& s : cfg.surfaces) {
+            Array one;
+            one.push_back(s.x0);
+            one.push_back(s.x1);
+            one.push_back(s.y);
+            surfaces.push_back(one);
+        }
+        d["surfaces"] = surfaces;
         return d;
     }
 };

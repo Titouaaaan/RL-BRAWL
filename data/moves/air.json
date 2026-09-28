@@ -1,9 +1,12 @@
 // Air (light, in the air, no up/down). The first hitbox is the strong "clean"
 // hit, and the second is a weaker "late" hit that lingers. Landing during the
-// move costs 8 frames of landing lag.
+// move costs 6 frames of landing lag, or just a normal landing if it happens
+// before frame 4 or after frame 20 (the auto-cancel windows).
 {
     "total_frames": 26,
-    "landing_lag": 8,
+    "landing_lag": 6,
+    "autocancel_before": 4,
+    "autocancel_after": 20,
     "hitboxes": [
         {"start": 5, "end": 8, "x": 1.4, "y": 1.5, "radius": 1.2,
          "damage": 9, "base_kb": 0.45, "kb_growth": 0.009, "angle": 45},

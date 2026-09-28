@@ -52,7 +52,7 @@ def test_damage_reward_is_zero_sum():
     for _ in range(10):
         env.step(acts(1, p1=(0, 0, 2)))  # hold jab
         total += env.reward[0]
-    assert np.allclose(total, [0.03, -0.03])  # 3% dealt / taken
+    assert np.allclose(total, [0.0315, -0.0315])  # 3% x 1.05 (a fresh move) dealt / taken
 
 
 def test_ko_reward_termination_winner_and_autoreset():

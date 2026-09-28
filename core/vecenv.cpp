@@ -42,7 +42,9 @@ static void write_fighter(const Fighter& f, const GameConfig& cfg, float m, floa
     *o++ = f.invuln / float(std::max(cfg.respawn_invuln, 1));
     *o++ = intangible(f, cfg);  // hits would pass through right now
     *o++ = f.fastfall_blocked;
-    *o++ = f.air_attack_locked;
+    *o++ = float(f.air_whiffs) / std::max(cfg.air_whiff_limit, 1);  // 1 = no more air attacks until landing
+    *o++ = f.shield_hp / cfg.shield_max;
+    *o++ = float(f.hitlag) / std::max(cfg.hitlag_max, 1);
     // Distances to the blast zones and stage edges. They're linear in x/y,
     // but handing them over directly makes "near the edge" easy to learn.
     *o++ = (cfg.blast_x - x) / cfg.blast_x;
@@ -77,18 +79,20 @@ void write_obs(const GameState& s, const GameConfig& cfg, int player, float* out
             const ActiveHitbox& hb = all[k];
             if (hb.owner != owner) continue;
             const Fighter& victim = s.f[1 - owner];
-            float kb = knockback(*hb.def, victim.percent + hb.def->damage);  // what it would do if it hit now
+            // What it would do if it hit now, including stale-move weakening.
+            float kb = knockback(*hb.def, victim.percent + hb.def->damage * hb.power) * hb.power;
             float angle = hb.def->angle * 3.14159265f / 180.0f;
             *o++ = m * (hb.x - me.x) / 10.0f;
             *o++ = (hb.y - me.y) / 10.0f;
             *o++ = hb.def->radius / 2.0f;
-            *o++ = hb.def->damage / 20.0f;
+            *o++ = hb.def->damage * hb.power / 20.0f;
             *o++ = kb / 3.0f;
             *o++ = m * s.f[owner].facing * std::cos(angle);  // launch direction
             *o++ = std::sin(angle);
             *o++ = hb.frames_left / 10.0f;
             *o++ = (owner == player);
             *o++ = hb.spent;
+            *o++ = hb.def->grab;  // a grab: ignores shields
             *o++ = 1.0f;  // mask: this slot holds a real hitbox
             ++written;
         }

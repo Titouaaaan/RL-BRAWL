@@ -22,6 +22,7 @@ const char* const MOVE_NAMES[NUM_MOVES] = {
     "down_heavy", "heavy", "up_heavy",
     "down_air", "air", "up_air",
     "heavy_down_air", "heavy_air", "heavy_up_air",
+    "grab", "throw_forward", "throw_back", "throw_up", "throw_down",
 };
 
 static bool read_float(const json& obj, const char* key, float& out, std::string& err) {
@@ -44,6 +45,25 @@ static bool read_int(const json& obj, const char* key, int& out, std::string& er
     return true;
 }
 
+// Optional fields: missing means "use the default"; present but the wrong
+// type is an error.
+static bool read_opt_int(const json& obj, const char* key, int& out, std::string& err) {
+    auto it = obj.find(key);
+    if (it == obj.end()) return true;
+    return read_int(obj, key, out, err);
+}
+
+static bool read_opt_bool(const json& obj, const char* key, bool& out, std::string& err) {
+    auto it = obj.find(key);
+    if (it == obj.end()) return true;
+    if (!it->is_boolean()) {
+        err = std::string("field \"") + key + "\" must be true or false";
+        return false;
+    }
+    out = it->get<bool>();
+    return true;
+}
+
 // Parses one move from the text of its JSON file.
 static std::string parse_move(const std::string& text, MoveDef& out) {
     // allow_exceptions = false: on a syntax error we get a "discarded" value
@@ -55,6 +75,10 @@ static std::string parse_move(const std::string& text, MoveDef& out) {
     std::string err;
     if (!read_int(j, "total_frames", m.total_frames, err)) return err;
     if (!read_int(j, "landing_lag", m.landing_lag, err)) return err;
+    m.autocancel_after = m.total_frames + 1;  // default: no late auto-cancel window
+    if (!read_opt_int(j, "autocancel_before", m.autocancel_before, err)) return err;
+    if (!read_opt_int(j, "autocancel_after", m.autocancel_after, err)) return err;
+    if (!read_opt_bool(j, "throw", m.is_throw, err)) return err;
     if (m.total_frames < 1) return "total_frames must be at least 1";
 
     auto list = j.find("hitboxes");
@@ -68,7 +92,7 @@ static std::string parse_move(const std::string& text, MoveDef& out) {
                   read_float(h, "x", hb.x, err) && read_float(h, "y", hb.y, err) &&
                   read_float(h, "radius", hb.radius, err) && read_float(h, "damage", hb.damage, err) &&
                   read_float(h, "base_kb", hb.base_kb, err) && read_float(h, "kb_growth", hb.kb_growth, err) &&
-                  read_float(h, "angle", hb.angle, err);
+                  read_float(h, "angle", hb.angle, err) && read_opt_bool(h, "grab", hb.grab, err);
         std::string where = "hitbox " + std::to_string(i + 1) + ": ";
         if (!ok) return where + err;
         if (hb.start < 1 || hb.end < hb.start || hb.end > m.total_frames)

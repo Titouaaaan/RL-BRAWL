@@ -1,0 +1,11 @@
+// Up throw: straight up, weak but it puts the opponent above you for up-air
+// juggles and platform pressure.
+{
+    "total_frames": 24,
+    "throw": true,
+    "landing_lag": 0,
+    "hitboxes": [
+        {"start": 8, "end": 8, "x": 0, "y": 0, "radius": 1,
+         "damage": 6, "base_kb": 0.55, "kb_growth": 0.006, "angle": 90}
+    ]
+}

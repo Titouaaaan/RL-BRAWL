@@ -3,10 +3,6 @@ extends Node2D
 ## reads the keyboard (or a replay), calls step() once per frame, and draws.
 
 const COLORS := [Color(0.35, 0.6, 1.0), Color(1.0, 0.45, 0.35)]
-# Same order as the enums in core/sim.h.
-const STATE_NAMES := ["IDLE", "RUN", "JUMPSQUAT", "AIRBORNE", "LANDING", "ATTACK", "HITSTUN", "SPOTDODGE", "AIRDODGE", "HELPLESS"]
-const ST_HITSTUN := 6
-const ST_RUN := 1
 
 # Keys are *physical* positions (US layout names), so on AZERTY "WASD" is ZQSD.
 # Player 1: WASD stick, Space jump, J light, K heavy, L dodge.
@@ -33,6 +29,13 @@ const DEADZONE := 0.5  # how far the stick must be pushed to count as a directio
 
 var game := FightGame.new()
 var move_names: PackedStringArray = game.get_move_names()  # from core/moves.cpp
+var state_names: PackedStringArray = game.get_state_names()  # from core/sim.cpp
+var ST := {}  # state name -> number, e.g. ST.HITSTUN (filled in _ready)
+# Render interpolation: the sim runs at exactly 60 steps per second, but the
+# screen may refresh faster (120/144 Hz). Drawing only the latest step makes
+# motion look choppy, so we draw between the previous and the current step.
+var prev_fighters := [{}, {}]
+var cur_fighters := [{}, {}]
 var cfg: Dictionary
 var load_error := ""
 # Camera: follows both fighters and zooms out as they get further apart.
@@ -51,6 +54,8 @@ var speed_acc := 0.0  # fractional frames owed, for speeds below 1x
 
 
 func _ready() -> void:
+	for i in state_names.size():
+		ST[state_names[i]] = i
 	var args := OS.get_cmdline_user_args()  # whatever came after "--" on the command line
 	var path := ""
 	for a in args:
@@ -166,6 +171,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _physics_process(_delta: float) -> void:
 	# Runs exactly 60 times per second: one call = one sim frame at 1x speed.
+	prev_fighters = [game.get_fighter(0), game.get_fighter(1)]
 	if replay.is_empty():
 		var a := merge(read_input(KEYS[0]), read_pad(0))
 		var b := merge(read_input(KEYS[1]), read_pad(1))
@@ -175,13 +181,32 @@ func _physics_process(_delta: float) -> void:
 		while speed_acc >= 1.0:
 			speed_acc -= 1.0
 			replay_step()
-	update_camera()
+	cur_fighters = [game.get_fighter(0), game.get_fighter(1)]
+
+
+# Runs once per screen refresh (can be more often than 60 Hz).
+func _process(delta: float) -> void:
+	if cur_fighters[0].is_empty():
+		return
+	update_camera(delta)
 	queue_redraw()  # ask Godot to call _draw() again
 
 
-func update_camera() -> void:
-	var a: Dictionary = game.get_fighter(0)
-	var b: Dictionary = game.get_fighter(1)
+# A fighter's dictionary with x/y blended between the last two sim steps.
+func shown(i: int) -> Dictionary:
+	var f: Dictionary = cur_fighters[i].duplicate()
+	var p: Dictionary = prev_fighters[i]
+	if p.is_empty() or abs(p.x - f.x) + abs(p.y - f.y) > 6.0:  # respawns teleport: don't blend
+		return f
+	var t := Engine.get_physics_interpolation_fraction()
+	f.x = lerp(float(p.x), float(f.x), t)
+	f.y = lerp(float(p.y), float(f.y), t)
+	return f
+
+
+func update_camera(delta: float) -> void:
+	var a := shown(0)
+	var b := shown(1)
 	var lo := Vector2(min(a.x, b.x), min(a.y, b.y))
 	var hi := Vector2(max(a.x, b.x), max(a.y, b.y) + cfg.hurtbox_h)
 	# Half the visible area, in sim units: both fighters plus a margin, but
@@ -190,9 +215,11 @@ func update_camera() -> void:
 	var size := get_viewport_rect().size
 	var target_px: float = min(size.x / 2 / half.x, size.y / 2 / half.y)
 	var target := (lo + hi) / 2 + Vector2(0, 3)  # a bit above the fighters, so the floor sits low
-	# Move 10% of the way each frame: smooth instead of jerky.
-	cam_center = cam_center.lerp(target, 0.1)
-	px = lerp(px, target_px, 0.1)
+	# Move 10% of the way per 60 Hz frame: smooth instead of jerky. The power
+	# makes it the same speed at any screen refresh rate.
+	var k := 1.0 - pow(0.9, delta * 60.0)
+	cam_center = cam_center.lerp(target, k)
+	px = lerp(px, target_px, k)
 
 
 func read_input(k: Dictionary) -> Array:
@@ -247,6 +274,8 @@ func to_screen(x: float, y: float) -> Vector2:
 
 
 func _draw() -> void:
+	if cur_fighters[0].is_empty():
+		return  # nothing simulated yet
 	var font := ThemeDB.fallback_font
 	var w: float = cfg.stage_half_width
 
@@ -256,28 +285,49 @@ func _draw() -> void:
 	draw_rect(Rect2(bz_tl, bz_br - bz_tl), Color(1, 1, 1, 0.15), false, 2.0)
 	var stage_tl := to_screen(-w, 0)
 	draw_rect(Rect2(stage_tl, to_screen(w, -2) - stage_tl), Color(0.45, 0.45, 0.5))
+	# Platforms (every floor after the first): thin, pass-through from below.
+	for k in range(1, cfg.surfaces.size()):
+		var s: Array = cfg.surfaces[k]
+		var p_tl := to_screen(s[0], s[2])
+		draw_rect(Rect2(p_tl, to_screen(s[1], s[2] - 0.5) - p_tl), Color(0.55, 0.55, 0.62))
 
+	var fighters := [shown(0), shown(1)]
 	for i in 2:
-		draw_fighter(i, game.get_fighter(i), font)
+		draw_fighter(i, fighters[i], font)
 
 	# Hitboxes: translucent circles in the attacker's colour with a red rim.
 	# "Spent" ones (the move already hit) are drawn faded; they can't hit again.
+	# Grab boxes get a yellow rim. They move with their (interpolated) owner.
 	for hb in game.get_hitboxes():
-		var c := to_screen(hb.x, hb.y)
+		var o: int = hb.owner
+		var c := to_screen(hb.x + fighters[o].x - cur_fighters[o].x, hb.y + fighters[o].y - cur_fighters[o].y)
 		var alpha := 0.15 if hb.spent else 0.45
+		var rim := Color(1, 0.9, 0.1, alpha * 2) if hb.grab else Color(1, 0.1, 0.1, alpha * 2)
 		draw_circle(c, hb.radius * px, Color(COLORS[hb.owner], alpha))
-		draw_arc(c, hb.radius * px, 0, TAU, 32, Color(1, 0.1, 0.1, alpha * 2), 2.0)
+		draw_arc(c, hb.radius * px, 0, TAU, 32, rim, 2.0)
 
 	draw_hud(font)
 
 
 func draw_fighter(i: int, f: Dictionary, font: Font) -> void:
-	var hw: float = cfg.hurtbox_w / 2
-	var top_left := to_screen(f.x - hw, f.y + cfg.hurtbox_h)
-	var rect := Rect2(top_left, Vector2(cfg.hurtbox_w, cfg.hurtbox_h) * px)
+	var w: float = cfg.hurtbox_w
+	var h: float = cfg.hurtbox_h
+	if f.state == ST.KNOCKDOWN:
+		w = h * 1.1  # lying on the floor
+		h = cfg.hurtbox_w * 0.6
+	var hw := w / 2
+	var shake := 0.0
+	if f.hitlag > 0 and f.state == ST.HITSTUN:
+		shake = 0.18 * (1 if f.hitlag % 2 == 0 else -1)  # the victim shakes during the hit freeze
+	var top_left := to_screen(f.x - hw + shake, f.y + h)
+	var rect := Rect2(top_left, Vector2(w, h) * px)
 	var color: Color = COLORS[i]
-	if f.state == ST_HITSTUN:
+	if f.state == ST.HITSTUN:
 		color = color.lerp(Color.WHITE, 0.6)  # flash pale while stunned
+	elif f.state == ST.GRABBED:
+		color = color.lerp(Color(0.6, 0.2, 0.8), 0.5)
+	elif f.state == ST.SHIELDBREAK:
+		color = color.lerp(Color(1, 0.9, 0.2), 0.5 + 0.3 * sin(f.state_frame * 0.4))  # dazed
 	if f.invuln > 0 and (f.invuln / 6) % 2 == 0:
 		color.a = 0.35  # blink while invulnerable after respawning
 	if f.intangible and f.invuln == 0:
@@ -286,16 +336,24 @@ func draw_fighter(i: int, f: Dictionary, font: Font) -> void:
 	if f.intangible:
 		draw_rect(rect, Color.WHITE, false, 2.0)  # white outline = intangible (i-frames)
 	# White "eye" on the side the fighter is facing.
-	draw_circle(to_screen(f.x + f.facing * hw * 0.6, f.y + cfg.hurtbox_h * 0.8), px * 0.25, Color.WHITE)
+	draw_circle(to_screen(f.x + f.facing * hw * 0.6 + shake, f.y + h * 0.8), px * 0.25, Color.WHITE)
+	# Shield: a bubble that shrinks as the shield wears down.
+	if f.state == ST.SHIELD or f.state == ST.SHIELDSTUN:
+		var r: float = (0.7 + 1.5 * f.shield_hp / cfg.shield_max) * px
+		var c := to_screen(f.x, f.y + cfg.hurtbox_h / 2)
+		draw_circle(c, r, Color(COLORS[i], 0.3))
+		draw_arc(c, r, 0, TAU, 40, Color(1, 1, 1, 0.8 if f.state == ST.SHIELDSTUN else 0.4), 2.0)
 	# Small player number above the head.
-	draw_string(font, to_screen(f.x - 0.5, f.y + cfg.hurtbox_h + 0.5), "P%d" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, COLORS[i])
+	draw_string(font, to_screen(f.x - 0.5, f.y + h + 0.5), "P%d" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, COLORS[i])
 
 
 func draw_hud(font: Font) -> void:
 	var size := get_viewport_rect().size
 	for i in 2:
-		var f: Dictionary = game.get_fighter(i)
+		var f: Dictionary = cur_fighters[i]
 		var x := size.x * (0.3 if i == 0 else 0.6)
+		# Shield meter: a thin bar under the damage.
+		draw_rect(Rect2(x, size.y - 6, 80.0 * f.shield_hp / cfg.shield_max, 3), Color(COLORS[i], 0.7))
 		draw_string(font, Vector2(x, size.y - 40), "P%d  %d%%" % [i + 1, int(f.percent)], HORIZONTAL_ALIGNMENT_LEFT, -1, 30, COLORS[i])
 		for s in f.stocks:
 			draw_circle(Vector2(x + 12 + s * 22, size.y - 18), 7, COLORS[i])
@@ -307,7 +365,8 @@ func draw_hud(font: Font) -> void:
 	if replay.is_empty():
 		draw_string(font, Vector2(16, 24), "P1: WASD, Space jump, J light, K heavy, L dodge (or controller 1)", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
 		draw_string(font, Vector2(16, 44), "P2: arrows, Enter jump, . light, / heavy, , dodge (or controller 2)", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
-		draw_string(font, Vector2(16, 64), "Light/heavy + up/down/neutral = 12 moves (ground and air). Hold down alone = fast-fall.   R / Options: reload + restart   Esc: quit", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
+		draw_string(font, Vector2(16, 64), "Attacks: light/heavy + up/down/neutral.  Dodge: shield (+ side = roll, + down = spot dodge); light while shielding = grab, then a direction throws.", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
+		draw_string(font, Vector2(16, 84), "Tap jump = short hop.  Hold down = fast-fall / drop through a platform.  Hold a direction when hit = DI.  Dodge as you land = tech.   R: restart  Esc: quit", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
 	else:
 		var status := "PAUSED" if paused else "%sx" % SPEEDS[speed_i]
 		var line := "REPLAY  frame %d / %d   %s" % [replay_frame, replay.inputs.size(), status]
@@ -327,13 +386,13 @@ func draw_hud(font: Font) -> void:
 
 # Debug text: the state machine's state, e.g. "ATTACK heavy 12" = frame 12 of the heavy.
 func state_label(f: Dictionary) -> String:
-	var label: String = STATE_NAMES[f.state]
-	if f.state == ST_RUN and f.state_frame < cfg.dash_frames:
+	var label: String = state_names[f.state]
+	if f.state == ST.RUN and f.state_frame < cfg.dash_frames:
 		label = "DASH"
 	if f.move >= 0:
 		label += " " + move_names[f.move]
 	label += " %d" % f.state_frame
-	if f.state == ST_HITSTUN:
+	if f.state == ST.HITSTUN:
 		label += " (%d left)" % f.hitstun
 	if f.air_attack_locked:
 		label += "  [no air attacks]"

@@ -66,7 +66,7 @@ weights on both sides, the two players mirrored each other and settled into
 standoffs. `selfplay/win_rate_vs_frozen` and `selfplay/generation` track it.
 
 **Actions** are 45 discrete choices: stick x (3) × stick y (3) × button
-(none, jump, light, heavy, dodge). **Observations** are 121 numbers from the
+(none, jump, light, heavy, dodge). **Observations** are 145 numbers from the
 player's own point of view; player 1's world is mirrored so that both
 players see themselves starting on the left (layout in `core/vecenv.h`).
 **Rewards:** +1 for a KO, −1 for being KO'd. On top of that, two shaping

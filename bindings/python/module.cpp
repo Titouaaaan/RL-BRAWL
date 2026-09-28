@@ -40,6 +40,9 @@ NB_MODULE(fightcore, m) {
     m.attr("ST_AIRDODGE") = (int)ST_AIRDODGE;
     m.attr("ST_HELPLESS") = (int)ST_HELPLESS;
     m.attr("ST_LANDING") = (int)ST_LANDING;
+    nb::list states;
+    for (const char* n : STATE_NAMES) states.append(n);
+    m.attr("STATE_NAMES") = nb::tuple(states);
 
     nb::class_<VecEnv>(m, "VecEnv")
         // A custom __init__: nanobind hands us raw memory for the object and
@@ -115,9 +118,24 @@ NB_MODULE(fightcore, m) {
                  d["intangible"] = intangible(f, e.cfg);
                  d["grounded"] = f.grounded;
                  d["fastfall"] = f.fastfall;
-                 d["air_attack_locked"] = f.air_attack_locked;
+                 d["air_attack_locked"] = f.air_whiffs >= e.cfg.air_whiff_limit;
+                 d["air_whiffs"] = (int)f.air_whiffs;
+                 d["shield_hp"] = f.shield_hp;
+                 d["hitlag"] = (int)f.hitlag;
+                 d["surface"] = (int)f.surface;
+                 d["landing_lag"] = (int)f.landing_lag;
+                 d["vx"] = f.vx;
+                 d["vy"] = f.vy;
                  d["move_hit"] = f.move_hit;
                  return d;
              },
-             nb::arg("env"), nb::arg("player"));
+             nb::arg("env"), nb::arg("player"))
+        .def("set_percent",
+             [](VecEnv& e, int env, int player, float percent) {
+                 if (env < 0 || env >= e.num_envs || player < 0 || player > 1)
+                     throw std::out_of_range("bad env or player index");
+                 e.games[env].f[player].percent = percent;
+             },
+             nb::arg("env"), nb::arg("player"), nb::arg("percent"),
+             "Test helper: set a fighter's damage % (to set up situations quickly).");
 }

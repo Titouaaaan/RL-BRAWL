@@ -2,7 +2,9 @@
 // launches much higher than the light one: the finisher after a juggle.
 {
     "total_frames": 32,
-    "landing_lag": 10,
+    "landing_lag": 9,
+    "autocancel_before": 6,
+    "autocancel_after": 26,
     "hitboxes": [
         {"start": 7, "end": 10, "x": 0.3, "y": 3.9, "radius": 1.5,
          "damage": 13, "base_kb": 0.65, "kb_growth": 0.014, "angle": 88}

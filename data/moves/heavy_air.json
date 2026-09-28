@@ -2,7 +2,9 @@
 // than the light air, but it can KO sideways at high %.
 {
     "total_frames": 34,
-    "landing_lag": 12,
+    "landing_lag": 10,
+    "autocancel_before": 7,
+    "autocancel_after": 28,
     "hitboxes": [
         {"start": 9, "end": 12, "x": 1.8, "y": 1.5, "radius": 1.3,
          "damage": 13, "base_kb": 0.6, "kb_growth": 0.013, "angle": 40}

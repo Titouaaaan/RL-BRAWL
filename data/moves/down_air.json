@@ -3,7 +3,9 @@
 // it's fast, so it's the safe way to hit someone underneath you.
 {
     "total_frames": 24,
-    "landing_lag": 8,
+    "landing_lag": 7,
+    "autocancel_before": 4,
+    "autocancel_after": 18,
     "hitboxes": [
         {"start": 5, "end": 8, "x": 0.3, "y": -0.1, "radius": 1.1,
          "damage": 7, "base_kb": 0.4, "kb_growth": 0.006, "angle": -60}
