@@ -10,6 +10,7 @@
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/godot.hpp>
+#include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 
 #include "../../core/sim.h"
@@ -27,17 +28,28 @@ class FightGame : public RefCounted {
 protected:
     // Godot calls this once, to learn which methods scripts may call.
     static void _bind_methods() {
+        ClassDB::bind_method(D_METHOD("load_moves", "dir"), &FightGame::load_moves);
         ClassDB::bind_method(D_METHOD("reset"), &FightGame::reset);
         ClassDB::bind_method(
             D_METHOD("step", "p1_stick_x", "p1_stick_y", "p1_button", "p2_stick_x", "p2_stick_y", "p2_button"),
             &FightGame::step);
         ClassDB::bind_method(D_METHOD("get_fighter", "index"), &FightGame::get_fighter);
+        ClassDB::bind_method(D_METHOD("get_hitboxes"), &FightGame::get_hitboxes);
         ClassDB::bind_method(D_METHOD("get_frame"), &FightGame::get_frame);
-        ClassDB::bind_method(D_METHOD("get_stage_half_width"), &FightGame::get_stage_half_width);
+        ClassDB::bind_method(D_METHOD("is_over"), &FightGame::is_over);
+        ClassDB::bind_method(D_METHOD("get_config"), &FightGame::get_config);
     }
 
 public:
     FightGame() { ::reset(state, cfg); }
+
+    // Loads data/moves/*.json and restarts the game. Returns "" on success,
+    // otherwise the error text (Godot shows it on screen instead of crashing).
+    String load_moves(const String& dir) {
+        std::string err = ::load_moves(cfg, dir.utf8().get_data());
+        ::reset(state, cfg);
+        return String::utf8(err.c_str());
+    }
 
     void reset() { ::reset(state, cfg); }
 
@@ -47,7 +59,8 @@ public:
         Input in[2];
         in[0] = Input{(int8_t)p1x, (int8_t)p1y, (uint8_t)p1b};
         in[1] = Input{(int8_t)p2x, (int8_t)p2y, (uint8_t)p2b};
-        ::step(state, in, cfg);
+        StepEvents ev;  // ponytail: unused in Godot until we show hit/KO effects
+        ::step(state, in, cfg, ev);
     }
 
     // Returns one fighter's fields as a Dictionary, which is easy to read
@@ -64,11 +77,46 @@ public:
         d["state"] = f.state;
         d["state_frame"] = f.state_frame;
         d["jumps_left"] = f.jumps_left;
+        d["percent"] = f.percent;
+        d["stocks"] = f.stocks;
+        d["move"] = f.move;
+        d["hitstun"] = f.hitstun;
+        d["invuln"] = f.invuln;
         return d;
     }
 
+    // Active hitboxes this frame, each as {owner, x, y, radius, spent}.
+    Array get_hitboxes() const {
+        ActiveHitbox boxes[2 * MAX_HITBOXES_PER_MOVE];
+        int n = active_hitboxes(state, cfg, boxes, 2 * MAX_HITBOXES_PER_MOVE);
+        Array out;
+        for (int i = 0; i < n; ++i) {
+            Dictionary d;
+            d["owner"] = boxes[i].owner;
+            d["x"] = boxes[i].x;
+            d["y"] = boxes[i].y;
+            d["radius"] = boxes[i].def->radius;
+            d["spent"] = boxes[i].spent;
+            out.push_back(d);
+        }
+        return out;
+    }
+
     int64_t get_frame() const { return state.frame; }
-    double get_stage_half_width() const { return cfg.stage_half_width; }
+    bool is_over() const { return state.over; }
+
+    // The numbers the drawing code needs, so sizes on screen always match the sim.
+    Dictionary get_config() const {
+        Dictionary d;
+        d["stage_half_width"] = cfg.stage_half_width;
+        d["blast_x"] = cfg.blast_x;
+        d["blast_top"] = cfg.blast_top;
+        d["blast_bottom"] = cfg.blast_bottom;
+        d["hurtbox_w"] = cfg.hurtbox_w;
+        d["hurtbox_h"] = cfg.hurtbox_h;
+        d["time_limit_frames"] = cfg.time_limit_frames;
+        return d;
+    }
 };
 
 // --- Registration: tells Godot which classes this DLL provides. ---

@@ -18,6 +18,12 @@ if not exist build\godot\CMakeCache.txt (
     echo [play] Configuring the build...
     python -m cmake -S bindings/godot -B build/godot || goto :error
 )
+rem    Windows won't let the build overwrite a DLL that a running Godot has
+rem    loaded, but it does allow renaming it. So we move the old one aside;
+rem    an open game keeps running the old code, a new one gets the new code.
+set "DLL=godot\bin\fightgame.windows.template_debug.x86_64.dll"
+if exist "%DLL%.old" del "%DLL%.old" 2>nul
+if exist "%DLL%" move /y "%DLL%" "%DLL%.old" >nul 2>&1
 echo [play] Building C++...
 python -m cmake --build build/godot --config Release --parallel -- /nologo /verbosity:minimal || goto :error
 

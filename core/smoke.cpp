@@ -8,10 +8,11 @@
 #include <cstdio>
 #include <random>
 
+static GameConfig cfg;
+
 static uint64_t run(int frames) {
     std::mt19937 rng(1234);  // fixed seed, so both runs see the same inputs
     std::uniform_int_distribution<int> stick(-1, 1), button(0, 3);
-    GameConfig cfg;
     GameState s;
     reset(s, cfg);
     for (int t = 0; t < frames; ++t) {
@@ -21,12 +22,20 @@ static uint64_t run(int frames) {
             i.stick_y = static_cast<int8_t>(stick(rng));
             i.button = static_cast<uint8_t>(button(rng));
         }
-        step(s, in, cfg);
+        StepEvents ev;
+        step(s, in, cfg, ev);
+        if (s.over) reset(s, cfg);  // keep playing new games
     }
     return hash_state(s);
 }
 
-int main() {
+// Run from the repo root, or pass the moves folder as the first argument.
+int main(int argc, char** argv) {
+    std::string err = load_moves(cfg, argc > 1 ? argv[1] : "data/moves");
+    if (!err.empty()) {
+        std::printf("FAIL: %s\n", err.c_str());
+        return 1;
+    }
     uint64_t a = run(100000), b = run(100000);
     std::printf("run 1: %016llx\nrun 2: %016llx\n", (unsigned long long)a, (unsigned long long)b);
     if (a != b) {

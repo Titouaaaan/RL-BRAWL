@@ -8,7 +8,7 @@ project(fightcore LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(CORE_SOURCES core/sim.cpp)
+set(CORE_SOURCES core/sim.cpp core/moves.cpp)
 
 # scikit-build-core (driven by `pip install`) sets SKBUILD. In that case we
 # build the Python module. Otherwise, in a plain CMake build, we build the

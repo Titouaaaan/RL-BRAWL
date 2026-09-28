@@ -6,7 +6,7 @@ import numpy as np
 import fightcore
 
 N, STEPS = 4096, 500
-env = fightcore.VecEnv(N)
+env = fightcore.VecEnv(N, "data/moves")  # run from the repo root
 rng = np.random.default_rng(0)
 actions = rng.integers(-1, 2, size=(STEPS, N, 2, 3)).astype(np.int8)  # sticks
 actions[..., 2] = rng.integers(0, 4, size=(STEPS, N, 2))  # buttons

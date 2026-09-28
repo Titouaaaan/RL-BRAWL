@@ -3,6 +3,7 @@
 // without copying them.
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
+#include <nanobind/stl/string.h>  // lets Python str convert to std::string
 
 #include <stdexcept>  // std::invalid_argument (nanobind turns it into a Python ValueError)
 #include <vector>
@@ -24,7 +25,9 @@ struct VecEnv {
     GameConfig cfg;
     std::vector<GameState> games;
 
-    explicit VecEnv(int n) : games(n) {
+    VecEnv(int n, const std::string& moves_dir) : games(n) {
+        std::string err = load_moves(cfg, moves_dir);
+        if (!err.empty()) throw std::invalid_argument(err);
         for (GameState& g : games) reset(g, cfg);
     }
 
@@ -41,7 +44,8 @@ struct VecEnv {
                 in[p].stick_y = a(i, p, 1);
                 in[p].button = static_cast<uint8_t>(a(i, p, 2));
             }
-            ::step(games[i], in, cfg);  // `::` = the free function from sim.h, not this method
+            StepEvents ev;  // ponytail: events discarded until phase 2 turns them into rewards
+            ::step(games[i], in, cfg, ev);  // `::` = the free function from sim.h, not this method
         }
     }
 
@@ -54,12 +58,33 @@ struct VecEnv {
         uint64_t* dst = out.data();
         for (size_t i = 0; i < games.size(); ++i) dst[i] = hash_state(games[i]);
     }
+
+    // One fighter's fields as a dict. For tests and debugging, not for the
+    // training loop (building a dict per call is slow).
+    nb::dict fighter(size_t env, int player) const {
+        if (env >= games.size() || player < 0 || player > 1) throw std::out_of_range("bad env or player index");
+        const Fighter& f = games[env].f[player];
+        nb::dict d;
+        d["x"] = f.x;
+        d["y"] = f.y;
+        d["launch_vx"] = f.launch_vx;
+        d["launch_vy"] = f.launch_vy;
+        d["percent"] = f.percent;
+        d["state"] = (int)f.state;
+        d["hitstun"] = (int)f.hitstun;
+        d["stocks"] = (int)f.stocks;
+        d["invuln"] = (int)f.invuln;
+        d["grounded"] = f.grounded;
+        return d;
+    }
 };
 
 NB_MODULE(fightcore, m) {
+    m.attr("ST_HITSTUN") = (int)ST_HITSTUN;
     nb::class_<VecEnv>(m, "VecEnv")
-        .def(nb::init<int>(), nb::arg("num_envs"))
+        .def(nb::init<int, const std::string&>(), nb::arg("num_envs"), nb::arg("moves_dir"))
         .def("step", &VecEnv::step, nb::arg("actions"))
         .def("hashes", &VecEnv::hashes, nb::arg("out"))
+        .def("fighter", &VecEnv::fighter, nb::arg("env"), nb::arg("player"))
         .def_prop_ro("num_envs", [](const VecEnv& e) { return e.games.size(); });
 }

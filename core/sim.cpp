@@ -1,17 +1,33 @@
 #include "sim.h"
 
 #include <algorithm>  // std::min, std::max, std::clamp
+#include <cmath>      // std::sqrt, std::cos, std::sin, std::lround
+
+static const float DEG_TO_RAD = 3.14159265f / 180.0f;
 
 void reset(GameState& s, const GameConfig& cfg) {
     s = GameState{};  // put every field back to the default written in sim.h
-    s.f[0].x = -cfg.spawn_x;
-    s.f[0].facing = 1;
-    s.f[1].x = cfg.spawn_x;
-    s.f[1].facing = -1;
+    for (int p = 0; p < 2; ++p) {
+        s.f[p].x = (p == 0) ? -cfg.spawn_x : cfg.spawn_x;
+        s.f[p].facing = (p == 0) ? 1 : -1;
+        s.f[p].stocks = cfg.stocks;
+    }
 }
 
+float knockback(const HitboxDef& hb, float victim_percent) {
+    return hb.base_kb + hb.kb_growth * victim_percent;
+}
+
+int hitstun_frames(float kb, const GameConfig& cfg) {
+    return static_cast<int>(std::lround(kb * cfg.hitstun_per_kb));
+}
+
+// ---------------------------------------------------------------------------
+// Small helpers. `static` on a function here means "only visible inside this
+// .cpp file".
+// ---------------------------------------------------------------------------
+
 static void set_state(Fighter& f, FighterState st) {
-    // `static` on a function here means "only visible inside this .cpp file".
     if (f.state != st) {
         f.state = st;
         f.state_frame = 0;
@@ -27,55 +43,262 @@ static Input sanitize(Input in) {
     return in;
 }
 
+// Moves v toward target by at most `amount`, without overshooting.
+static float approach(float v, float target, float amount) {
+    if (v < target) return std::min(v + amount, target);
+    return std::max(v - amount, target);
+}
+
+// States where the fighter is free to act on input.
+static bool actionable(const Fighter& f) {
+    return f.state == ST_IDLE || f.state == ST_WALK || f.state == ST_AIRBORNE;
+}
+
+static void start_attack(Fighter& f, MoveId m) {
+    f.move = m;
+    f.move_hit = false;
+    set_state(f, ST_ATTACK);
+}
+
+// Touching the floor after being in the air.
+static void land(Fighter& f, const GameConfig& cfg) {
+    f.y = 0;
+    f.vy = 0;
+    f.launch_vy = 0;
+    f.grounded = true;
+    f.fastfall = false;
+    f.jumps_left = 2;
+    if (f.state == ST_ATTACK) {  // landed during an aerial: that move's landing lag
+        f.landing_lag = static_cast<int16_t>(cfg.moves[f.move].landing_lag);
+        f.move = MOVE_NONE;
+        set_state(f, ST_LANDING);
+    } else if (f.state == ST_AIRBORNE) {
+        f.landing_lag = static_cast<int16_t>(cfg.landing_lag);
+        set_state(f, ST_LANDING);
+    }
+    // In hitstun you keep sliding along the floor until the hitstun ends.
+}
+
+// ---------------------------------------------------------------------------
+// One fighter, one frame: the state machine, then physics.
+// ---------------------------------------------------------------------------
+
 static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg) {
     const Input in = sanitize(raw_in);
-    bool grounded = (f.state != ST_AIRBORNE);
-    bool jump_pressed = (in.button == BTN_JUMP && f.prev_button != BTN_JUMP);
+    const bool jump_pressed = (in.button == BTN_JUMP && f.prev_button != BTN_JUMP);
 
-    // Jump: a ground jump, or a double jump if one is left.
-    if (jump_pressed && f.jumps_left > 0) {
-        f.vy = cfg.jump_velocity;
-        f.jumps_left -= 1;
-        set_state(f, ST_AIRBORNE);
-        grounded = false;
+    // 1. Leave timed states whose time is up. The fighter can act again on
+    //    this same frame (that's what "actionable on frame N" means).
+    switch (f.state) {
+    case ST_HITSTUN:
+        f.hitstun -= 1;
+        if (f.hitstun <= 0) set_state(f, f.grounded ? ST_IDLE : ST_AIRBORNE);
+        break;
+    case ST_ATTACK:
+        if (f.state_frame >= cfg.moves[f.move].total_frames) {
+            f.move = MOVE_NONE;
+            set_state(f, f.grounded ? ST_IDLE : ST_AIRBORNE);
+        }
+        break;
+    case ST_LANDING:
+        if (f.state_frame >= f.landing_lag) set_state(f, ST_IDLE);
+        break;
+    case ST_JUMPSQUAT:
+        if (f.state_frame >= cfg.jumpsquat_frames) {
+            f.vy = cfg.jump_velocity;
+            f.grounded = false;
+            set_state(f, ST_AIRBORNE);
+        }
+        break;
+    default:
+        break;
     }
 
-    // Horizontal movement. For now air drift is the same as walking.
-    // ponytail: full-speed air control; phase 1 adds air drift and friction from the design doc.
-    f.vx = cfg.walk_speed * in.stick_x;
-    if (in.stick_x != 0) f.facing = in.stick_x;
-    if (grounded) set_state(f, in.stick_x != 0 ? ST_WALK : ST_IDLE);
+    // 2. Read the controller, if the fighter is free to act. Attacks come out
+    //    whenever the button is held (holding light = repeated jabs); jumps
+    //    only on a fresh press.
+    if (actionable(f)) {
+        if (f.grounded) {
+            if (jump_pressed) {
+                f.jumps_left -= 1;
+                set_state(f, ST_JUMPSQUAT);
+            } else if (in.button == BTN_LIGHT || in.button == BTN_HEAVY) {
+                if (in.stick_x != 0) f.facing = in.stick_x;  // attack the way the stick points
+                start_attack(f, in.button == BTN_LIGHT ? MOVE_JAB : MOVE_HEAVY);
+            } else {
+                if (in.stick_x != 0) f.facing = in.stick_x;
+                set_state(f, in.stick_x != 0 ? ST_WALK : ST_IDLE);
+            }
+        } else {
+            if (jump_pressed && f.jumps_left > 0) {
+                f.jumps_left -= 1;
+                f.vy = cfg.double_jump_velocity;
+                f.fastfall = false;
+            } else if (in.button == BTN_LIGHT || in.button == BTN_HEAVY) {
+                start_attack(f, MOVE_AERIAL);  // facing is locked in the air
+            }
+        }
+    }
 
-    // Gravity while airborne, capped at the maximum fall speed.
-    if (!grounded) f.vy = std::max(f.vy - cfg.gravity, -cfg.max_fall_speed);
+    // 3. Horizontal velocity: walking and friction on the ground, drift in the air.
+    if (f.grounded) {
+        if (f.state == ST_WALK) f.vx = cfg.walk_speed * in.stick_x;
+        else f.vx = approach(f.vx, 0.0f, cfg.ground_friction);
+    } else if (f.state != ST_HITSTUN) {  // no drifting while in hitstun
+        if (in.stick_x != 0) f.vx = approach(f.vx, cfg.air_speed * in.stick_x, cfg.air_accel);
+        else f.vx = approach(f.vx, 0.0f, cfg.air_friction);
+    }
 
+    // 4. Vertical velocity: gravity, capped fall speed, fast-fall. Fast-fall
+    //    = holding down once you're falling: you drop at a higher fixed speed.
+    if (!f.grounded) {
+        if (f.state != ST_HITSTUN && in.stick_y < 0 && f.vy <= 0) f.fastfall = true;
+        f.vy = f.fastfall ? -cfg.fastfall_speed : std::max(f.vy - cfg.gravity, -cfg.max_fall_speed);
+    }
+
+    // 5. Knockback shrinks by a fixed amount each frame, keeping its direction.
+    float speed = std::sqrt(f.launch_vx * f.launch_vx + f.launch_vy * f.launch_vy);
+    if (speed > 0) {
+        float scale = std::max(speed - cfg.kb_decay, 0.0f) / speed;
+        f.launch_vx *= scale;
+        f.launch_vy *= scale;
+    }
+
+    // 6. Move, then collide with the floor.
     float prev_y = f.y;
-    f.x += f.vx;
-    f.y += f.vy;
-
-    // Floor collision. The floor has edges, so a fighter who walks past one
-    // falls. The blast zones (KO) are added in phase 1; until then, whoever
-    // falls just keeps falling. Landing needs prev_y >= 0 (the fighter was
-    // above the floor last frame), so someone below the stage can't snap up.
+    f.x += f.vx + f.launch_vx;
+    f.y += f.vy + f.launch_vy;
     bool over_floor = (f.x >= -cfg.stage_half_width && f.x <= cfg.stage_half_width);
-    if (over_floor && prev_y >= 0.0f && f.y <= 0.0f) {
-        f.y = 0.0f;
-        f.vy = 0.0f;
-        f.jumps_left = 2;
-        if (!grounded) set_state(f, ST_IDLE);  // landing
-    } else if (grounded && !over_floor) {
-        set_state(f, ST_AIRBORNE);  // walked off the edge
-        f.jumps_left = std::min<uint8_t>(f.jumps_left, 1);  // only the double jump is left
+
+    if (f.grounded) {
+        if (!over_floor || f.y > 0) {
+            // Walked off the edge or got launched upward.
+            f.grounded = false;
+            if (!over_floor) f.jumps_left = std::min<uint8_t>(f.jumps_left, 1);
+            if (f.state == ST_IDLE || f.state == ST_WALK || f.state == ST_LANDING) set_state(f, ST_AIRBORNE);
+        } else {
+            f.y = 0;  // a downward launch on the ground just stops at the floor
+            f.launch_vy = std::max(f.launch_vy, 0.0f);
+        }
+    } else if (over_floor && prev_y >= 0 && f.y <= 0) {
+        // Landing needs prev_y >= 0 (above the floor last frame), so someone
+        // below the stage can't snap up onto it.
+        land(f, cfg);
     }
 
+    if (f.invuln > 0) f.invuln -= 1;
     f.prev_button = in.button;
     f.state_frame += 1;
 }
 
-void step(GameState& s, const Input in[2], const GameConfig& cfg) {
+// ---------------------------------------------------------------------------
+// Combat
+// ---------------------------------------------------------------------------
+
+// Does a circle overlap an axis-aligned box? Find the point of the box closest
+// to the circle's centre, then check whether it's within the radius.
+static bool circle_hits_box(float cx, float cy, float r, float left, float bottom, float right, float top) {
+    float nx = std::clamp(cx, left, right);
+    float ny = std::clamp(cy, bottom, top);
+    float dx = cx - nx, dy = cy - ny;
+    return dx * dx + dy * dy <= r * r;
+}
+
+// Returns the hitbox of attacker `a` that hits victim `v` this frame, or
+// nullptr. If several overlap, the first one listed in the JSON wins.
+static const HitboxDef* find_hit(const Fighter& a, const Fighter& v, const GameConfig& cfg) {
+    if (a.state != ST_ATTACK || a.move_hit || v.invuln > 0) return nullptr;
+    for (const HitboxDef& hb : cfg.moves[a.move].hitboxes) {
+        if (a.state_frame < hb.start || a.state_frame > hb.end) continue;
+        float cx = a.x + a.facing * hb.x;
+        float cy = a.y + hb.y;
+        float half_w = cfg.hurtbox_w / 2;
+        if (circle_hits_box(cx, cy, hb.radius, v.x - half_w, v.y, v.x + half_w, v.y + cfg.hurtbox_h)) return &hb;
+    }
+    return nullptr;
+}
+
+static void apply_hit(Fighter& a, Fighter& v, const HitboxDef& hb, const GameConfig& cfg) {
+    v.percent += hb.damage;
+    // Knockback uses the damage *after* this hit, so a strong hit at 0% still sends you a bit.
+    float kb = knockback(hb, v.percent);
+    float angle = hb.angle * DEG_TO_RAD;
+    v.launch_vx = a.facing * kb * std::cos(angle);
+    v.launch_vy = kb * std::sin(angle);
+    v.vx = 0;
+    v.vy = 0;
+    v.fastfall = false;
+    v.move = MOVE_NONE;  // getting hit cancels whatever you were doing
+    v.hitstun = static_cast<int16_t>(hitstun_frames(kb, cfg));
+    v.state = ST_HITSTUN;
+    v.state_frame = 0;
+    a.move_hit = true;
+}
+
+static bool outside_blast_zone(const Fighter& f, const GameConfig& cfg) {
+    return f.x < -cfg.blast_x || f.x > cfg.blast_x || f.y > cfg.blast_top || f.y < cfg.blast_bottom;
+}
+
+static void respawn(Fighter& f, int player, const GameConfig& cfg) {
+    Fighter fresh;  // all defaults from sim.h
+    fresh.stocks = f.stocks;
+    fresh.x = (player == 0) ? -cfg.spawn_x : cfg.spawn_x;
+    fresh.y = cfg.respawn_y;
+    fresh.facing = (player == 0) ? 1 : -1;
+    fresh.grounded = false;
+    fresh.state = ST_AIRBORNE;
+    fresh.jumps_left = 1;
+    fresh.invuln = static_cast<int16_t>(cfg.respawn_invuln);
+    fresh.prev_button = f.prev_button;  // so a held jump doesn't fire on respawn
+    f = fresh;
+}
+
+// ---------------------------------------------------------------------------
+// The whole game, one frame.
+// ---------------------------------------------------------------------------
+
+void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev) {
+    ev = StepEvents{};
+    if (s.over) return;
+
     step_fighter(s.f[0], in[0], cfg);
     step_fighter(s.f[1], in[1], cfg);
+
+    // Find both players' hits first, then apply them. If both hit each other
+    // on the same frame (a "trade"), both hits land, whoever is player 0.
+    const HitboxDef* hit[2];
+    for (int p = 0; p < 2; ++p) hit[p] = find_hit(s.f[p], s.f[1 - p], cfg);
+    for (int p = 0; p < 2; ++p) {
+        if (!hit[p]) continue;
+        apply_hit(s.f[p], s.f[1 - p], *hit[p], cfg);
+        ev.hit[p] = true;
+        ev.damage[p] = hit[p]->damage;
+    }
+
+    for (int p = 0; p < 2; ++p) {
+        Fighter& f = s.f[p];
+        if (!outside_blast_zone(f, cfg)) continue;
+        ev.ko[p] = true;
+        f.stocks -= 1;
+        if (f.stocks > 0) respawn(f, p, cfg);
+        else s.over = true;
+    }
+
     s.frame += 1;
+    if (s.frame >= cfg.time_limit_frames) s.over = true;
+}
+
+int active_hitboxes(const GameState& s, const GameConfig& cfg, ActiveHitbox out[], int max) {
+    int n = 0;
+    for (int p = 0; p < 2; ++p) {
+        const Fighter& f = s.f[p];
+        if (f.state != ST_ATTACK) continue;
+        for (const HitboxDef& hb : cfg.moves[f.move].hitboxes) {
+            if (f.state_frame < hb.start || f.state_frame > hb.end || n >= max) continue;
+            out[n++] = ActiveHitbox{p, f.x + f.facing * hb.x, f.y + hb.y, hb.end - f.state_frame, f.move_hit, &hb};
+        }
+    }
+    return n;
 }
 
 // FNV-1a: a very simple hash. For each byte, XOR it in, then multiply by a
@@ -92,19 +315,32 @@ uint64_t hash_state(const GameState& s) {
     // We hash field by field instead of hashing the raw struct in one go,
     // because the compiler inserts unused "padding" bytes between fields to
     // keep them aligned, and those bytes can hold garbage that differs between
-    // two otherwise-identical states.
+    // two otherwise-identical states. When you add a field to Fighter or
+    // GameState, add it here too.
     uint64_t h = 14695981039346656037ull;
     for (const Fighter& f : s.f) {
         mix(h, &f.x, sizeof f.x);
         mix(h, &f.y, sizeof f.y);
         mix(h, &f.vx, sizeof f.vx);
         mix(h, &f.vy, sizeof f.vy);
+        mix(h, &f.launch_vx, sizeof f.launch_vx);
+        mix(h, &f.launch_vy, sizeof f.launch_vy);
+        mix(h, &f.percent, sizeof f.percent);
         mix(h, &f.facing, sizeof f.facing);
         mix(h, &f.state, sizeof f.state);
         mix(h, &f.state_frame, sizeof f.state_frame);
+        mix(h, &f.grounded, sizeof f.grounded);
+        mix(h, &f.fastfall, sizeof f.fastfall);
         mix(h, &f.jumps_left, sizeof f.jumps_left);
+        mix(h, &f.stocks, sizeof f.stocks);
+        mix(h, &f.move, sizeof f.move);
+        mix(h, &f.move_hit, sizeof f.move_hit);
+        mix(h, &f.hitstun, sizeof f.hitstun);
+        mix(h, &f.landing_lag, sizeof f.landing_lag);
+        mix(h, &f.invuln, sizeof f.invuln);
         mix(h, &f.prev_button, sizeof f.prev_button);
     }
     mix(h, &s.frame, sizeof s.frame);
+    mix(h, &s.over, sizeof s.over);
     return h;
 }

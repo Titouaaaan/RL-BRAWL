@@ -1,0 +1,13 @@
+// Aerial (light or heavy, in the air). The first hitbox is the strong "clean"
+// hit, and the second is a weaker "late" hit that lingers. Landing during the
+// move costs 8 frames of landing lag.
+{
+    "total_frames": 26,
+    "landing_lag": 8,
+    "hitboxes": [
+        {"start": 5, "end": 8, "x": 1.4, "y": 1.5, "radius": 1.2,
+         "damage": 9, "base_kb": 0.45, "kb_growth": 0.009, "angle": 45},
+        {"start": 9, "end": 16, "x": 1.4, "y": 1.5, "radius": 1.0,
+         "damage": 5, "base_kb": 0.3, "kb_growth": 0.004, "angle": 45}
+    ]
+}

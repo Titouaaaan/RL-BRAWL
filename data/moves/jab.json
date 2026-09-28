@@ -1,0 +1,14 @@
+// Jab (light, on the ground): fast, weak, short range.
+// Frame data: 2 startup, hits on frames 3-5, then recovery until frame 14.
+// Holding light repeats the jab every 14 frames. kb_growth is kept low so the
+// victim's hitstun stays under 14 frames up to ~190%, meaning they can escape
+// between jabs. Above that, the pushback carries them out of range. Both
+// guard against a "jab lock" (being jabbed forever, unable to act).
+{
+    "total_frames": 14,
+    "landing_lag": 0,
+    "hitboxes": [
+        {"start": 3, "end": 5, "x": 1.8, "y": 1.6, "radius": 0.9,
+         "damage": 3, "base_kb": 0.35, "kb_growth": 0.001, "angle": 30}
+    ]
+}

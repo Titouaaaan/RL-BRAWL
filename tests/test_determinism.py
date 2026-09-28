@@ -1,6 +1,10 @@
+from pathlib import Path
+
 import numpy as np
 
 import fightcore
+
+MOVES = str(Path(__file__).parent.parent / "data" / "moves")
 
 
 def random_actions(steps, num_envs, seed=0):
@@ -11,7 +15,7 @@ def random_actions(steps, num_envs, seed=0):
 
 
 def run(actions):
-    env = fightcore.VecEnv(actions.shape[1])
+    env = fightcore.VecEnv(actions.shape[1], MOVES)
     start = np.zeros(env.num_envs, dtype=np.uint64)
     end = np.zeros(env.num_envs, dtype=np.uint64)
     env.hashes(start)
@@ -31,7 +35,7 @@ def test_same_inputs_same_state():
 
 
 def test_bad_shape_rejected():
-    env = fightcore.VecEnv(4)
+    env = fightcore.VecEnv(4, MOVES)
     try:
         env.step(np.zeros((3, 2, 3), dtype=np.int8))
     except ValueError:

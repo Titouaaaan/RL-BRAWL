@@ -16,7 +16,7 @@ set(GODOTCPP_BUILD_PROFILE "${CMAKE_CURRENT_SOURCE_DIR}/build_profile.json" CACH
 # a static library (compiled code that gets copied into our DLL at link time).
 add_subdirectory("${REPO_ROOT}/extern/godot-cpp" godot-cpp)
 
-add_library(fightgame SHARED fightgame.cpp "${REPO_ROOT}/core/sim.cpp")
+add_library(fightgame SHARED fightgame.cpp "${REPO_ROOT}/core/sim.cpp" "${REPO_ROOT}/core/moves.cpp")
 target_link_libraries(fightgame PRIVATE godot-cpp)
 
 # The file name has to match godot/fightgame.gdextension, e.g.

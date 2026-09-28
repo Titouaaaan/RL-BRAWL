@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Phase 0 (build plumbing) done: movement-only sim, `VecEnv` binding, determinism test, ASan smoke build, benchmark, plus the Godot debug view (`bindings/godot/` + `godot/`, godot-cpp pinned as a submodule in `extern/`). Read `docs/design.md` before starting any phase.
+Phase 0 (build plumbing) and phase 1 (game mechanics) done: full v0 fighter state machine, moves from JSON, hitboxes/knockback/hitstun, blast zones/stocks/respawn, `StepEvents`; `VecEnv` binding (no observations/rewards yet: that's phase 2), Godot debug view (`bindings/godot/` + `godot/`, godot-cpp pinned as a submodule in `extern/`, nlohmann/json vendored in `extern/nlohmann/`). Read `docs/design.md` before starting any phase.
 
 ## Commands
 
@@ -30,7 +30,7 @@ One engine-free C++ core, two front ends:
 - **`core/`** (C++, CMake): the whole game is `GameState` (one plain struct) plus a pure, deterministic `step(state, inputs[2], config, events)`. No globals, no hidden state, no engine calls. Same state + same inputs must give the same result; replays are just a seed plus the input sequence.
 - **`bindings/python/`**: nanobind module exposing a batched `VecEnv` (N games stepped in one C++ call, auto-reset inside, writes obs/reward/done into preallocated NumPy buffers zero-copy). A thin Gymnasium-compatible wrapper sits on top. Never loop over environments in Python.
 - **`bindings/godot/`**: GDExtension exposing the same core to Godot. It's the visual debug view (keyboard play, later replays), and it moved up from phase 5 so each phase can be checked visually. Keep it building whenever the core changes.
-- **`data/moves/`**: one JSON file per move (startup/active/recovery frames, per-active-frame hitbox lists). Loaded by both the core and Godot so visuals never drift from simulation. Tune the game here, not by recompiling. Broken mechanics (spammed moves, jab locks, infinite combos) are fixed in these files, not in RL code.
+- **`data/moves/`**: one JSON file per move (`total_frames`, `landing_lag`, and up to 4 hitboxes, each active on a `start`..`end` frame window; field reference in `docs/running.md`). Loaded by `core/moves.cpp`, which must never throw (the Godot build has exceptions off). Godot gets them through the core too, so visuals never drift from simulation. Tune the game here, not by recompiling. Broken mechanics (spammed moves, jab locks, infinite combos) are fixed in these files, not in RL code.
 - **`train/`**: single-file CleanRL-style PPO, shared weights for both players, opponent sampled ~80% latest / ~20% from a snapshot pool. Only the learning side's experience is used for updates.
 - **`tools/`**: replay tools, throughput benchmarks. (No separate Python viewer; Godot is the viewer.)
 - **`tests/`**: pytest through the bindings.
