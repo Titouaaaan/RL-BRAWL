@@ -116,8 +116,8 @@ struct GameConfig {
     float air_friction = 0.01f;
     float jump_velocity = 0.9f;
     float double_jump_velocity = 0.85f;
-    float gravity = 0.05f;
-    float max_fall_speed = 1.2f;
+    float gravity = 0.045f;        // lower = floatier (longer hang time)
+    float max_fall_speed = 1.1f;
     float fastfall_speed = 1.6f;
     int jumpsquat_frames = 3;
     int landing_lag = 3;  // after a normal landing (aerials use their own)

@@ -22,7 +22,7 @@ Keys are matched by **position** on the keyboard, so on AZERTY, "WASD" is really
 **R** reloads the move files and restarts. **Esc** quits.
 
 - Light or heavy on the ground: **jab** or **heavy**. Hold the stick left or right while pressing to attack in that direction.
-- Light or heavy in the air: **aerial**. Landing during it costs landing lag.
+- Light or heavy in the air: **aerial**. You can turn around in the air, so hold the stick backward to hit behind you. Facing locks once the aerial starts. Landing during it costs landing lag.
 - Holding the attack button repeats the move. Jumping needs a fresh press.
 - Hold **down** while falling to **fast-fall** (drop faster).
 - Leave the faint blast-zone area and you lose a stock. You respawn above the stage, blinking and invulnerable for 2 seconds.

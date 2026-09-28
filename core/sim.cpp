@@ -130,12 +130,16 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
                 set_state(f, in.stick_x != 0 ? ST_WALK : ST_IDLE);
             }
         } else {
+            // You can turn freely in the air, so an aerial can hit either side.
+            // Facing only locks once the aerial starts (actionable() is false
+            // during ATTACK), so the hitbox never flips mid-move.
+            if (in.stick_x != 0) f.facing = in.stick_x;
             if (jump_pressed && f.jumps_left > 0) {
                 f.jumps_left -= 1;
                 f.vy = cfg.double_jump_velocity;
                 f.fastfall = false;
             } else if (in.button == BTN_LIGHT || in.button == BTN_HEAVY) {
-                start_attack(f, MOVE_AERIAL);  // facing is locked in the air
+                start_attack(f, MOVE_AERIAL);
             }
         }
     }

@@ -55,3 +55,16 @@ def test_bad_move_file_gives_readable_error(tmp_path):
     (tmp_path / "heavy.json").write_text('{"total_frames": 40, "landing_lag": 0, "hitboxes": [{"start": 14}]}')
     with pytest.raises(ValueError, match=r"heavy\.json: hitbox 1: missing field \"end\""):
         fightcore.VecEnv(1, str(tmp_path))
+
+
+def test_can_turn_in_air_but_not_mid_aerial():
+    env = fightcore.VecEnv(1, str(MOVES))
+    act(env, p1=(0, 0, 1))  # jump (P1 starts facing right)
+    for _ in range(5):  # jumpsquat, then airborne, holding left
+        act(env, p1=(-1, 0, 0))
+    assert not env.fighter(0, 0)["grounded"]
+    assert env.fighter(0, 0)["facing"] == -1  # turned around in the air
+    act(env, p1=(-1, 0, 2))  # aerial toward the left
+    for _ in range(3):
+        act(env, p1=(1, 0, 0))  # stick right during the aerial...
+    assert env.fighter(0, 0)["facing"] == -1  # ...doesn't flip the move

@@ -69,6 +69,7 @@ struct VecEnv {
         d["y"] = f.y;
         d["launch_vx"] = f.launch_vx;
         d["launch_vy"] = f.launch_vy;
+        d["facing"] = (int)f.facing;
         d["percent"] = f.percent;
         d["state"] = (int)f.state;
         d["hitstun"] = (int)f.hitstun;
