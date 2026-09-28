@@ -14,8 +14,8 @@ import fightcore
 # a state doesn't silently shift them (tests/test_bots.py checks the rest).
 F = fightcore.OBS_FIGHTER
 ME, OPP = 0, F  # start of my / the opponent's fighter block
-X, VY, GROUNDED, JUMPS = 0, 3, 8, 10
-STATE = 12  # the state one-hot starts here (order: FighterState in core/sim.h)
+X, VY, GROUNDED, JUMPS = 0, 3, 8, 11
+STATE = 13  # the state one-hot starts here (order: FighterState in core/sim.h)
 ST_ATTACK, ST_LANDING, ST_HITSTUN = 5, 4, 6
 EDGE_RIGHT, EDGE_LEFT = F - 2, F - 1  # distance to the stage edges, / stage_half_width
 DX = 2 * F  # opponent x - my x, / blast_x

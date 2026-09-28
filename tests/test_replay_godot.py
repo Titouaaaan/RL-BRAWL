@@ -18,8 +18,8 @@ import replay  # noqa: E402  (train/replay.py)
 
 
 def find_godot():
-    if os.environ.get("GODOT"):
-        exe = Path(os.environ["GODOT"])
+    exe = Path(os.environ.get("GODOT", ""))
+    if exe.name.lower().startswith("godot"):  # ignore GODOT if it points at something else
         console = exe.with_name(exe.stem + "_console.exe")  # the console build prints to stdout
         return console if console.exists() else exe
     found = sorted((Path.home() / "Downloads").glob("**/Godot_v4*_win64_console.exe"))

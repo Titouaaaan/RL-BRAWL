@@ -1,5 +1,5 @@
-// Up-air (light or heavy + up, in the air): a fast hit above you. It juggles
-// (keeps a launched opponent in the air) and, at high %, KOs off the top.
+// Up-air (light + up, in the air): a fast hit above you. It juggles
+// (keeps a launched opponent in the air); the heavy up-air is the finisher.
 // 3 startup, hits on frames 4-8, 6 frames of landing lag.
 {
     "total_frames": 24,

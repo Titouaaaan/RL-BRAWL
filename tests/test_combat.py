@@ -113,14 +113,14 @@ def move_id(name):
 def test_stick_picks_the_move():
     env = fightcore.VecEnv(1, str(MOVES), frame_skip=1)
     act(env, p1=(0, 1, 2))  # light + up on the ground
-    assert env.fighter(0, 0)["move"] == move_id("utilt")
+    assert env.fighter(0, 0)["move"] == move_id("up_tilt")
     for _ in range(25):
         act(env)
     act(env, p1=(0, 0, 1))  # jump...
     for _ in range(4):
         act(env)
     act(env, p1=(0, -1, 3))  # ...heavy + down in the air
-    assert env.fighter(0, 0)["move"] == move_id("dair")
+    assert env.fighter(0, 0)["move"] == move_id("heavy_down_air")
 
 
 def test_dash_then_run():
@@ -148,3 +148,43 @@ def test_cannot_push_someone_off_the_stage():
     p1, p2 = env.fighter(0, 0), env.fighter(0, 1)
     assert p1["grounded"] and p1["stocks"] == 3 and p1["x"] >= -30.0  # pinned at the edge, still on stage
     assert p2["x"] - p1["x"] > 1.999
+
+
+def jump_to_apex(env):
+    act(env, p1=(0, 0, 1))
+    for _ in range(25):  # jumpsquat, then rise until falling
+        act(env)
+
+
+def test_holding_down_fast_falls():
+    env = fightcore.VecEnv(1, str(MOVES), frame_skip=1)
+    jump_to_apex(env)
+    for _ in range(5):
+        act(env, p1=(0, -1, 0))
+    assert not env.fighter(0, 0)["fastfall"]  # 5 frames: not yet
+    act(env, p1=(0, -1, 0))
+    assert env.fighter(0, 0)["fastfall"]  # 6th frame held: fast-fall
+
+
+def test_down_plus_attack_is_a_move_not_a_drop():
+    env = fightcore.VecEnv(1, str(MOVES), frame_skip=1)
+    jump_to_apex(env)
+    for _ in range(10):  # hold down + light: down-air, and no fast-fall
+        act(env, p1=(0, -1, 2))
+    f = env.fighter(0, 0)
+    assert f["move"] == move_id("down_air") and not f["fastfall"]
+
+
+def test_every_move_is_reachable():
+    # Each (ground/air, light/heavy, stick down/neutral/up) picks its own move.
+    seen = set()
+    for button in (2, 3):
+        for sy in (-1, 0, 1):
+            env = fightcore.VecEnv(1, str(MOVES), frame_skip=1)
+            act(env, p1=(0, sy, button))  # on the ground
+            seen.add(env.fighter(0, 0)["move"])
+            env = fightcore.VecEnv(1, str(MOVES), frame_skip=1)
+            jump_to_apex(env)
+            act(env, p1=(0, sy, button))  # in the air
+            seen.add(env.fighter(0, 0)["move"])
+    assert seen == set(range(len(fightcore.MOVE_NAMES)))

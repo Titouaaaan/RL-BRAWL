@@ -24,7 +24,7 @@ v0 is one character in a mirror match on one flat stage. This is enough to produ
 - **Heavy attack:** slow startup, high damage, KO-capable knockback.
 - **Aerial attack:** one attack usable in the air.
 
-- **More moves (Sep 28, 2026):** up-tilt, up-air, down-air (spike), chosen by stick direction; dash then run; grounded fighters push each other apart but can't be pushed off the stage. Added after self-play converged to point-blank jab trading (40% of hits were same-frame trades, since fighters could stand inside each other).
+- **More moves (Sep 28, 2026):** 12 moves: ground/air x light/heavy x stick down/neutral/up (e.g. up-tilt, down-heavy, heavy down-air spike). Fast-fall needs down held 6 frames without attacking, so down + attack is a down move; the hold counter is observed so the policy stays Markov; dash then run; grounded fighters push each other apart but can't be pushed off the stage. Added after self-play converged to point-blank jab trading (40% of hits were same-frame trades, since fighters could stand inside each other).
 - **Dodge:** on the ground a spot dodge (i-frames, short recovery); in the air an air dodge (i-frames, then helpless until landing, as in Smash).
 
 Left out of v0: shield, grabs, ledges, specials, multiple characters.

@@ -1,0 +1,11 @@
+// Down-tilt (light + down, on the ground): a quick, low poke along the floor.
+// Low angle, so it pushes the opponent away rather than up: good for keeping
+// someone out, and safe-ish because it recovers fast.
+{
+    "total_frames": 16,
+    "landing_lag": 0,
+    "hitboxes": [
+        {"start": 4, "end": 6, "x": 1.9, "y": 0.4, "radius": 0.9,
+         "damage": 5, "base_kb": 0.4, "kb_growth": 0.004, "angle": 20}
+    ]
+}

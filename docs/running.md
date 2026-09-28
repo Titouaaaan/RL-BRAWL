@@ -39,10 +39,16 @@ To remap, edit the `PAD` table near the top of `godot/main.gd`.
 
 - Moving starts with a short, fast **dash** (8 frames), then a **run**. Turning around during the dash dashes the other way (a "dash dance").
 - Fighters on the ground **push each other** apart instead of walking through each other. Nobody can be pushed off the stage: a fighter at the edge acts as a wall.
-- On the ground: **light = jab**, **light + up = up-tilt** (launches upward, anti-air), **heavy = heavy**. Hold left or right while pressing to attack in that direction.
-- In the air: **light or heavy = aerial**, **+ up = up-air** (juggles), **+ down = down-air** (slow, but its first hit *spikes* downward: deadly on someone below the stage). You can turn around in the air, so hold the stick backward to hit behind you. Facing locks once the move starts. Landing during an aerial costs its landing lag.
+- **Attacks:** light or heavy, combined with the stick's up/down, on the ground or in the air, gives 12 moves. Left/right only sets which way you face (hold it backward to turn and hit behind you, also in the air). Facing locks once the move starts. Landing during an air move costs its landing lag.
+
+  | | down | neutral / side | up |
+  |---|---|---|---|
+  | ground, light | down-tilt: low poke | jab | up-tilt: launches up, anti-air |
+  | ground, heavy | down-heavy: hits both sides | heavy | up-heavy: KOs upward |
+  | air, light | down-air: quick kick below | air | up-air: juggles |
+  | air, heavy | heavy down-air: **spike** (sends downward) | heavy air | heavy up-air: launches high |
 - Holding the attack button repeats the move. Jumping needs a fresh press.
-- Hold **down** while falling to **fast-fall** (drop faster).
+- **Fast-fall:** hold **down without attacking** for 6 frames (0.1 s) while falling. Down + an attack does the down move instead and doesn't drop you; to fast-fall during a down-air, let go of the attack button and keep holding down.
 - **Dodge** on the ground: a *spot dodge*. You're intangible (hits pass through you) for frames 3-15 of 26, then stuck for a moment.
 - **Dodge** in the air: an *air dodge*. Intangible for frames 3-18, and afterwards you're **helpless**: you can drift but can't jump, attack or dodge until you touch the ground (then 10 frames of landing lag). Careful off the stage: an air dodge there usually means falling to your doom.
 - While intangible, a fighter is drawn see-through with a white outline.
@@ -52,7 +58,7 @@ To remap, edit the `PAD` table near the top of `godot/main.gd`.
 
 ## Tuning moves
 
-Each move is a file in `data/moves/` (`jab`, `heavy`, `aerial`, `utilt`, `uair`, `dair`). Edit one, save, and press **R** in the game: no rebuild needed. If the file has a mistake, the error shows in red at the top of the game window.
+Each move is a file in `data/moves/`, named as in the table above (`jab.json`, `up_tilt.json`, `heavy_down_air.json`, ...). Edit one, save, and press **R** in the game: no rebuild needed. If the file has a mistake, the error shows in red at the top of the game window.
 
 | Field | Meaning |
 |---|---|

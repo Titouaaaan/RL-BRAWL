@@ -54,6 +54,15 @@ static bool actionable(const Fighter& f) {
     return f.state == ST_IDLE || f.state == ST_RUN || f.state == ST_AIRBORNE;
 }
 
+// The move table from sim.h: [air?][heavy?][stick down / neutral / up].
+static MoveId pick_move(bool grounded, uint8_t button, int8_t stick_y) {
+    static const MoveId table[2][2][3] = {
+        {{MOVE_DOWN_TILT, MOVE_JAB, MOVE_UP_TILT}, {MOVE_DOWN_HEAVY, MOVE_HEAVY, MOVE_UP_HEAVY}},
+        {{MOVE_DOWN_AIR, MOVE_AIR, MOVE_UP_AIR}, {MOVE_HEAVY_DOWN_AIR, MOVE_HEAVY_AIR, MOVE_HEAVY_UP_AIR}},
+    };
+    return table[grounded ? 0 : 1][button == BTN_HEAVY ? 1 : 0][stick_y + 1];
+}
+
 static void start_attack(Fighter& f, MoveId m) {
     f.move = m;
     f.move_hit = false;
@@ -134,8 +143,7 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
                 set_state(f, ST_JUMPSQUAT);
             } else if (in.button == BTN_LIGHT || in.button == BTN_HEAVY) {
                 if (in.stick_x != 0) f.facing = in.stick_x;  // attack the way the stick points
-                if (in.button == BTN_HEAVY) start_attack(f, MOVE_HEAVY);
-                else start_attack(f, in.stick_y > 0 ? MOVE_UTILT : MOVE_JAB);
+                start_attack(f, pick_move(true, in.button, in.stick_y));
             } else if (in.button == BTN_DODGE) {
                 set_state(f, ST_SPOTDODGE);
             } else if (in.stick_x != 0) {
@@ -159,7 +167,7 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
                 f.vy = cfg.double_jump_velocity;
                 f.fastfall = false;
             } else if (in.button == BTN_LIGHT || in.button == BTN_HEAVY) {
-                start_attack(f, in.stick_y > 0 ? MOVE_UAIR : in.stick_y < 0 ? MOVE_DAIR : MOVE_AERIAL);
+                start_attack(f, pick_move(false, in.button, in.stick_y));
             } else if (in.button == BTN_DODGE) {
                 f.fastfall = false;
                 set_state(f, ST_AIRDODGE);
@@ -176,10 +184,15 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
         else f.vx = approach(f.vx, 0.0f, cfg.air_friction);
     }
 
-    // 4. Vertical velocity: gravity, capped fall speed, fast-fall. Fast-fall
-    //    = holding down once you're falling: you drop at a higher fixed speed.
+    // 4. Vertical velocity: gravity, capped fall speed, fast-fall. Fast-fall =
+    //    holding down (without attacking) for fastfall_hold frames while
+    //    falling: you drop at a higher fixed speed. Pressing an attack resets
+    //    the count, so down + attack is a down move, not a drop.
+    bool attacking = (in.button == BTN_LIGHT || in.button == BTN_HEAVY);
+    f.down_frames = (in.stick_y < 0 && !attacking) ? uint8_t(std::min(f.down_frames + 1, 255)) : 0;
     if (!f.grounded) {
-        if (f.state != ST_HITSTUN && f.state != ST_AIRDODGE && in.stick_y < 0 && f.vy <= 0) f.fastfall = true;
+        bool can_fastfall = f.state != ST_HITSTUN && f.state != ST_AIRDODGE;
+        if (can_fastfall && f.down_frames >= cfg.fastfall_hold && f.vy <= 0) f.fastfall = true;
         f.vy = f.fastfall ? -cfg.fastfall_speed : std::max(f.vy - cfg.gravity, -cfg.max_fall_speed);
     }
 
@@ -398,6 +411,7 @@ uint64_t hash_state(const GameState& s) {
         mix(h, &f.state_frame, sizeof f.state_frame);
         mix(h, &f.grounded, sizeof f.grounded);
         mix(h, &f.fastfall, sizeof f.fastfall);
+        mix(h, &f.down_frames, sizeof f.down_frames);
         mix(h, &f.jumps_left, sizeof f.jumps_left);
         mix(h, &f.stocks, sizeof f.stocks);
         mix(h, &f.move, sizeof f.move);

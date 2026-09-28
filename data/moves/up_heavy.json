@@ -1,0 +1,11 @@
+// Up-heavy (heavy + up, on the ground): a big, slow hit straight up. The main
+// way to KO off the top blast zone, and it punishes people landing on you.
+// 10 startup, huge recovery: very punishable if it misses.
+{
+    "total_frames": 38,
+    "landing_lag": 0,
+    "hitboxes": [
+        {"start": 11, "end": 15, "x": 0.4, "y": 3.4, "radius": 1.6,
+         "damage": 15, "base_kb": 0.7, "kb_growth": 0.015, "angle": 88}
+    ]
+}

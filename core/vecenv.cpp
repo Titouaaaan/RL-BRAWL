@@ -25,6 +25,8 @@ static void write_fighter(const Fighter& f, const GameConfig& cfg, float m, floa
     *o++ = f.stocks / float(cfg.stocks);
     *o++ = f.grounded;
     *o++ = f.fastfall;
+    // How far along the hold-down-to-fast-fall timer is (1 = fast-fall ready).
+    *o++ = std::min<float>(f.down_frames, float(cfg.fastfall_hold)) / std::max(cfg.fastfall_hold, 1);
     *o++ = f.jumps_left / 2.0f;
     *o++ = m * f.facing;
     for (int st = 0; st < NUM_STATES; ++st) *o++ = (f.state == st);  // one-hot, NUM_STATES values

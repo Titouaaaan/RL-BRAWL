@@ -17,7 +17,12 @@
 
 using json = nlohmann::json;
 
-const char* const MOVE_NAMES[NUM_MOVES] = {"jab", "heavy", "aerial", "utilt", "uair", "dair"};
+const char* const MOVE_NAMES[NUM_MOVES] = {
+    "down_tilt", "jab", "up_tilt",
+    "down_heavy", "heavy", "up_heavy",
+    "down_air", "air", "up_air",
+    "heavy_down_air", "heavy_air", "heavy_up_air",
+};
 
 static bool read_float(const json& obj, const char* key, float& out, std::string& err) {
     auto it = obj.find(key);  // find() returns end() if missing (or if obj isn't an object)

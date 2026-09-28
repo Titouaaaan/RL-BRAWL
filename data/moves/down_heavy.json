@@ -1,0 +1,13 @@
+// Down-heavy (heavy + down, on the ground): sweeps both sides at once (a
+// negative x means behind you). Low launch angle, so at high % it sends the
+// opponent sideways off the stage. Good when you're not sure where they are.
+{
+    "total_frames": 38,
+    "landing_lag": 0,
+    "hitboxes": [
+        {"start": 10, "end": 13, "x": 1.7, "y": 0.5, "radius": 1.1,
+         "damage": 13, "base_kb": 0.6, "kb_growth": 0.013, "angle": 25},
+        {"start": 10, "end": 13, "x": -1.7, "y": 0.5, "radius": 1.1,
+         "damage": 13, "base_kb": 0.6, "kb_growth": 0.013, "angle": 155}
+    ]
+}

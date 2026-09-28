@@ -307,7 +307,7 @@ func draw_hud(font: Font) -> void:
 	if replay.is_empty():
 		draw_string(font, Vector2(16, 24), "P1: WASD, Space jump, J light, K heavy, L dodge (or controller 1)", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
 		draw_string(font, Vector2(16, 44), "P2: arrows, Enter jump, . light, / heavy, , dodge (or controller 2)", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
-		draw_string(font, Vector2(16, 64), "Attack + up/down: up-tilt, up-air, down-air.   R / Options: reload moves + restart   Esc: quit", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
+		draw_string(font, Vector2(16, 64), "Light/heavy + up/down/neutral = 12 moves (ground and air). Hold down alone = fast-fall.   R / Options: reload + restart   Esc: quit", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
 	else:
 		var status := "PAUSED" if paused else "%sx" % SPEEDS[speed_i]
 		var line := "REPLAY  frame %d / %d   %s" % [replay_frame, replay.inputs.size(), status]

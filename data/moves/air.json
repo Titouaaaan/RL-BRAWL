@@ -1,4 +1,4 @@
-// Aerial (light or heavy, in the air). The first hitbox is the strong "clean"
+// Air (light, in the air, no up/down). The first hitbox is the strong "clean"
 // hit, and the second is a weaker "late" hit that lingers. Landing during the
 // move costs 8 frames of landing lag.
 {

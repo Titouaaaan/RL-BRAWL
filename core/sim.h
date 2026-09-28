@@ -29,18 +29,21 @@ struct Input {
 // Moves (loaded from data/moves/*.json by load_moves in moves.cpp)
 // ---------------------------------------------------------------------------
 
-// Which move comes out is decided by the game from button + stick, not by the agent:
-//   ground: light = jab, light + up = up-tilt, heavy = heavy
-//   air:    light/heavy = aerial (neutral air), + up = up-air, + down = down-air
+// Which move comes out is decided by the game, not the agent: ground or air,
+// light or heavy, and the stick's up/down (left/right only sets facing).
+//
+//                  down              neutral / side    up
+//   ground light   down_tilt         jab               up_tilt
+//   ground heavy   down_heavy        heavy             up_heavy
+//   air light      down_air          air               up_air
+//   air heavy      heavy_down_air    heavy_air         heavy_up_air
 enum MoveId : int8_t {
     MOVE_NONE = -1,
-    MOVE_JAB = 0,
-    MOVE_HEAVY = 1,
-    MOVE_AERIAL = 2,
-    MOVE_UTILT = 3,
-    MOVE_UAIR = 4,
-    MOVE_DAIR = 5,
-    NUM_MOVES = 6,
+    MOVE_DOWN_TILT, MOVE_JAB, MOVE_UP_TILT,
+    MOVE_DOWN_HEAVY, MOVE_HEAVY, MOVE_UP_HEAVY,
+    MOVE_DOWN_AIR, MOVE_AIR, MOVE_UP_AIR,
+    MOVE_HEAVY_DOWN_AIR, MOVE_HEAVY_AIR, MOVE_HEAVY_UP_AIR,
+    NUM_MOVES,  // = 12 (an enum's values count up from 0, so this is the count)
 };
 // File names in data/moves/ (without .json), in MoveId order. Defined in moves.cpp;
 // Python, Godot and replays all read the list from here.
@@ -101,6 +104,10 @@ struct Fighter {
     int32_t state_frame = 0;  // frames spent in `state` so far (1 on the first frame)
     bool grounded = true;
     bool fastfall = false;
+    // Consecutive frames the stick has been held down with no attack button.
+    // Fast-fall needs GameConfig::fastfall_hold of them, so down + attack
+    // does a down move without dropping.
+    uint8_t down_frames = 0;
     uint8_t jumps_left = 2;   // one ground jump plus one double jump
     uint8_t stocks = 3;       // lives left
     int8_t move = MOVE_NONE;  // current move while state == ST_ATTACK
@@ -140,6 +147,7 @@ struct GameConfig {
     float gravity = 0.045f;        // lower = floatier (longer hang time)
     float max_fall_speed = 1.1f;
     float fastfall_speed = 1.6f;
+    int fastfall_hold = 6;  // frames of holding down (no attack) before fast-falling
     int jumpsquat_frames = 3;
     int landing_lag = 3;  // after a normal landing (aerials use their own)
     // Dodges. "Intangible" (i-frames) = hitboxes pass through you. Frames
