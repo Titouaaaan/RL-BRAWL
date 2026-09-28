@@ -31,6 +31,9 @@ static nb::ndarray<nb::numpy, T> view(std::vector<T>& buf, Dims... dims) {
 NB_MODULE(fightcore, m) {
     m.attr("OBS_DIM") = OBS_DIM;
     m.attr("OBS_FIGHTER") = OBS_FIGHTER;
+    nb::list names;
+    for (const char* n : MOVE_NAMES) names.append(n);
+    m.attr("MOVE_NAMES") = nb::tuple(names);
     m.attr("NUM_STATES") = (int)NUM_STATES;
     m.attr("ST_HITSTUN") = (int)ST_HITSTUN;
     m.attr("ST_SPOTDODGE") = (int)ST_SPOTDODGE;
@@ -101,6 +104,7 @@ NB_MODULE(fightcore, m) {
                  d["facing"] = (int)f.facing;
                  d["percent"] = f.percent;
                  d["state"] = (int)f.state;
+                 d["move"] = (int)f.move;
                  d["hitstun"] = (int)f.hitstun;
                  d["stocks"] = (int)f.stocks;
                  d["invuln"] = (int)f.invuln;

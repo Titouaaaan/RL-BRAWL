@@ -20,10 +20,17 @@ def act(env, p1=(0, 0, 0), p2=(0, 0, 0)):
     env.step(np.array([[p1, p2]], dtype=np.int8))
 
 
+def approach(env, gap):
+    """P1 runs right until the fighters are closer than `gap`, then lets the dash/run slide stop."""
+    while env.fighter(0, 1)["x"] - env.fighter(0, 0)["x"] > gap:
+        act(env, p1=(1, 0, 0))
+    for _ in range(12):
+        act(env)
+
+
 def test_jab_damage_knockback_hitstun():
     env = fightcore.VecEnv(1, str(MOVES), frame_skip=1)
-    for _ in range(66):  # walk P1 right until P2 is in jab range
-        act(env, p1=(1, 0, 0))
+    approach(env, 3.2)  # into jab range
     for _ in range(10):  # hold light until the jab connects
         act(env, p1=(0, 0, 2))
         if env.fighter(0, 1)["percent"] > 0:
@@ -41,7 +48,7 @@ def test_jab_damage_knockback_hitstun():
 def test_walk_off_stage_loses_stock_and_respawns():
     env = fightcore.VecEnv(1, str(MOVES), frame_skip=1)
     for _ in range(600):
-        act(env, p2=(-1, 0, 0))  # P2 walks left off the stage
+        act(env, p2=(-1, 0, 0))  # P2 runs left off the stage
         if env.fighter(0, 1)["stocks"] < 3:
             break
     p2 = env.fighter(0, 1)
@@ -50,7 +57,7 @@ def test_walk_off_stage_loses_stock_and_respawns():
 
 
 def test_bad_move_file_gives_readable_error(tmp_path):
-    for name in ("jab", "heavy", "aerial"):
+    for name in fightcore.MOVE_NAMES:
         (tmp_path / f"{name}.json").write_text((MOVES / f"{name}.json").read_text())
     (tmp_path / "heavy.json").write_text('{"total_frames": 40, "landing_lag": 0, "hitboxes": [{"start": 14}]}')
     with pytest.raises(ValueError, match=r"heavy\.json: hitbox 1: missing field \"end\""):
@@ -72,8 +79,7 @@ def test_can_turn_in_air_but_not_mid_aerial():
 
 def test_spot_dodge_makes_a_jab_whiff():
     env = fightcore.VecEnv(1, str(MOVES), frame_skip=1)
-    for _ in range(66):
-        act(env, p1=(1, 0, 0))  # walk into jab range
+    approach(env, 3.2)  # into jab range
     act(env, p2=(0, 0, 4))  # P2 starts a spot dodge...
     for _ in range(4):
         act(env, p1=(0, 0, 2), p2=(0, 0, 4))  # ...and P1 jabs into it
@@ -98,3 +104,47 @@ def test_air_dodge_leaves_you_helpless_until_landing():
         if env.fighter(0, 0)["grounded"]:
             break
     assert env.fighter(0, 0)["state"] == fightcore.ST_LANDING  # landing lag, then free
+
+
+def move_id(name):
+    return fightcore.MOVE_NAMES.index(name)
+
+
+def test_stick_picks_the_move():
+    env = fightcore.VecEnv(1, str(MOVES), frame_skip=1)
+    act(env, p1=(0, 1, 2))  # light + up on the ground
+    assert env.fighter(0, 0)["move"] == move_id("utilt")
+    for _ in range(25):
+        act(env)
+    act(env, p1=(0, 0, 1))  # jump...
+    for _ in range(4):
+        act(env)
+    act(env, p1=(0, -1, 3))  # ...heavy + down in the air
+    assert env.fighter(0, 0)["move"] == move_id("dair")
+
+
+def test_dash_then_run():
+    env = fightcore.VecEnv(1, str(MOVES), frame_skip=1)
+    xs = [env.fighter(0, 0)["x"]]
+    for _ in range(20):
+        act(env, p1=(1, 0, 0))
+        xs.append(env.fighter(0, 0)["x"])
+    speeds = np.diff(xs)
+    assert np.allclose(speeds[:8], 0.45) and np.allclose(speeds[10:], 0.34)  # GameConfig dash/run speeds
+
+
+def test_grounded_fighters_cannot_overlap():
+    env = fightcore.VecEnv(1, str(MOVES), frame_skip=1)
+    for _ in range(120):  # P1 runs into the standing P2 and keeps pushing
+        act(env, p1=(1, 0, 0))
+        gap = env.fighter(0, 1)["x"] - env.fighter(0, 0)["x"]
+        assert gap > 1.999  # hurtboxes are 2 wide: they touch but never overlap
+
+
+def test_cannot_push_someone_off_the_stage():
+    env = fightcore.VecEnv(1, str(MOVES), frame_skip=1)
+    for _ in range(300):  # P2 runs left into P1 and keeps shoving toward the edge
+        act(env, p2=(-1, 0, 0))
+    p1, p2 = env.fighter(0, 0), env.fighter(0, 1)
+    assert p1["grounded"] and p1["stocks"] == 3 and p1["x"] >= -30.0  # pinned at the edge, still on stage
+    assert p2["x"] - p1["x"] > 1.999

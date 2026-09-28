@@ -44,8 +44,10 @@ def test_player1_stick_is_mirrored():
 
 def test_damage_reward_is_zero_sum():
     env = fightcore.VecEnv(1, MOVES, frame_skip=1, damage_reward=0.01)
-    for _ in range(66):
-        env.step(acts(1, p1=(1, 0, 0)))  # walk into jab range
+    while env.fighter(0, 1)["x"] - env.fighter(0, 0)["x"] > 3.2:
+        env.step(acts(1, p1=(1, 0, 0)))  # run into jab range
+    for _ in range(12):
+        env.step(acts(1))  # let the run slide stop
     total = np.zeros(2)
     for _ in range(10):
         env.step(acts(1, p1=(0, 0, 2)))  # hold jab
@@ -58,7 +60,7 @@ def test_ko_reward_termination_winner_and_autoreset():
     fresh = env.obs.copy()
     kos = 0
     for _ in range(3000):
-        env.step(acts(1, p2=(1, 0, 0)))  # P2 walks "forward" (its mirrored right = real left), off the edge
+        env.step(acts(1, p2=(-1, 0, 0)))  # P2 runs "backward" (its mirrored left = real right), off the far edge
         r = env.reward[0]
         if r[1] <= -1:
             kos += 1

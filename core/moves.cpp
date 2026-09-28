@@ -1,4 +1,6 @@
 // Loads move frame data from data/moves/*.json into GameConfig::moves.
+// To add a move: a MoveId in sim.h, its name in MOVE_NAMES below, a JSON
+// file, and the button/stick rule that picks it in step_fighter (sim.cpp).
 //
 // This is kept out of sim.cpp because the JSON library is one ~25,000-line
 // header: only this file pays its compile time.
@@ -15,7 +17,7 @@
 
 using json = nlohmann::json;
 
-static const char* MOVE_FILES[NUM_MOVES] = {"jab.json", "heavy.json", "aerial.json"};
+const char* const MOVE_NAMES[NUM_MOVES] = {"jab", "heavy", "aerial", "utilt", "uair", "dair"};
 
 static bool read_float(const json& obj, const char* key, float& out, std::string& err) {
     auto it = obj.find(key);  // find() returns end() if missing (or if obj isn't an object)
@@ -76,7 +78,7 @@ static std::string parse_move(const std::string& text, MoveDef& out) {
 std::string load_moves_from_text(GameConfig& cfg, const std::string texts[NUM_MOVES]) {
     for (int m = 0; m < NUM_MOVES; ++m) {
         std::string err = parse_move(texts[m], cfg.moves[m]);
-        if (!err.empty()) return std::string(MOVE_FILES[m]) + ": " + err;
+        if (!err.empty()) return std::string(MOVE_NAMES[m]) + ".json: " + err;
     }
     return "";
 }
@@ -84,7 +86,7 @@ std::string load_moves_from_text(GameConfig& cfg, const std::string texts[NUM_MO
 std::string load_moves(GameConfig& cfg, const std::string& dir) {
     std::string texts[NUM_MOVES];
     for (int m = 0; m < NUM_MOVES; ++m) {
-        std::string path = dir + "/" + MOVE_FILES[m];
+        std::string path = dir + "/" + MOVE_NAMES[m] + ".json";
         std::ifstream file(path);
         if (!file) return path + ": cannot open file";
         // Read the whole file into a string: istreambuf_iterator walks it char by char.

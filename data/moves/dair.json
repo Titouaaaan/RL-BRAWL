@@ -1,0 +1,16 @@
+// Down-air (light or heavy + down, in the air): a slow stomp below your feet.
+// The clean hit is a "spike": it launches DOWNWARD (negative angle), so an
+// opponent hit off the stage is sent toward the bottom blast zone. That's
+// what makes edgeguarding (attacking someone trying to get back) worth it.
+// On a grounded opponent it just pops them along the floor.
+// Slow (7 startup) with big landing lag (14): risky to throw out carelessly.
+{
+    "total_frames": 32,
+    "landing_lag": 14,
+    "hitboxes": [
+        {"start": 8, "end": 11, "x": 0.2, "y": -0.2, "radius": 1.2,
+         "damage": 12, "base_kb": 0.6, "kb_growth": 0.01, "angle": -80},
+        {"start": 12, "end": 18, "x": 0.2, "y": 0.0, "radius": 1.0,
+         "damage": 6, "base_kb": 0.35, "kb_growth": 0.005, "angle": 40}
+    ]
+}

@@ -31,7 +31,8 @@ protected:
     // Godot calls this once, to learn which methods scripts may call.
     static void _bind_methods() {
         ClassDB::bind_method(D_METHOD("load_moves", "dir"), &FightGame::load_moves);
-        ClassDB::bind_method(D_METHOD("load_moves_from_text", "jab", "heavy", "aerial"), &FightGame::load_moves_from_text);
+        ClassDB::bind_method(D_METHOD("load_moves_from_text", "texts"), &FightGame::load_moves_from_text);
+        ClassDB::bind_method(D_METHOD("get_move_names"), &FightGame::get_move_names);
         ClassDB::bind_method(D_METHOD("get_hash"), &FightGame::get_hash);
         ClassDB::bind_method(D_METHOD("reset"), &FightGame::reset);
         ClassDB::bind_method(
@@ -56,9 +57,11 @@ public:
         return String::utf8(err.c_str());
     }
 
-    // Same, from the files' contents (replays carry their own copy).
-    String load_moves_from_text(const String& jab, const String& heavy, const String& aerial) {
-        std::string texts[NUM_MOVES] = {jab.utf8().get_data(), heavy.utf8().get_data(), aerial.utf8().get_data()};
+    // Same, from the files' contents in get_move_names() order (replays carry their own copy).
+    String load_moves_from_text(const PackedStringArray& in) {
+        if (in.size() != NUM_MOVES) return "expected one text per move in get_move_names()";
+        std::string texts[NUM_MOVES];
+        for (int m = 0; m < NUM_MOVES; ++m) texts[m] = in[m].utf8().get_data();
         std::string err = ::load_moves_from_text(cfg, texts);
         ::reset(state, cfg);
         return String::utf8(err.c_str());
@@ -70,6 +73,12 @@ public:
         char buf[17];
         std::snprintf(buf, sizeof buf, "%016llx", (unsigned long long)hash_state(state));
         return String(buf);
+    }
+
+    PackedStringArray get_move_names() const {
+        PackedStringArray out;
+        for (const char* n : MOVE_NAMES) out.push_back(n);
+        return out;
     }
 
     void reset() { ::reset(state, cfg); }
@@ -138,6 +147,7 @@ public:
         d["hurtbox_w"] = cfg.hurtbox_w;
         d["hurtbox_h"] = cfg.hurtbox_h;
         d["time_limit_frames"] = cfg.time_limit_frames;
+        d["dash_frames"] = cfg.dash_frames;
         return d;
     }
 };

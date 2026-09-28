@@ -15,7 +15,7 @@ import numpy as np
 
 import fightcore
 
-MOVE_NAMES = ("jab", "heavy", "aerial")  # the files core/moves.cpp loads
+MOVE_NAMES = fightcore.MOVE_NAMES  # the files core/moves.cpp loads, from C++
 
 
 def play_and_record(moves_dir, policy0, policy1, frame_skip=4, reaction_delay=0, meta=None):

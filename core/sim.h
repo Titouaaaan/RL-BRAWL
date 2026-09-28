@@ -29,9 +29,22 @@ struct Input {
 // Moves (loaded from data/moves/*.json by load_moves in moves.cpp)
 // ---------------------------------------------------------------------------
 
-// Which button makes which move come out is decided by the game, not the agent:
-// light on the ground = jab, heavy on the ground = heavy, either in the air = aerial.
-enum MoveId : int8_t { MOVE_NONE = -1, MOVE_JAB = 0, MOVE_HEAVY = 1, MOVE_AERIAL = 2, NUM_MOVES = 3 };
+// Which move comes out is decided by the game from button + stick, not by the agent:
+//   ground: light = jab, light + up = up-tilt, heavy = heavy
+//   air:    light/heavy = aerial (neutral air), + up = up-air, + down = down-air
+enum MoveId : int8_t {
+    MOVE_NONE = -1,
+    MOVE_JAB = 0,
+    MOVE_HEAVY = 1,
+    MOVE_AERIAL = 2,
+    MOVE_UTILT = 3,
+    MOVE_UAIR = 4,
+    MOVE_DAIR = 5,
+    NUM_MOVES = 6,
+};
+// File names in data/moves/ (without .json), in MoveId order. Defined in moves.cpp;
+// Python, Godot and replays all read the list from here.
+extern const char* const MOVE_NAMES[NUM_MOVES];
 
 const int MAX_HITBOXES_PER_MOVE = 4;
 
@@ -64,7 +77,7 @@ struct MoveDef {
 // Each frame, (state, state_frame, input) decides the next state.
 enum FighterState : uint8_t {
     ST_IDLE = 0,       // standing, can act
-    ST_WALK = 1,       // walking, can act
+    ST_RUN = 1,        // moving: a fast dash for the first dash_frames, then a run; can act
     ST_JUMPSQUAT = 2,  // crouching for a few frames before leaving the ground
     ST_AIRBORNE = 3,   // in the air, can act (double jump, aerial, drift)
     ST_LANDING = 4,    // landing lag: stuck for a few frames after touching down
@@ -112,7 +125,12 @@ struct GameState {
 // during a game. Units: distance per frame, at 60 frames per second.
 struct GameConfig {
     // Movement
-    float walk_speed = 0.25f;
+    // Starting to move (or turning around) begins with a short, fast dash,
+    // then settles into a run. Turning during the dash restarts it the other
+    // way (a "dash dance").
+    float dash_speed = 0.45f;
+    int dash_frames = 8;
+    float run_speed = 0.34f;
     float ground_friction = 0.04f;  // how fast you stop sliding on the ground
     float air_speed = 0.22f;        // max horizontal speed from drifting
     float air_accel = 0.03f;
@@ -131,6 +149,7 @@ struct GameConfig {
     int dodge_landing_lag = 10;  // landing during/after an air dodge
     // Body
     float hurtbox_w = 2.0f, hurtbox_h = 3.0f;
+    // (Two grounded fighters can't overlap; see push_apart in sim.cpp.)
     // Combat
     float hitstun_per_kb = 25.0f;  // hitstun frames = knockback * this
     float kb_decay = 0.05f;        // knockback speed lost per frame
@@ -172,7 +191,7 @@ struct ActiveHitbox {
 // Reads jab.json, heavy.json and aerial.json from `dir` into cfg.moves.
 // Returns "" on success, otherwise an error message naming the file and field.
 std::string load_moves(GameConfig& cfg, const std::string& dir);
-// Same, but from the files' contents (jab, heavy, aerial). Replays carry their
+// Same, but from the files' contents, in MOVE_NAMES order. Replays carry their
 // own copy of the move files, so they still play back after the files change.
 std::string load_moves_from_text(GameConfig& cfg, const std::string texts[NUM_MOVES]);
 

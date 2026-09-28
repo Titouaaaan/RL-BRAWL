@@ -87,7 +87,11 @@ class Args:
     pool_frac: float = 0.2
     """selfplay: fraction of envs that face a pool snapshot instead of the latest weights"""
     eval_every: int = 25
-    """every N iterations: win rate vs the fixed bots, a replay, a checkpoint"""
+    """every N iterations: win rate vs the fixed bots, and agent_latest.pt"""
+    keep_every: int = 250
+    """every N iterations: keep a permanent checkpoint (they're ~1 MB each)"""
+    replay_every: int = 100
+    """every N iterations: record one game to replays/<run>/"""
     eval_games: int = 32
     """games per bot in each evaluation"""
     hidden: int = 256
@@ -453,8 +457,13 @@ if __name__ == "__main__":
                 w, l, d = evaluate(me, bots.BOTS[name], args, args.eval_games)
                 writer.add_scalar(f"eval/win_vs_{name}", w, global_step)
                 print(f"  eval vs {name:7s} win {w:.2f} loss {l:.2f} draw {d:.2f}")
-            torch.save(agent.state_dict(), run_dir / f"agent_{iteration:05d}.pt")
+            torch.save(agent.state_dict(), run_dir / "agent_latest.pt")
+            if iteration % args.keep_every == 0:
+                torch.save(agent.state_dict(), run_dir / f"agent_{iteration:05d}.pt")
+
+        if iteration % args.replay_every == 0 or iteration == args.num_iterations:
             # A replay against the training opponent, to watch in Godot (play.bat replay).
+            me = net_policy(agent, device)
             opp = me if args.opponent == "selfplay" else opp_bots[args.opponent][0]
             opp_name = "self" if args.opponent == "selfplay" else opp_bots[args.opponent][0].__name__
             rep = replay.play_and_record(args.moves_dir, me, opp, args.frame_skip, args.reaction_delay,

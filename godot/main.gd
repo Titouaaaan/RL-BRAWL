@@ -4,9 +4,9 @@ extends Node2D
 
 const COLORS := [Color(0.35, 0.6, 1.0), Color(1.0, 0.45, 0.35)]
 # Same order as the enums in core/sim.h.
-const STATE_NAMES := ["IDLE", "WALK", "JUMPSQUAT", "AIRBORNE", "LANDING", "ATTACK", "HITSTUN", "SPOTDODGE", "AIRDODGE", "HELPLESS"]
-const MOVE_NAMES := ["jab", "heavy", "aerial"]
+const STATE_NAMES := ["IDLE", "RUN", "JUMPSQUAT", "AIRBORNE", "LANDING", "ATTACK", "HITSTUN", "SPOTDODGE", "AIRDODGE", "HELPLESS"]
 const ST_HITSTUN := 6
+const ST_RUN := 1
 
 # Keys are *physical* positions (US layout names), so on AZERTY "WASD" is ZQSD.
 # Player 1: WASD stick, Space jump, J light, K heavy, L dodge.
@@ -17,7 +17,22 @@ const KEYS := [
 	{left = KEY_LEFT, right = KEY_RIGHT, down = KEY_DOWN, up = KEY_UP, jump = KEY_ENTER, light = KEY_PERIOD, heavy = KEY_SLASH, dodge = KEY_COMMA},
 ]
 
+# Controllers: the first one connected plays P1, the second P2; the keyboard
+# works at the same time. Button names are Godot's (Xbox-style positions);
+# on a PS4 pad: A = Cross, B = Circle, X = Square, Y = Triangle.
+#   Left stick or d-pad: move      Cross / Triangle: jump
+#   Square: light      Circle: heavy      L1 / R1 / L2 / R2: dodge
+#   Options: restart (like R)
+const PAD := {
+	jump = [JOY_BUTTON_A, JOY_BUTTON_Y],
+	light = [JOY_BUTTON_X],
+	heavy = [JOY_BUTTON_B],
+	dodge = [JOY_BUTTON_LEFT_SHOULDER, JOY_BUTTON_RIGHT_SHOULDER],
+}
+const DEADZONE := 0.5  # how far the stick must be pushed to count as a direction
+
 var game := FightGame.new()
+var move_names: PackedStringArray = game.get_move_names()  # from core/moves.cpp
 var cfg: Dictionary
 var load_error := ""
 # Camera: follows both fighters and zooms out as they get further apart.
@@ -70,7 +85,14 @@ func load_replay(path: String) -> void:
 # Loads the move files stored in the replay (not the current ones in
 # data/moves), so old replays still play back after you tune the moves.
 func restart_replay() -> void:
-	load_error = game.load_moves_from_text(replay.moves.jab, replay.moves.heavy, replay.moves.aerial)
+	var texts := PackedStringArray()
+	for n in move_names:
+		if not replay.moves.has(n):
+			load_error = "replay was recorded without move '%s' (an older version of the game)" % n
+			replay.inputs = []
+			return
+		texts.append(replay.moves[n])
+	load_error = game.load_moves_from_text(texts)
 	cfg = game.get_config()
 	replay_frame = 0
 	replay_result = ""
@@ -116,6 +138,12 @@ func reload() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_START:
+		if replay.is_empty():
+			reload()
+		else:
+			restart_replay()
+		return
 	if not (event is InputEventKey and event.pressed):
 		return
 	var key: Key = event.physical_keycode
@@ -139,8 +167,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func _physics_process(_delta: float) -> void:
 	# Runs exactly 60 times per second: one call = one sim frame at 1x speed.
 	if replay.is_empty():
-		var a := read_input(KEYS[0])
-		var b := read_input(KEYS[1])
+		var a := merge(read_input(KEYS[0]), read_pad(0))
+		var b := merge(read_input(KEYS[1]), read_pad(1))
 		game.step(a[0], a[1], a[2], b[0], b[1], b[2])
 	elif not paused:
 		speed_acc += SPEEDS[speed_i]
@@ -180,6 +208,37 @@ func read_input(k: Dictionary) -> Array:
 
 func held(key: Key) -> bool:
 	return Input.is_physical_key_pressed(key)
+
+
+# The player's controller (the n-th one connected), as [stick_x, stick_y, button].
+func read_pad(n: int) -> Array:
+	var pads := Input.get_connected_joypads()
+	if n >= pads.size():
+		return [0, 0, 0]
+	var dev: int = pads[n]
+	var x := Input.get_joy_axis(dev, JOY_AXIS_LEFT_X)
+	var y := -Input.get_joy_axis(dev, JOY_AXIS_LEFT_Y)  # Godot's stick y points down; the sim's up
+	# The sim only knows -1/0/1 per axis (the same 3 values the agent picks from).
+	var sx := int(x > DEADZONE) - int(x < -DEADZONE)
+	var sy := int(y > DEADZONE) - int(y < -DEADZONE)
+	sx = clampi(sx + int(pad(dev, JOY_BUTTON_DPAD_RIGHT)) - int(pad(dev, JOY_BUTTON_DPAD_LEFT)), -1, 1)
+	sy = clampi(sy + int(pad(dev, JOY_BUTTON_DPAD_UP)) - int(pad(dev, JOY_BUTTON_DPAD_DOWN)), -1, 1)
+	var triggers := Input.get_joy_axis(dev, JOY_AXIS_TRIGGER_LEFT) > 0.5 or Input.get_joy_axis(dev, JOY_AXIS_TRIGGER_RIGHT) > 0.5
+	var button := 0
+	if PAD.jump.any(func(b): return pad(dev, b)): button = 1
+	elif PAD.light.any(func(b): return pad(dev, b)): button = 2
+	elif PAD.heavy.any(func(b): return pad(dev, b)): button = 3
+	elif triggers or PAD.dodge.any(func(b): return pad(dev, b)): button = 4
+	return [sx, sy, button]
+
+
+func pad(dev: int, b: JoyButton) -> bool:
+	return Input.is_joy_button_pressed(dev, b)
+
+
+# Keyboard + controller for the same player: directions add up, first button wins.
+func merge(k: Array, p: Array) -> Array:
+	return [clampi(k[0] + p[0], -1, 1), clampi(k[1] + p[1], -1, 1), k[2] if k[2] != 0 else p[2]]
 
 
 # Sim coordinates (y up) -> screen pixels (y down), through the camera.
@@ -246,8 +305,9 @@ func draw_hud(font: Font) -> void:
 	draw_string(font, Vector2(size.x / 2 - 30, 30), "%d:%02d" % [seconds_left / 60, seconds_left % 60], HORIZONTAL_ALIGNMENT_LEFT, -1, 24)
 	var dim := Color(1, 1, 1, 0.6)
 	if replay.is_empty():
-		draw_string(font, Vector2(16, 24), "P1: WASD, Space jump, J light, K heavy, L dodge   |   P2: arrows, Enter jump, . light, / heavy, , dodge", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
-		draw_string(font, Vector2(16, 44), "R: reload moves + restart   Esc: quit", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
+		draw_string(font, Vector2(16, 24), "P1: WASD, Space jump, J light, K heavy, L dodge (or controller 1)", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
+		draw_string(font, Vector2(16, 44), "P2: arrows, Enter jump, . light, / heavy, , dodge (or controller 2)", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
+		draw_string(font, Vector2(16, 64), "Attack + up/down: up-tilt, up-air, down-air.   R / Options: reload moves + restart   Esc: quit", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
 	else:
 		var status := "PAUSED" if paused else "%sx" % SPEEDS[speed_i]
 		var line := "REPLAY  frame %d / %d   %s" % [replay_frame, replay.inputs.size(), status]
@@ -268,8 +328,10 @@ func draw_hud(font: Font) -> void:
 # Debug text: the state machine's state, e.g. "ATTACK heavy 12" = frame 12 of the heavy.
 func state_label(f: Dictionary) -> String:
 	var label: String = STATE_NAMES[f.state]
+	if f.state == ST_RUN and f.state_frame < cfg.dash_frames:
+		label = "DASH"
 	if f.move >= 0:
-		label += " " + MOVE_NAMES[f.move]
+		label += " " + move_names[f.move]
 	label += " %d" % f.state_frame
 	if f.state == ST_HITSTUN:
 		label += " (%d left)" % f.hitstun

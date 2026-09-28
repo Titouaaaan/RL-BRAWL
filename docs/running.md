@@ -22,10 +22,25 @@ Keys are matched by **position** on the keyboard, so on AZERTY, "WASD" is really
 | Heavy attack | K | `/` (`!` on AZERTY) |
 | Dodge | L | `,` (`;` on AZERTY) |
 
+**Controllers** work alongside the keyboard: the first controller connected plays P1, the second P2. A PS4 controller works over USB or Bluetooth with no setup. If Godot doesn't see it, close Steam: its "Steam Input" feature can grab controllers.
+
+| PS4 controller | Action |
+|---|---|
+| Left stick or d-pad | Move (the stick has to be pushed past halfway) |
+| Cross or Triangle | Jump |
+| Square | Light attack |
+| Circle | Heavy attack |
+| L1 / R1 / L2 / R2 | Dodge |
+| Options | Reload moves + restart (like R) |
+
+To remap, edit the `PAD` table near the top of `godot/main.gd`.
+
 **R** reloads the move files and restarts. **Esc** quits.
 
-- Light or heavy on the ground: **jab** or **heavy**. Hold the stick left or right while pressing to attack in that direction.
-- Light or heavy in the air: **aerial**. You can turn around in the air, so hold the stick backward to hit behind you. Facing locks once the aerial starts. Landing during it costs landing lag.
+- Moving starts with a short, fast **dash** (8 frames), then a **run**. Turning around during the dash dashes the other way (a "dash dance").
+- Fighters on the ground **push each other** apart instead of walking through each other. Nobody can be pushed off the stage: a fighter at the edge acts as a wall.
+- On the ground: **light = jab**, **light + up = up-tilt** (launches upward, anti-air), **heavy = heavy**. Hold left or right while pressing to attack in that direction.
+- In the air: **light or heavy = aerial**, **+ up = up-air** (juggles), **+ down = down-air** (slow, but its first hit *spikes* downward: deadly on someone below the stage). You can turn around in the air, so hold the stick backward to hit behind you. Facing locks once the move starts. Landing during an aerial costs its landing lag.
 - Holding the attack button repeats the move. Jumping needs a fresh press.
 - Hold **down** while falling to **fast-fall** (drop faster).
 - **Dodge** on the ground: a *spot dodge*. You're intangible (hits pass through you) for frames 3-15 of 26, then stuck for a moment.
@@ -37,7 +52,7 @@ Keys are matched by **position** on the keyboard, so on AZERTY, "WASD" is really
 
 ## Tuning moves
 
-Each move is a file in `data/moves/` (`jab.json`, `heavy.json`, `aerial.json`). Edit one, save, and press **R** in the game: no rebuild needed. If the file has a mistake, the error shows in red at the top of the game window.
+Each move is a file in `data/moves/` (`jab`, `heavy`, `aerial`, `utilt`, `uair`, `dair`). Edit one, save, and press **R** in the game: no rebuild needed. If the file has a mistake, the error shows in red at the top of the game window.
 
 | Field | Meaning |
 |---|---|
@@ -49,9 +64,9 @@ Each move is a file in `data/moves/` (`jab.json`, `heavy.json`, `aerial.json`). 
 | `radius` | Circle size. |
 | `damage` | % added to the victim. |
 | `base_kb`, `kb_growth` | Knockback (launch speed) = `base_kb + kb_growth * victim %`. Hitstun frames = knockback * 25. |
-| `angle` | Launch direction in degrees: 0 = straight forward, 90 = straight up. |
+| `angle` | Launch direction in degrees: 0 = straight forward, 90 = straight up, negative = downward (a spike). |
 
-Movement and dodge numbers (walk speed, gravity, dodge frames, blast zones and so on) live in `GameConfig` in `core/sim.h`. Those do need a rebuild, which `play.bat` does for you.
+Movement and dodge numbers (dash and run speed, gravity, dodge frames, blast zones and so on) live in `GameConfig` in `core/sim.h`. Those do need a rebuild, which `play.bat` does for you.
 
 ## What happens when you run it
 

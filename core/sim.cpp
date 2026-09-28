@@ -51,7 +51,7 @@ static float approach(float v, float target, float amount) {
 
 // States where the fighter is free to act on input.
 static bool actionable(const Fighter& f) {
-    return f.state == ST_IDLE || f.state == ST_WALK || f.state == ST_AIRBORNE;
+    return f.state == ST_IDLE || f.state == ST_RUN || f.state == ST_AIRBORNE;
 }
 
 static void start_attack(Fighter& f, MoveId m) {
@@ -134,12 +134,20 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
                 set_state(f, ST_JUMPSQUAT);
             } else if (in.button == BTN_LIGHT || in.button == BTN_HEAVY) {
                 if (in.stick_x != 0) f.facing = in.stick_x;  // attack the way the stick points
-                start_attack(f, in.button == BTN_LIGHT ? MOVE_JAB : MOVE_HEAVY);
+                if (in.button == BTN_HEAVY) start_attack(f, MOVE_HEAVY);
+                else start_attack(f, in.stick_y > 0 ? MOVE_UTILT : MOVE_JAB);
             } else if (in.button == BTN_DODGE) {
                 set_state(f, ST_SPOTDODGE);
+            } else if (in.stick_x != 0) {
+                // Start moving, or turn around: either way a fresh dash begins.
+                bool fresh = (f.state != ST_RUN) || (in.stick_x != f.facing);
+                f.facing = in.stick_x;
+                if (fresh) {
+                    f.state = ST_RUN;
+                    f.state_frame = 0;
+                }
             } else {
-                if (in.stick_x != 0) f.facing = in.stick_x;
-                set_state(f, in.stick_x != 0 ? ST_WALK : ST_IDLE);
+                set_state(f, ST_IDLE);
             }
         } else {
             // You can turn freely in the air, so an aerial can hit either side.
@@ -151,7 +159,7 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
                 f.vy = cfg.double_jump_velocity;
                 f.fastfall = false;
             } else if (in.button == BTN_LIGHT || in.button == BTN_HEAVY) {
-                start_attack(f, MOVE_AERIAL);
+                start_attack(f, in.stick_y > 0 ? MOVE_UAIR : in.stick_y < 0 ? MOVE_DAIR : MOVE_AERIAL);
             } else if (in.button == BTN_DODGE) {
                 f.fastfall = false;
                 set_state(f, ST_AIRDODGE);
@@ -161,7 +169,7 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
 
     // 3. Horizontal velocity: walking and friction on the ground, drift in the air.
     if (f.grounded) {
-        if (f.state == ST_WALK) f.vx = cfg.walk_speed * in.stick_x;
+        if (f.state == ST_RUN) f.vx = f.facing * (f.state_frame < cfg.dash_frames ? cfg.dash_speed : cfg.run_speed);
         else f.vx = approach(f.vx, 0.0f, cfg.ground_friction);
     } else if (f.state != ST_HITSTUN && f.state != ST_AIRDODGE) {  // no drift in hitstun or mid-dodge
         if (in.stick_x != 0) f.vx = approach(f.vx, cfg.air_speed * in.stick_x, cfg.air_accel);
@@ -194,7 +202,7 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
             // Walked off the edge or got launched upward.
             f.grounded = false;
             if (!over_floor) f.jumps_left = std::min<uint8_t>(f.jumps_left, 1);
-            if (f.state == ST_IDLE || f.state == ST_WALK || f.state == ST_LANDING) set_state(f, ST_AIRBORNE);
+            if (f.state == ST_IDLE || f.state == ST_RUN || f.state == ST_LANDING) set_state(f, ST_AIRBORNE);
         } else {
             f.y = 0;  // a downward launch on the ground just stops at the floor
             f.launch_vy = std::max(f.launch_vy, 0.0f);
@@ -254,6 +262,29 @@ static void apply_hit(Fighter& a, Fighter& v, const HitboxDef& hb, const GameCon
     a.move_hit = true;
 }
 
+// Grounded fighters whose bodies overlap are pushed apart, half each, so
+// nobody can stand inside the opponent (where every attack trades). Running
+// into a standing opponent therefore shoves both along at half speed.
+static void push_apart(Fighter& a, Fighter& b, const GameConfig& cfg) {
+    if (!a.grounded || !b.grounded) return;  // you can still jump over someone
+    float dx = b.x - a.x;
+    float overlap = cfg.hurtbox_w - std::abs(dx);
+    if (overlap <= 0) return;
+    float dir = (dx > 0) ? 1.0f : (dx < 0) ? -1.0f : -1.0f * a.facing;  // exactly stacked: a steps back
+    a.x -= dir * overlap / 2;
+    b.x += dir * overlap / 2;
+    // Nobody gets shoved off the stage (that would be a free KO for walking
+    // into someone): a fighter at the edge stays there and acts as a wall.
+    float lim = cfg.stage_half_width;
+    if (std::abs(a.x) > lim) {
+        a.x = std::clamp(a.x, -lim, lim);
+        b.x = a.x + dir * cfg.hurtbox_w;
+    } else if (std::abs(b.x) > lim) {
+        b.x = std::clamp(b.x, -lim, lim);
+        a.x = b.x - dir * cfg.hurtbox_w;
+    }
+}
+
 static bool outside_blast_zone(const Fighter& f, const GameConfig& cfg) {
     return f.x < -cfg.blast_x || f.x > cfg.blast_x || f.y > cfg.blast_top || f.y < cfg.blast_bottom;
 }
@@ -282,6 +313,7 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
 
     step_fighter(s.f[0], in[0], cfg);
     step_fighter(s.f[1], in[1], cfg);
+    push_apart(s.f[0], s.f[1], cfg);
 
     // Find both players' hits first, then apply them. If both hit each other
     // on the same frame (a "trade"), both hits land, whoever is player 0.
