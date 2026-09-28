@@ -4,7 +4,6 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 
-#include <algorithm>  // std::clamp
 #include <stdexcept>  // std::invalid_argument (nanobind turns it into a Python ValueError)
 #include <vector>
 
@@ -37,11 +36,10 @@ struct VecEnv {
         for (size_t i = 0; i < games.size(); ++i) {
             Input in[2];
             for (int p = 0; p < 2; ++p) {
-                // Clamp at the Python/C++ boundary so a bad action can't make
-                // anyone walk 100x faster.
-                in[p].stick_x = std::clamp<int8_t>(a(i, p, 0), -1, 1);
-                in[p].stick_y = std::clamp<int8_t>(a(i, p, 1), -1, 1);
-                in[p].button = static_cast<uint8_t>(std::clamp<int8_t>(a(i, p, 2), 0, 3));
+                // Out-of-range values are clamped inside step() itself.
+                in[p].stick_x = a(i, p, 0);
+                in[p].stick_y = a(i, p, 1);
+                in[p].button = static_cast<uint8_t>(a(i, p, 2));
             }
             ::step(games[i], in, cfg);  // `::` = the free function from sim.h, not this method
         }

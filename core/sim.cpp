@@ -1,7 +1,6 @@
 #include "sim.h"
 
-#include <algorithm>  // std::min, std::max
-#include <cstring>    // std::memcpy
+#include <algorithm>  // std::min, std::max, std::clamp
 
 void reset(GameState& s, const GameConfig& cfg) {
     s = GameState{};  // put every field back to the default written in sim.h
@@ -19,7 +18,17 @@ static void set_state(Fighter& f, FighterState st) {
     }
 }
 
-static void step_fighter(Fighter& f, const Input& in, const GameConfig& cfg) {
+// Every caller (Python, Godot) goes through here, so bad input values are
+// fixed in one place: a stick of 5 must not make anyone walk 5x faster.
+static Input sanitize(Input in) {
+    in.stick_x = std::clamp<int8_t>(in.stick_x, -1, 1);
+    in.stick_y = std::clamp<int8_t>(in.stick_y, -1, 1);
+    if (in.button > BTN_HEAVY) in.button = BTN_NONE;
+    return in;
+}
+
+static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg) {
+    const Input in = sanitize(raw_in);
     bool grounded = (f.state != ST_AIRBORNE);
     bool jump_pressed = (in.button == BTN_JUMP && f.prev_button != BTN_JUMP);
 

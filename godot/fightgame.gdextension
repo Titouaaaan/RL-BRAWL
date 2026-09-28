@@ -1,0 +1,10 @@
+; Tells Godot to load our C++ DLL at startup and which function to call in it.
+; "debug" is used when running from the editor or play.bat.
+; ponytail: Windows only; add linux/macos lines when building there.
+
+[configuration]
+entry_symbol = "fightgame_init"
+compatibility_minimum = "4.5"
+
+[libraries]
+windows.debug.x86_64 = "res://bin/fightgame.windows.template_debug.x86_64.dll"

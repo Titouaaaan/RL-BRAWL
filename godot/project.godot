@@ -1,0 +1,17 @@
+; Godot project settings. The editor rewrites this file when you change
+; settings in Project > Project Settings.
+
+config_version=5
+
+[application]
+config/name="Bootleg SSM"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.7")
+
+[display]
+window/size/viewport_width=1280
+window/size/viewport_height=720
+
+[physics]
+; The sim runs at 60 Hz, and _physics_process runs at this rate.
+common/physics_ticks_per_second=60

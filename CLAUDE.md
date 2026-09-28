@@ -4,12 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Phase 0 (build plumbing) done: movement-only sim, `VecEnv` binding, determinism test, ASan smoke build, benchmark. Read `docs/design.md` before starting any phase.
+Phase 0 (build plumbing) done: movement-only sim, `VecEnv` binding, determinism test, ASan smoke build, benchmark, plus the Godot debug view (`bindings/godot/` + `godot/`, godot-cpp pinned as a submodule in `extern/`). Read `docs/design.md` before starting any phase.
 
 ## Commands
 
 Toolchain: MSVC from Visual Studio 2026 (it must match python.org Python's compiler), CMake 4.x from pip. Use `python -m cmake`, **not** bare `cmake`: the Strawberry Perl CMake 3.29 on PATH is too old for VS 2026.
 
+- **Play the game (build + launch Godot):** `play.bat` (`play.bat edit` opens the editor). Owner-facing instructions: `docs/running.md`; keep it current when controls or commands change.
+- Godot extension only: `python -m cmake -S bindings/godot -B build/godot && python -m cmake --build build/godot --config Release --parallel` (fails with LNK1104 if Godot is running: the DLL is locked).
 - Build/rebuild Python module after any C++ change: `python -m pip install --no-build-isolation .`
 - Tests: `python -m pytest -q`
 - Benchmark: `python tools/bench.py`
@@ -19,7 +21,7 @@ Root `CMakeLists.txt` builds the Python module when driven by pip (`SKBUILD` set
 
 ## What this is
 
-A minimal Smash-style fighting game (one character mirror match, one flat stage) whose simulation core is used both for RL self-play training (Python/PyTorch) and, later, a Godot front end. v0 is done when two PPO self-play agents fight competently.
+A minimal Smash-style fighting game (one character mirror match, one flat stage) whose simulation core is used both for RL self-play training (Python/PyTorch) and a Godot front end (built from phase 1 on, so every phase can be watched). v0 is done when two PPO self-play agents fight competently.
 
 ## Architecture (planned, see `docs/design.md`)
 
@@ -27,10 +29,10 @@ One engine-free C++ core, two front ends:
 
 - **`core/`** (C++, CMake): the whole game is `GameState` (one plain struct) plus a pure, deterministic `step(state, inputs[2], config, events)`. No globals, no hidden state, no engine calls. Same state + same inputs must give the same result; replays are just a seed plus the input sequence.
 - **`bindings/python/`**: nanobind module exposing a batched `VecEnv` (N games stepped in one C++ call, auto-reset inside, writes obs/reward/done into preallocated NumPy buffers zero-copy). A thin Gymnasium-compatible wrapper sits on top. Never loop over environments in Python.
-- **`bindings/godot/`**: GDExtension, deferred to phase 5.
+- **`bindings/godot/`**: GDExtension exposing the same core to Godot. It's the visual debug view (keyboard play, later replays), and it moved up from phase 5 so each phase can be checked visually. Keep it building whenever the core changes.
 - **`data/moves/`**: one JSON file per move (startup/active/recovery frames, per-active-frame hitbox lists). Loaded by both the core and Godot so visuals never drift from simulation. Tune the game here, not by recompiling. Broken mechanics (spammed moves, jab locks, infinite combos) are fixed in these files, not in RL code.
 - **`train/`**: single-file CleanRL-style PPO, shared weights for both players, opponent sampled ~80% latest / ~20% from a snapshot pool. Only the learning side's experience is used for updates.
-- **`tools/`**: Python debug viewer (plays replay files, keyboard play), replay tools, throughput benchmarks.
+- **`tools/`**: replay tools, throughput benchmarks. (No separate Python viewer; Godot is the viewer.)
 - **`tests/`**: pytest through the bindings.
 
 ## Invariants that later goals depend on

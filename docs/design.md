@@ -133,7 +133,7 @@ Each rung catches a different class of bug (environment, reward, or PPO). Only m
 
 Build a debug viewer, tests and logging early; they are how you will see what the agents are actually doing.
 
-- **Python debug viewer:** pygame or matplotlib, fighters as boxes, hitboxes as circles, damage % as text. It plays back replay files and lets you play with the keyboard, which is how you tune game feel and catch broken moves before agents exploit them. Godot later reads the same replay files.
+- **Godot debug view (from phase 1 on):** a GDExtension that calls the same C++ step(), drawing fighters as boxes, hitboxes as circles and damage % as text. You can play it with the keyboard now, and it plays back replay files once they exist. This is how you tune game feel and catch broken moves before agents exploit them, and every phase is checked visually here. It replaces the separate Python viewer that was planned earlier.
 - **Tests (pytest via the bindings):** a determinism test (same random inputs twice, compare state hashes), unit tests for knockback and hitstun math, and a throughput benchmark run regularly.
 - **Logging (TensorBoard or W&B):** KO rate, game length, damage per stock, move usage frequencies, action entropy. If a move's usage drops to 0%, the move is bad or the agent is stuck.
 
@@ -143,7 +143,7 @@ Build a debug viewer, tests and logging early; they are how you will see what th
 fightgame/
   core/            # C++ sim: state, step, moves, collision, VecEnv (CMake project)
   bindings/python/ # nanobind module exposing VecEnv to Python
-  bindings/godot/  # GDExtension (phase 5, empty for now)
+  bindings/godot/  # GDExtension + Godot project, built from phase 1 on
   data/moves/      # JSON move definitions, shared by core and Godot
   train/           # PPO, self-play pool, eval, logging (PyTorch)
   tools/           # debug viewer, replay tools, benchmarks
@@ -155,6 +155,8 @@ fightgame/
 Step 0 is done at the end of phase 4; each phase has a gate that must pass before the next starts.
 
 &#91;embedded content: phases 0–5 · each with its gate\]
+
+**Plan change (Sep 28, 2026):** the Godot front end moves from phase 5 to right after phase 0 and grows alongside the core, so that every phase can be followed visually. Phase 5 keeps only the player-facing work (playing against a trained bot, polish).
 
 Phase 0 is small but, for a C++ beginner, it is where the most frustrating hours go (build systems, not the language), so it is kept separate. Claude Code is well suited to it.
 
