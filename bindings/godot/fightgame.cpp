@@ -113,6 +113,7 @@ public:
         d["hitstun"] = f.hitstun;
         d["invuln"] = f.invuln;
         d["intangible"] = intangible(f, cfg);
+        d["air_attack_locked"] = f.air_attack_locked;
         return d;
     }
 

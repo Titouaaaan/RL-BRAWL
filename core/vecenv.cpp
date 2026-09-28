@@ -41,6 +41,8 @@ static void write_fighter(const Fighter& f, const GameConfig& cfg, float m, floa
     *o++ = lag_left / 60.0f;
     *o++ = f.invuln / float(std::max(cfg.respawn_invuln, 1));
     *o++ = intangible(f, cfg);  // hits would pass through right now
+    *o++ = f.fastfall_blocked;
+    *o++ = f.air_attack_locked;
     // Distances to the blast zones and stage edges. They're linear in x/y,
     // but handing them over directly makes "near the edge" easy to learn.
     *o++ = (cfg.blast_x - x) / cfg.blast_x;

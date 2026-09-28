@@ -108,6 +108,13 @@ struct Fighter {
     // Fast-fall needs GameConfig::fastfall_hold of them, so down + attack
     // does a down move without dropping.
     uint8_t down_frames = 0;
+    // Set when an attack is pressed; cleared once the stick leaves "down".
+    // A down input that was part of an attack can't turn into a fast-fall:
+    // you have to let go and press down again.
+    bool fastfall_blocked = false;
+    // An air attack that ended without hitting locks out air attacks until
+    // you land (or get hit). Hitting keeps them available, so juggles work.
+    bool air_attack_locked = false;
     uint8_t jumps_left = 2;   // one ground jump plus one double jump
     uint8_t stocks = 3;       // lives left
     int8_t move = MOVE_NONE;  // current move while state == ST_ATTACK

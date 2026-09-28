@@ -335,6 +335,8 @@ func state_label(f: Dictionary) -> String:
 	label += " %d" % f.state_frame
 	if f.state == ST_HITSTUN:
 		label += " (%d left)" % f.hitstun
+	if f.air_attack_locked:
+		label += "  [no air attacks]"
 	return label
 
 

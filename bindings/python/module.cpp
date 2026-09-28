@@ -111,6 +111,8 @@ NB_MODULE(fightcore, m) {
                  d["intangible"] = intangible(f, e.cfg);
                  d["grounded"] = f.grounded;
                  d["fastfall"] = f.fastfall;
+                 d["air_attack_locked"] = f.air_attack_locked;
+                 d["move_hit"] = f.move_hit;
                  return d;
              },
              nb::arg("env"), nb::arg("player"));

@@ -77,6 +77,7 @@ static void land(Fighter& f, const GameConfig& cfg) {
     f.grounded = true;
     f.fastfall = false;
     f.jumps_left = 2;
+    f.air_attack_locked = false;
     if (f.state == ST_ATTACK) {  // landed during an aerial: that move's landing lag
         f.landing_lag = static_cast<int16_t>(cfg.moves[f.move].landing_lag);
         f.move = MOVE_NONE;
@@ -108,6 +109,7 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
         break;
     case ST_ATTACK:
         if (f.state_frame >= cfg.moves[f.move].total_frames) {
+            if (!f.grounded && !f.move_hit) f.air_attack_locked = true;  // whiffed in the air
             f.move = MOVE_NONE;
             set_state(f, f.grounded ? ST_IDLE : ST_AIRBORNE);
         }
@@ -166,7 +168,7 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
                 f.jumps_left -= 1;
                 f.vy = cfg.double_jump_velocity;
                 f.fastfall = false;
-            } else if (in.button == BTN_LIGHT || in.button == BTN_HEAVY) {
+            } else if ((in.button == BTN_LIGHT || in.button == BTN_HEAVY) && !f.air_attack_locked) {
                 start_attack(f, pick_move(false, in.button, in.stick_y));
             } else if (in.button == BTN_DODGE) {
                 f.fastfall = false;
@@ -189,7 +191,10 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
     //    falling: you drop at a higher fixed speed. Pressing an attack resets
     //    the count, so down + attack is a down move, not a drop.
     bool attacking = (in.button == BTN_LIGHT || in.button == BTN_HEAVY);
-    f.down_frames = (in.stick_y < 0 && !attacking) ? uint8_t(std::min(f.down_frames + 1, 255)) : 0;
+    if (attacking) f.fastfall_blocked = true;
+    if (in.stick_y >= 0) f.fastfall_blocked = false;  // stick released: down is "fresh" again
+    bool counts = in.stick_y < 0 && !attacking && !f.fastfall_blocked;
+    f.down_frames = counts ? uint8_t(std::min(f.down_frames + 1, 255)) : 0;
     if (!f.grounded) {
         bool can_fastfall = f.state != ST_HITSTUN && f.state != ST_AIRDODGE;
         if (can_fastfall && f.down_frames >= cfg.fastfall_hold && f.vy <= 0) f.fastfall = true;
@@ -269,6 +274,7 @@ static void apply_hit(Fighter& a, Fighter& v, const HitboxDef& hb, const GameCon
     v.vy = 0;
     v.fastfall = false;
     v.move = MOVE_NONE;  // getting hit cancels whatever you were doing
+    v.air_attack_locked = false;
     v.hitstun = static_cast<int16_t>(hitstun_frames(kb, cfg));
     v.state = ST_HITSTUN;
     v.state_frame = 0;
@@ -412,6 +418,8 @@ uint64_t hash_state(const GameState& s) {
         mix(h, &f.grounded, sizeof f.grounded);
         mix(h, &f.fastfall, sizeof f.fastfall);
         mix(h, &f.down_frames, sizeof f.down_frames);
+        mix(h, &f.fastfall_blocked, sizeof f.fastfall_blocked);
+        mix(h, &f.air_attack_locked, sizeof f.air_attack_locked);
         mix(h, &f.jumps_left, sizeof f.jumps_left);
         mix(h, &f.stocks, sizeof f.stocks);
         mix(h, &f.move, sizeof f.move);

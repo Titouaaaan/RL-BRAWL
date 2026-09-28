@@ -188,3 +188,61 @@ def test_every_move_is_reachable():
             act(env, p1=(0, sy, button))  # in the air
             seen.add(env.fighter(0, 0)["move"])
     assert seen == set(range(len(fightcore.MOVE_NAMES)))
+
+
+def run_out_move(env, p1=(0, 0, 0)):
+    while env.fighter(0, 0)["state"] == 5:  # ST_ATTACK
+        act(env, p1=p1)
+
+
+def test_whiffed_air_attack_locks_air_attacks_until_landing():
+    env = fightcore.VecEnv(1, str(MOVES), frame_skip=1)
+    act(env, p1=(0, 0, 1))  # jump, far from P2
+    for _ in range(4):
+        act(env)
+    act(env, p1=(0, 0, 2))  # air attack, hits nothing
+    run_out_move(env)
+    f = env.fighter(0, 0)
+    assert f["air_attack_locked"] and not f["grounded"]
+    act(env, p1=(0, 0, 3))  # another attack: refused
+    assert env.fighter(0, 0)["state"] != 5
+    act(env, p1=(0, 0, 4))  # dodging is still allowed
+    assert env.fighter(0, 0)["state"] == fightcore.ST_AIRDODGE
+    for _ in range(200):
+        act(env)
+        if env.fighter(0, 0)["grounded"]:
+            break
+    assert not env.fighter(0, 0)["air_attack_locked"]  # landing clears it
+
+
+def test_connected_air_attack_keeps_air_attacks():
+    env = fightcore.VecEnv(1, str(MOVES), frame_skip=1)
+    approach(env, 3.2)
+    act(env, p1=(0, 0, 1), p2=(0, 0, 1))  # both jump together, so they're level...
+    for _ in range(3):
+        act(env)
+    act(env, p1=(0, 0, 2))  # ...and P1 air-attacks into P2
+    run_out_move(env)
+    f = env.fighter(0, 0)
+    assert env.fighter(0, 1)["percent"] > 0 and not f["grounded"]  # it connected, still airborne
+    assert not f["air_attack_locked"]
+    act(env, p1=(0, 1, 2))  # a follow-up up-air comes out
+    assert env.fighter(0, 0)["move"] == move_id("up_air")
+
+
+def test_holding_down_after_a_down_air_does_not_fast_fall():
+    env = fightcore.VecEnv(1, str(MOVES), frame_skip=1)
+    jump_to_apex(env)
+    act(env, p1=(0, -1, 2))  # down-air...
+    for _ in range(40):
+        act(env, p1=(0, -1, 0))  # ...then keep holding down, attack released
+        if env.fighter(0, 0)["grounded"]:
+            break
+    assert not env.fighter(0, 0)["fastfall"]  # the down was "used" by the attack
+    env2 = fightcore.VecEnv(1, str(MOVES), frame_skip=1)
+    jump_to_apex(env2)
+    act(env2, p1=(0, -1, 2))
+    act(env2)  # stick back to neutral...
+    for _ in range(6):
+        act(env2, p1=(0, -1, 0))  # ...then a fresh hold of down
+    assert env2.fighter(0, 0)["fastfall"]

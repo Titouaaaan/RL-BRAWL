@@ -48,7 +48,8 @@ To remap, edit the `PAD` table near the top of `godot/main.gd`.
   | air, light | down-air: quick kick below | air | up-air: juggles |
   | air, heavy | heavy down-air: **spike** (sends downward) | heavy air | heavy up-air: launches high |
 - Holding the attack button repeats the move. Jumping needs a fresh press.
-- **Fast-fall:** hold **down without attacking** for 6 frames (0.1 s) while falling. Down + an attack does the down move instead and doesn't drop you; to fast-fall during a down-air, let go of the attack button and keep holding down.
+- **Fast-fall:** hold **down without attacking** for 6 frames (0.1 s) while falling. Down + an attack does the down move instead and doesn't drop you. A down that was part of an attack is "used up": to fast-fall afterwards, return the stick to neutral and press down again.
+- **Missed air attacks:** if an air attack ends without hitting, you can't attack again until you land (the HUD shows `[no air attacks]`). You can still move, double jump and dodge. If it connects, you keep your attacks, so juggles work. Getting hit also clears the lock.
 - **Dodge** on the ground: a *spot dodge*. You're intangible (hits pass through you) for frames 3-15 of 26, then stuck for a moment.
 - **Dodge** in the air: an *air dodge*. Intangible for frames 3-18, and afterwards you're **helpless**: you can drift but can't jump, attack or dodge until you touch the ground (then 10 frames of landing lag). Careful off the stage: an air dodge there usually means falling to your doom.
 - While intangible, a fighter is drawn see-through with a white outline.
