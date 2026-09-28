@@ -87,5 +87,12 @@ Godot checks that its re-simulation ends in exactly the recorded state and
 shows "Replay verified" (or "DESYNC", which would mean the Python and Godot
 builds of the core disagree: a bug worth reporting).
 
+To watch a specific checkpoint against a specific opponent:
+
+```
+python train/record.py runs\<run>gent_00600.pt --opponent jabber   # dummy, random, jabber, spacer, or self
+play.bat replay
+```
+
 `python train/replay.py` records a random-vs-random game, handy for testing
 the viewer.
