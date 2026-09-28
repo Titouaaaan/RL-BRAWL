@@ -586,6 +586,11 @@ static void respawn(Fighter& f, int player, const GameConfig& cfg) {
 void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev) {
     ev = StepEvents{};
     if (s.over) return;
+    uint8_t before[2] = {s.f[0].state, s.f[1].state};  // to spot state changes for the events
+    for (Fighter& f : s.f) {
+        if (f.combo_timer < 65535) f.combo_timer += 1;
+        if (f.combo_timer > cfg.combo_window) f.combo = 0;  // too slow: the combo is over
+    }
 
     for (int p = 0; p < 2; ++p) {
         Fighter& f = s.f[p];
@@ -597,7 +602,10 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
             if (f.state == ST_HITSTUN) {
                 f.di_x = i.stick_x;
                 f.di_y = i.stick_y;
-                if (f.hitlag == 0) apply_di(f, cfg);
+                if (f.hitlag == 0) {
+                    apply_di(f, cfg);
+                    ev.di[p] = (f.di_x != 0 || f.di_y != 0);
+                }
             }
             if (i.button == BTN_DODGE && f.prev_button != BTN_DODGE) f.dodge_ago = 0;
             f.prev_button = i.button;
@@ -657,19 +665,50 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
             break;
         case HIT_SHIELD:
             apply_shield_hit(a, v, hit[p], cfg);
+            ev.shield_block[1 - p] = true;
             break;
         case HIT_GRAB:
             ev.hit_move[p] = static_cast<int8_t>(hit[p].move);
             apply_grab(a, v);
+            ev.grab[p] = true;
             break;
         default:
             break;
         }
     }
 
+    // Combos, for both players at once (so a trade treats them the same): a
+    // hit soon after your last one continues your combo; getting hit ends it;
+    // in a trade, both combos restart at 1.
+    bool landed[2], was_hit[2];
+    for (int p = 0; p < 2; ++p) landed[p] = hit[p].kind == HIT_ATTACK || hit[p].kind == HIT_THROW;
+    for (int p = 0; p < 2; ++p) was_hit[p] = landed[1 - p];
+    for (int p = 0; p < 2; ++p) {
+        Fighter& f = s.f[p];
+        if (landed[p]) {
+            bool continues = !was_hit[p] && f.combo > 0 && f.combo_timer <= cfg.combo_window;
+            f.combo = continues ? uint8_t(std::min(f.combo + 1, 255)) : 1;
+            f.combo_timer = 0;
+            ev.combo[p] = f.combo;
+        } else if (was_hit[p]) {
+            f.combo = 0;
+        }
+    }
+
+    // Events that are just state changes.
+    for (int p = 0; p < 2; ++p) {
+        const Fighter& f = s.f[p];
+        if (f.state == before[p]) continue;
+        if (f.state == ST_TECH) ev.tech[p] = true;
+        if (f.state == ST_KNOCKDOWN) ev.knockdown[p] = true;
+        if (f.state == ST_SHIELDBREAK) ev.shield_break[p] = true;
+        if (before[p] == ST_JUMPSQUAT && f.state == ST_AIRBORNE) ev.jump[p] = f.short_hop ? 2 : 1;
+    }
+
     for (int p = 0; p < 2; ++p) {
         Fighter& f = s.f[p];
         if (!outside_blast_zone(f, cfg)) continue;
+        s.f[0].combo = s.f[1].combo = 0;  // a KO ends any combo
         ev.ko[p] = true;
         f.stocks -= 1;
         if (f.stocks > 0) respawn(f, p, cfg);
@@ -764,6 +803,8 @@ uint64_t hash_state(const GameState& s) {
         mix(h, &f.roll_dir, sizeof f.roll_dir);
         mix(h, &f.dodge_ago, sizeof f.dodge_ago);
         mix(h, f.stale, sizeof f.stale);
+        mix(h, &f.combo, sizeof f.combo);
+        mix(h, &f.combo_timer, sizeof f.combo_timer);
         mix(h, &f.prev_button, sizeof f.prev_button);
     }
     mix(h, &s.frame, sizeof s.frame);

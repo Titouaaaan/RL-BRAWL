@@ -116,3 +116,34 @@ def test_timeout_tie_breaker_rewards_the_player_ahead():
         env.step(acts(1))  # then both wait for the time limit
     assert env.winner[0] == 0
     assert np.allclose(env.reward[0], [0.3, -0.3])
+
+
+def test_combo_bonus_grows_the_damage_reward():
+    # Two quick hits: the second continues the combo, so with combo_growth=2
+    # its damage reward counts double. Zero-sum: P2 loses what P1 gains.
+    env = fightcore.VecEnv(1, MOVES, frame_skip=1, damage_reward=0.01, combo_growth=2.0, combo_cap=4.0)
+    while env.fighter(0, 1)["x"] - env.fighter(0, 0)["x"] > 3.2:
+        env.step(acts(1, p1=(1, 0, 0)))
+    for _ in range(20):
+        env.step(acts(1))
+    rewards, combos = [], []
+    for _ in range(60):  # hold jab: the second jab lands while P2 is still close
+        env.step(acts(1, p1=(0, 0, 2)))
+        if env.reward[0, 0] > 0:
+            rewards.append(env.reward[0, 0])
+            combos.append(env.fighter(0, 0)["combo"])
+        assert env.reward[0, 0] == -env.reward[0, 1]
+    assert combos[:2] == [1, 2]
+    dmg1, dmg2 = rewards[0] / 0.01, rewards[1] / 0.01 / 2.0  # undo the reward scale and the 2x combo bonus
+    assert 0 < dmg2 < dmg1  # the 2nd jab is stale (weaker), but its reward was doubled
+
+
+def test_stats_count_the_learners_actions():
+    env = fightcore.VecEnv(1, MOVES, frame_skip=1)
+    names = fightcore.STAT_NAMES
+    env.step(acts(1, p1=(0, 0, 1)))
+    for _ in range(10):
+        env.step(acts(1, p1=(0, 0, 1)))  # a full jump
+    st = dict(zip(names, env.stats))
+    assert st["frames"] == 11 and st["full_jumps"] == 1 and st["short_hops"] == 0
+    assert st["frames_airborne"] > 0

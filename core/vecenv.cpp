@@ -5,6 +5,15 @@
 #include <cmath>
 #include <stdexcept>
 
+const char* const STAT_NAMES[NUM_STATS] = {
+    "frames", "hits", "hits_taken", "damage_dealt", "damage_taken", "kos", "deaths",
+    "combo_hits", "combo_hits_taken", "max_combo",
+    "blocks", "got_blocked", "shield_breaks", "shield_breaks_caused",
+    "grabs", "got_grabbed", "techs", "knockdowns",
+    "full_jumps", "short_hops", "di_used",
+    "frames_airborne", "frames_on_platform", "frames_close",
+};
+
 // ---------------------------------------------------------------------------
 // Observations
 // ---------------------------------------------------------------------------
@@ -45,6 +54,8 @@ static void write_fighter(const Fighter& f, const GameConfig& cfg, float m, floa
     *o++ = float(f.air_whiffs) / std::max(cfg.air_whiff_limit, 1);  // 1 = no more air attacks until landing
     *o++ = f.shield_hp / cfg.shield_max;
     *o++ = float(f.hitlag) / std::max(cfg.hitlag_max, 1);
+    *o++ = std::min(f.combo, uint8_t(5)) / 5.0f;  // my current combo length (capped at 5)
+    *o++ = (f.combo > 0) ? std::min<float>(f.combo_timer, float(cfg.combo_window)) / cfg.combo_window : 1.0f;
     // Distances to the blast zones and stage edges. They're linear in x/y,
     // but handing them over directly makes "near the edge" easy to learn.
     *o++ = (cfg.blast_x - x) / cfg.blast_x;
@@ -112,7 +123,7 @@ VecEnv::VecEnv(int n, const GameConfig& c, const EnvParams& p)
       games(n), history(size_t(n) * (p.reaction_delay + 1)),
       obs(size_t(n) * 2 * OBS_DIM), final_obs(size_t(n) * 2 * OBS_DIM),
       reward(size_t(n) * 2), terminated(n), truncated(n), winner(n), final_hash(n),
-      move_uses(NUM_MOVES), move_hits(NUM_MOVES) {
+      move_uses(NUM_MOVES), move_hits(NUM_MOVES), stats(NUM_STATS) {
     if (n < 1 || p.frame_skip < 1 || p.reaction_delay < 0)
         throw std::invalid_argument("need num_envs >= 1, frame_skip >= 1, reaction_delay >= 0");
     reset_all();
@@ -143,6 +154,35 @@ void VecEnv::write_game_obs(int i, float* dst) {
     write_obs(seen, cfg, 1, dst + OBS_DIM);
 }
 
+void VecEnv::record_stats(const GameState& g, const StepEvents& ev) {
+    const Fighter& me = g.f[0];
+    double* st = stats.data();
+    st[STAT_FRAMES] += 1;
+    st[STAT_HITS] += ev.hit[0];
+    st[STAT_HITS_TAKEN] += ev.hit[1];
+    st[STAT_DAMAGE_DEALT] += ev.damage[0];
+    st[STAT_DAMAGE_TAKEN] += ev.damage[1];
+    st[STAT_KOS] += ev.ko[1];
+    st[STAT_DEATHS] += ev.ko[0];
+    st[STAT_COMBO_HITS] += (ev.combo[0] >= 2);
+    st[STAT_COMBOS_TAKEN] += (ev.combo[1] >= 2);
+    st[STAT_MAX_COMBO] = std::max(st[STAT_MAX_COMBO], double(ev.combo[0]));
+    st[STAT_BLOCKS] += ev.shield_block[0];
+    st[STAT_GOT_BLOCKED] += ev.shield_block[1];
+    st[STAT_SHIELD_BREAKS] += ev.shield_break[0];
+    st[STAT_SHIELD_BREAKS_CAUSED] += ev.shield_break[1];
+    st[STAT_GRABS] += ev.grab[0];
+    st[STAT_GOT_GRABBED] += ev.grab[1];
+    st[STAT_TECHS] += ev.tech[0];
+    st[STAT_KNOCKDOWNS] += ev.knockdown[0];
+    st[STAT_FULL_JUMPS] += (ev.jump[0] == 1);
+    st[STAT_SHORT_HOPS] += (ev.jump[0] == 2);
+    st[STAT_DI_USED] += ev.di[0];
+    st[STAT_FRAMES_AIRBORNE] += !me.grounded;
+    st[STAT_FRAMES_ON_PLATFORM] += (me.grounded && me.surface != 0);
+    st[STAT_FRAMES_CLOSE] += (std::abs(g.f[1].x - me.x) < 4.0f && std::abs(g.f[1].y - me.y) < 4.0f);
+}
+
 void VecEnv::step(const int8_t* actions) {
     const int hist = params.reaction_delay + 1;
     for (int i = 0; i < num_envs; ++i) {
@@ -164,8 +204,15 @@ void VecEnv::step(const int8_t* actions) {
             ::step(g, in, cfg, ev);  // `::step` = the sim's step from sim.h, not this method
             for (int p = 0; p < 2; ++p) {
                 r[p] += float(ev.ko[1 - p]) - float(ev.ko[p]);
-                r[p] += params.damage_reward * (ev.damage[p] - ev.damage[1 - p]);
+                if (ev.hit[p]) {
+                    // Damage reward, grown for hits deep in a combo; zero-sum.
+                    float mult = std::min(std::pow(params.combo_growth, float(ev.combo[p]) - 1.0f), params.combo_cap);
+                    float bonus = params.damage_reward * ev.damage[p] * std::max(mult, 1.0f);
+                    r[p] += bonus;
+                    r[1 - p] -= bonus;
+                }
             }
+            record_stats(g, ev);
             history[size_t(i) * hist + (g.frame % hist)] = g;
             if (ev.move_started[0] >= 0) move_uses[ev.move_started[0]] += 1;
             if (ev.hit_move[0] >= 0) move_hits[ev.hit_move[0]] += 1;

@@ -12,25 +12,45 @@
 #include "sim.h"
 
 // Observation layout (all float32, roughly scaled to [-1, 1]):
-//   [0, 47)    me:  fighter features (see write_fighter in vecenv.cpp)
-//   [47, 94)   opponent: same 47 features
-//   [94, 97)   relative dx, dy, and time left
-//   [97, 145)  4 hitbox slots x 12 features (the opponent's hitboxes first)
+//   [0, 49)    me:  fighter features (see write_fighter in vecenv.cpp)
+//   [49, 98)   opponent: same 49 features
+//   [98, 101)  relative dx, dy, and time left
+//   [101, 149) 4 hitbox slots x 12 features (the opponent's hitboxes first)
 // "Me" is always the observing player, and x is mirrored for player 1, so
 // both players see themselves start on the left. That's the egocentric
 // canonicalization from the design doc. Actions are mirrored the same way:
 // player 1's stick_x is negated before it reaches the game.
-const int OBS_FIGHTER = 29 + NUM_STATES;  // 47: 29 features + the state one-hot
+const int OBS_FIGHTER = 31 + NUM_STATES;  // 49: 31 features + the state one-hot
 const int OBS_HITBOXES = 4;
 const int OBS_HITBOX = 12;
-const int OBS_DIM = 2 * OBS_FIGHTER + 3 + OBS_HITBOXES * OBS_HITBOX;  // 145
+const int OBS_DIM = 2 * OBS_FIGHTER + 3 + OBS_HITBOXES * OBS_HITBOX;  // 149
 
 struct EnvParams {
     int frame_skip = 4;          // sim frames per decision; the action repeats for each
     int reaction_delay = 0;      // observe the state from this many frames ago
     float damage_reward = 0.01f; // reward per % dealt (and penalty per % taken)
     float timeout_reward = 0.0f; // at the time limit: + for the player with less damage, - for the other
+    // Combo bonus: the damage reward of the k-th hit in a combo is multiplied
+    // by min(combo_growth^(k-1), combo_cap). 1.0 = off. Zero-sum like the
+    // damage reward: the victim loses exactly what the attacker gains.
+    float combo_growth = 1.0f;
+    float combo_cap = 1.0f;
 };
+
+// Statistics about player 0 (the learner in training), summed over all games
+// and frames, for logging. Names are in STAT_NAMES (same order).
+enum Stat {
+    STAT_FRAMES, STAT_HITS, STAT_HITS_TAKEN, STAT_DAMAGE_DEALT, STAT_DAMAGE_TAKEN, STAT_KOS, STAT_DEATHS,
+    STAT_COMBO_HITS,      // hits that continued a combo (2nd hit or later)
+    STAT_COMBOS_TAKEN,    // opponent hits on player 0 that continued the opponent's combo
+    STAT_MAX_COMBO,       // longest combo (a max, not a sum)
+    STAT_BLOCKS, STAT_GOT_BLOCKED, STAT_SHIELD_BREAKS, STAT_SHIELD_BREAKS_CAUSED,
+    STAT_GRABS, STAT_GOT_GRABBED, STAT_TECHS, STAT_KNOCKDOWNS,
+    STAT_FULL_JUMPS, STAT_SHORT_HOPS, STAT_DI_USED,
+    STAT_FRAMES_AIRBORNE, STAT_FRAMES_ON_PLATFORM, STAT_FRAMES_CLOSE,  // close = within 4 units
+    NUM_STATS,
+};
+extern const char* const STAT_NAMES[NUM_STATS];
 
 // Writes player `player`'s view of `s` into out[0..OBS_DIM).
 void write_obs(const GameState& s, const GameConfig& cfg, int player, float* out);
@@ -57,6 +77,7 @@ struct VecEnv {
     // only grow; the training script zeroes them after reading.
     std::vector<int64_t> move_uses;  // [NUM_MOVES] times each move was started
     std::vector<int64_t> move_hits;  // [NUM_MOVES] times each move hit
+    std::vector<double> stats;       // [NUM_STATS] see Stat; also only grows until zeroed
 
     VecEnv(int num_envs, const GameConfig& cfg, const EnvParams& params);
 
@@ -68,5 +89,6 @@ struct VecEnv {
 
 private:
     void reset_game(int i);
+    void record_stats(const GameState& g, const StepEvents& ev);
     void write_game_obs(int i, float* dst);
 };

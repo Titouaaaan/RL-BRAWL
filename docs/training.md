@@ -3,10 +3,14 @@
 ## TL;DR
 
 ```
-python train/ppo.py --opponent dummy       # rung 1: learn to KO a standing dummy
+python -u train/ppo.py --opponent scripted --total-timesteps 20000000    # sanity check, ~10 min
+python -u train/ppo.py --opponent selfplay --total-timesteps 150000000   # the real run, ~2.5 h
 python -m tensorboard.main --logdir runs   # curves, at http://localhost:6006
 play.bat replay                            # watch the newest recorded game in Godot
 ```
+
+`-u` makes the log appear line by line. Add `> runs\selfplay.log 2>&1` to keep it in a file.
+A stopped run continues with `python -u train/ppo.py --resume runs\<run folder>`.
 
 Run the commands from the repo root. After any C++ change, rebuild the Python module first: `python -m pip install --no-build-isolation .`
 
@@ -56,9 +60,11 @@ header lists them; `git log -p train/ppo.py` shows the exact diff).
 *jabber* walks up and jabs, *spacer* keeps its distance and punishes whiffs
 with the heavy, plus dummy and random. (Training against jabber and spacer
 only produced an agent that waited for the opponent to come to it, and
-stood idle against a dummy.) `selfplay`: 80% of games against the current opponent, 20% against a
-random retired opponent, so the agent doesn't forget how to beat older
-versions of itself. The 80% opponent is a **frozen** copy of the agent
+stood idle against a dummy.) `selfplay`: 70% of games against the current
+opponent, 20% against a random retired opponent (so the agent doesn't forget
+how to beat older versions of itself), and 10% against the four scripted
+bots (`--bot-frac`), so it never forgets how to beat simple play (a previous
+run ended up drawing 97% of games against a standing dummy). The 70% opponent is a **frozen** copy of the agent
 ("gated" self-play): it stays fixed while the learner trains against it,
 and is replaced by the current weights once the learner wins ≥ 55% of at
 least 200 games against it (or after 100 iterations at most). With the live
@@ -78,11 +84,22 @@ terms give a denser learning signal early on, then fade out:
   backing off costs. Because it's a difference of potentials, it provably
   doesn't change which policy is optimal (Ng, Harada & Russell, 1999), so
   it can't be farmed by standing next to the opponent forever.
-- **Annealing:** both terms are multiplied by a scale that goes linearly
+- **Combo bonus:** the damage reward of the k-th hit of a combo is
+  multiplied by 1.15^(k-1), capped at 2× (`--combo-growth`, `--combo-cap`):
+  hit 2 counts 1.15×, hit 5 about 1.75×, hit 6+ double. A combo is a string
+  of hits, each within 1 second of the last, without getting hit back (the
+  game tracks it, and the agent observes its own count). It's zero-sum: the
+  player being comboed loses exactly as much. The game itself keeps combos
+  honest: stale moves weaken repeats and the victim can DI out.
+- **Annealing:** all of these are multiplied by a scale that goes linearly
   from 1 to 0 over the first half of training (`--shaping-anneal 0.5`),
-  leaving only the KO reward. `charts/shaping_scale` shows it. The
-  `charts/episodic_return` chart includes the damage term, so it drifts as
-  the scale falls; judge progress by the win rates.
+  leaving only the KO reward and the timeout tie-breaker.
+  `charts/shaping_scale` shows it. The `charts/episodic_return` chart
+  includes the damage term, so it drifts as the scale falls; judge progress
+  by the win rates.
+- **Exploration:** the entropy bonus starts at 0.03 and is lowered to 0.01
+  over the first half (`--ent-coef`, `--ent-coef-final`, `--ent-anneal`;
+  `charts/ent_coef`), so early training tries many different actions.
 
 ## Reading TensorBoard
 
@@ -97,6 +114,15 @@ terms give a denser learning signal early on, then fade out:
 | `actions/*` | several buttons used | a button at 0%: the agent is stuck |
 | `moves/*_use` | every move above a few % | a move at ~0%: it's dominated by another move; tune it in `data/moves/` |
 | `moves/*_hit_rate` | varies by move | a move used a lot but almost never hitting: the agent is flailing |
+| `actions/effective_count` | well above 1 (45 = every action equally) | drops toward 1-3: collapsed onto a few actions |
+| `actions/stick_*` | a spread of stick directions | |
+| `charts/draw_rate`, `charts/timeout_rate` | low, falling | rising: stalling (the old runs' main failure) |
+| `charts/win_rate_vs_frozen`, `_vs_pool`, `_vs_bots` | ~0.5-0.6 vs frozen; high vs bots | vs bots falling: forgetting basics |
+| `selfplay/generation` | climbing steadily | flat for long: the learner can't beat its frozen copy |
+| `states/*` | time spread over many states (RUN, AIRBORNE, SHIELD, ...) | IDLE very high: passivity |
+| `mech/*_per_min` | hits, blocks, grabs, techs, short hops all > 0 | a mechanic at 0: unused (worth checking why) |
+| `mech/combo_hit_share`, `mech/max_combo` | some combos (share 10-40%) | near 100% with max_combo climbing: a loop is being farmed |
+| `mech/di_rate`, `mech/tech_rate`, `mech/short_hop_share` | rising: the agent learns defense and movement tech | |
 
 ## Useful options
 

@@ -358,6 +358,8 @@ func draw_hud(font: Font) -> void:
 		for s in f.stocks:
 			draw_circle(Vector2(x + 12 + s * 22, size.y - 18), 7, COLORS[i])
 		draw_string(font, Vector2(x + 90, size.y - 14), state_label(f), HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
+		if f.combo >= 2:  # combo counter, like Smash's training mode
+			draw_string(font, Vector2(x, size.y - 78), "%d HIT COMBO" % f.combo, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, COLORS[i])
 
 	var seconds_left: int = max(0, cfg.time_limit_frames - game.get_frame()) / 60
 	draw_string(font, Vector2(size.x / 2 - 30, 30), "%d:%02d" % [seconds_left / 60, seconds_left % 60], HORIZONTAL_ALIGNMENT_LEFT, -1, 24)

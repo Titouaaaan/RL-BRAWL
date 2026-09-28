@@ -123,6 +123,7 @@ public:
         d["air_attack_locked"] = f.air_whiffs >= cfg.air_whiff_limit;
         d["shield_hp"] = f.shield_hp;
         d["hitlag"] = f.hitlag;
+        d["combo"] = f.combo;
         return d;
     }
 

@@ -19,7 +19,7 @@ STATE = 13  # the state one-hot starts here (order: FighterState in core/sim.h)
 ST_ATTACK, ST_LANDING, ST_HITSTUN = 5, 4, 6
 EDGE_RIGHT, EDGE_LEFT = F - 2, F - 1  # distance to the stage edges, / stage_half_width
 DX = 2 * F  # opponent x - my x, / blast_x
-BLAST_X, STAGE_HALF = 55.0, 30.0  # GameConfig values, to turn scaled obs back into units
+BLAST_X, BLAST_TOP, STAGE_HALF = fightcore.BLAST_X, fightcore.BLAST_TOP, fightcore.STAGE_HALF_WIDTH  # to turn scaled obs back into units
 NONE, JUMP, LIGHT, HEAVY, DODGE = 0, 1, 2, 3, 4
 
 

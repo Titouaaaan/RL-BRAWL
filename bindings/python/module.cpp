@@ -31,6 +31,10 @@ static nb::ndarray<nb::numpy, T> view(std::vector<T>& buf, Dims... dims) {
 NB_MODULE(fightcore, m) {
     m.attr("OBS_DIM") = OBS_DIM;
     m.attr("OBS_FIGHTER") = OBS_FIGHTER;
+    const GameConfig defaults;  // stage sizes, so Python never hard-codes them
+    m.attr("BLAST_X") = defaults.blast_x;
+    m.attr("BLAST_TOP") = defaults.blast_top;
+    m.attr("STAGE_HALF_WIDTH") = defaults.stage_half_width;
     nb::list names;
     for (const char* n : MOVE_NAMES) names.append(n);
     m.attr("MOVE_NAMES") = nb::tuple(names);
@@ -40,6 +44,9 @@ NB_MODULE(fightcore, m) {
     m.attr("ST_AIRDODGE") = (int)ST_AIRDODGE;
     m.attr("ST_HELPLESS") = (int)ST_HELPLESS;
     m.attr("ST_LANDING") = (int)ST_LANDING;
+    nb::list stat_names;
+    for (const char* n : STAT_NAMES) stat_names.append(n);
+    m.attr("STAT_NAMES") = nb::tuple(stat_names);
     nb::list states;
     for (const char* n : STATE_NAMES) states.append(n);
     m.attr("STATE_NAMES") = nb::tuple(states);
@@ -49,14 +56,16 @@ NB_MODULE(fightcore, m) {
         // we build the VecEnv inside it with "placement new" (new (ptr) T(...)).
         .def("__init__",
              [](VecEnv* self, int num_envs, const std::string& moves_dir, int frame_skip, int reaction_delay,
-                float damage_reward, float timeout_reward) {
+                float damage_reward, float timeout_reward, float combo_growth, float combo_cap) {
                  GameConfig cfg;
                  std::string err = load_moves(cfg, moves_dir);
                  if (!err.empty()) throw std::invalid_argument(err);
-                 new (self) VecEnv(num_envs, cfg, EnvParams{frame_skip, reaction_delay, damage_reward, timeout_reward});
+                 new (self) VecEnv(num_envs, cfg,
+                                   EnvParams{frame_skip, reaction_delay, damage_reward, timeout_reward, combo_growth, combo_cap});
              },
              nb::arg("num_envs"), nb::arg("moves_dir"), nb::arg("frame_skip") = 4, nb::arg("reaction_delay") = 0,
-             nb::arg("damage_reward") = 0.01f, nb::arg("timeout_reward") = 0.0f)
+             nb::arg("damage_reward") = 0.01f, nb::arg("timeout_reward") = 0.0f, nb::arg("combo_growth") = 1.0f,
+             nb::arg("combo_cap") = 1.0f)
 
         .def("step",
              [](VecEnv& e, ActionArray actions) {
@@ -85,6 +94,8 @@ NB_MODULE(fightcore, m) {
         .def_prop_ro("move_uses", [](VecEnv& e) { return view(e.move_uses, NUM_MOVES); },
                      nb::rv_policy::reference_internal)
         .def_prop_ro("move_hits", [](VecEnv& e) { return view(e.move_hits, NUM_MOVES); },
+                     nb::rv_policy::reference_internal)
+        .def_prop_ro("stats", [](VecEnv& e) { return view(e.stats, NUM_STATS); },
                      nb::rv_policy::reference_internal)
         .def_prop_ro("num_envs", [](const VecEnv& e) { return e.num_envs; })
         // Settable, so training can anneal it.
@@ -124,6 +135,7 @@ NB_MODULE(fightcore, m) {
                  d["hitlag"] = (int)f.hitlag;
                  d["surface"] = (int)f.surface;
                  d["landing_lag"] = (int)f.landing_lag;
+                 d["combo"] = (int)f.combo;
                  d["vx"] = f.vx;
                  d["vy"] = f.vy;
                  d["move_hit"] = f.move_hit;

@@ -27,6 +27,11 @@
 #   7. Self-play is gated: the opponent is a frozen copy of the agent, replaced
 #      only once the learner beats it (like AlphaGo Zero's 55% gate). Retired
 #      opponents form a pool that plays pool_frac of the games.
+#   9. Against collapse onto one strategy: scripted bots keep bot_frac of the
+#      self-play games; the entropy bonus starts high and is annealed; a combo
+#      bonus grows the damage reward for hits deep in a combo (zero-sum,
+#      capped, annealed with the damage reward); and extensive logging of
+#      moves, states, actions and mechanics (the mech/ charts) to spot it.
 import copy  # OURS
 import os
 import random
@@ -82,6 +87,16 @@ class Args:
     """observe the game this many frames late (6 = 0.1 s, like a quick human reaction)"""
     timeout_reward: float = 0.3
     """at the 3-minute limit: + for the player ahead (stocks, then damage), - for the other"""
+    combo_growth: float = 1.15
+    """the k-th hit of a combo gets its damage reward times combo_growth^(k-1)..."""
+    combo_cap: float = 2.0
+    """...up to this multiplier (so hit 6+ counts double). 1.0 turns the combo bonus off"""
+    bot_frac: float = 0.1
+    """selfplay: fraction of games against the scripted bots, so beating simple play is never forgotten"""
+    ent_coef_final: float = 0.01
+    """the entropy bonus goes from ent_coef down to this over the first ent_anneal of training"""
+    ent_anneal: float = 0.5
+    """fraction of training over which the entropy bonus is lowered"""
     damage_reward: float = 0.02
     """reward per % of damage dealt (and penalty per % taken), at the start (annealed)"""
     approach_reward: float = 0.1
@@ -136,7 +151,7 @@ class Args:
     """the surrogate clipping coefficient"""
     clip_vloss: bool = True
     """Toggles whether or not to use a clipped loss for the value function, as per the paper."""
-    ent_coef: float = 0.01
+    ent_coef: float = 0.03  # OURS: was 0.01; annealed to ent_coef_final (more exploration early)
     """coefficient of the entropy"""
     vf_coef: float = 0.5
     """coefficient of the value function"""
@@ -254,7 +269,7 @@ if __name__ == "__main__":
 
     # OURS: env setup. envs.obs etc. are NumPy views that step() updates in place.
     envs = fightcore.VecEnv(args.num_envs, args.moves_dir, args.frame_skip, args.reaction_delay,
-                            args.damage_reward, args.timeout_reward)
+                            args.damage_reward, args.timeout_reward, args.combo_growth, args.combo_cap)
     obs_shape, n_actions = (fightcore.OBS_DIM,), len(ACTIONS)
 
     agent = Agent(fightcore.OBS_DIM, n_actions, args.hidden).to(device)
@@ -274,30 +289,41 @@ if __name__ == "__main__":
     generation, gen_start_iter, gate_games, gate_wins = 0, 1, 0, 0
     pool = []  # retired opponents' weights (CPU state_dicts)
     pool_agent = copy.deepcopy(agent)  # holds whichever retired opponent is being played
-    n_pool = int(args.num_envs * args.pool_frac) if args.opponent == "selfplay" else 0
-    n_frozen = args.num_envs - n_pool  # envs [0, n_frozen) face the frozen opponent
+    # Self-play layout of the envs: [frozen opponent | retired pool | scripted bots].
+    selfplay = args.opponent == "selfplay"
+    n_pool = int(args.num_envs * args.pool_frac) if selfplay else 0
+    n_bots = int(args.num_envs * args.bot_frac) if selfplay else 0
+    n_frozen = args.num_envs - n_pool - n_bots  # envs [0, n_frozen) face the frozen opponent
+    selfplay_bots = [bots.jabber, bots.spacer, bots.dummy, bots.random]
+
+    def group_of(i):  # which kind of opponent env i faces, for logging
+        if not selfplay:
+            return args.opponent
+        return "frozen" if i < n_frozen else "pool" if i < n_frozen + n_pool else "bots"
 
     def opponent_actions(o):
         if args.opponent in opp_bots:
             groups = opp_bots[args.opponent]  # envs split evenly between the bots
             splits = np.array_split(np.arange(args.num_envs), len(groups))
             return np.concatenate([bot(o[idx]) for bot, idx in zip(groups, splits)])
-        current = net_policy(frozen, device)(o[:n_frozen])
-        if n_pool == 0:
-            return current
-        past = net_policy(pool_agent if pool else frozen, device)(o[n_frozen:])
-        return np.concatenate([current, past])
+        parts = [net_policy(frozen, device)(o[:n_frozen])]
+        if n_pool > 0:
+            parts.append(net_policy(pool_agent if pool else frozen, device)(o[n_frozen : n_frozen + n_pool]))
+        if n_bots > 0:
+            idx = np.array_split(np.arange(n_frozen + n_pool, args.num_envs), len(selfplay_bots))
+            parts += [bot(o[ix]) for bot, ix in zip(selfplay_bots, idx)]
+        return np.concatenate(parts)
 
     run_dir.mkdir(parents=True, exist_ok=True)  # OURS
     ep_return = np.zeros(args.num_envs)  # OURS: running episode stats for player 0
     ep_len = np.zeros(args.num_envs, dtype=np.int64)
-    ep_stats = []  # (return, length, win) of games finished since the last log
+    ep_stats = []  # (return, length, winner, timed out, opponent group) of games finished since the last log
 
     # OURS: approach shaping potential. phi = -coef * (distance in units) / 10.
     DXI = 2 * fightcore.OBS_FIGHTER  # obs index of dx (/blast_x); dy (/blast_top) follows
 
     def phi(o):
-        dist = np.hypot(o[:, DXI] * bots.BLAST_X, o[:, DXI + 1] * 40.0)
+        dist = np.hypot(o[:, DXI] * bots.BLAST_X, o[:, DXI + 1] * bots.BLAST_TOP)
         return -args.approach_reward * dist / 10.0
 
     # ALGO Logic: Storage setup
@@ -337,6 +363,7 @@ if __name__ == "__main__":
         progress = (iteration - 1.0) / args.num_iterations
         shaping = max(0.0, 1.0 - progress / args.shaping_anneal) if args.shaping_anneal > 0 else 0.0
         envs.damage_reward = args.damage_reward * shaping
+        ent_now = args.ent_coef_final + (args.ent_coef - args.ent_coef_final) * max(0.0, 1.0 - progress / args.ent_anneal)
 
         if pool:  # OURS: a fresh pool opponent for this rollout
             pool_agent.load_state_dict(random.choice(pool))
@@ -371,7 +398,7 @@ if __name__ == "__main__":
             ep_return += envs.reward[:, 0]
             ep_len += 1
             for i in np.flatnonzero(terminations | truncations):
-                ep_stats.append((ep_return[i], ep_len[i], envs.winner[i] == 0))
+                ep_stats.append((ep_return[i], ep_len[i], int(envs.winner[i]), bool(truncations[i]), group_of(i)))
                 if i < n_frozen:  # the gate only counts games against the frozen opponent
                     gate_games += 1
                     gate_wins += int(envs.winner[i] == 0)
@@ -445,7 +472,7 @@ if __name__ == "__main__":
                     v_loss = 0.5 * ((newvalue - b_returns[mb_inds]) ** 2).mean()
 
                 entropy_loss = entropy.mean()
-                loss = pg_loss - args.ent_coef * entropy_loss + v_loss * args.vf_coef
+                loss = pg_loss - ent_now * entropy_loss + v_loss * args.vf_coef  # OURS: scheduled ent_coef
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -473,14 +500,44 @@ if __name__ == "__main__":
 
         # OURS: game stats, action usage, self-play pool, periodic eval.
         if ep_stats:
-            r, length, win = map(np.array, zip(*ep_stats))
+            r, length, winner, timeout, group = map(np.array, zip(*ep_stats))
+            win, draw = winner == 0, winner == -1
             writer.add_scalar("charts/episodic_return", r.mean(), global_step)
             writer.add_scalar("charts/episodic_length", length.mean(), global_step)
             writer.add_scalar("charts/win_rate_train", win.mean(), global_step)
+            writer.add_scalar("charts/draw_rate", draw.mean(), global_step)       # stalling alarm
+            writer.add_scalar("charts/timeout_rate", timeout.mean(), global_step)  # games reaching 3:00
+            for g in np.unique(group):  # win rate per kind of opponent
+                writer.add_scalar(f"charts/win_rate_vs_{g}", win[group == g].mean(), global_step)
             print(f"iter {iteration}/{args.num_iterations}  games {len(r)}  return {r.mean():.2f}  "
-                  f"win {win.mean():.2f}  length {length.mean():.0f}")
+                  f"win {win.mean():.2f}  draw {draw.mean():.2f}  timeouts {timeout.mean():.2f}  length {length.mean():.0f}")
             ep_stats.clear()
         writer.add_scalar("charts/shaping_scale", shaping, global_step)
+        writer.add_scalar("charts/ent_coef", ent_now, global_step)
+
+        # OURS: game mechanics used by the learner (player 0), from the env's
+        # counters: rates per minute of game time, plus a few ratios.
+        st = dict(zip(fightcore.STAT_NAMES, envs.stats.copy()))
+        envs.stats[:] = 0
+        minutes = max(st["frames"], 1) / 3600.0
+        for name, value in st.items():
+            if name == "max_combo":
+                writer.add_scalar("mech/max_combo", value, global_step)
+            elif name.startswith("frames_"):
+                writer.add_scalar(f"mech/share_{name[7:]}", value / max(st["frames"], 1), global_step)
+            elif name != "frames":
+                writer.add_scalar(f"mech/{name}_per_min", value / minutes, global_step)
+        ratio = lambda a, b: a / b if b > 0 else 0.0  # noqa: E731
+        writer.add_scalar("mech/combo_hit_share", ratio(st["combo_hits"], st["hits"]), global_step)
+        writer.add_scalar("mech/di_rate", ratio(st["di_used"], st["hits_taken"]), global_step)
+        writer.add_scalar("mech/tech_rate", ratio(st["techs"], st["techs"] + st["knockdowns"]), global_step)
+        writer.add_scalar("mech/short_hop_share", ratio(st["short_hops"], st["short_hops"] + st["full_jumps"]), global_step)
+
+        # OURS: share of the learner's time in each state (from its own
+        # observations: the state one-hot starts at index bots.STATE).
+        state_share = obs[:, :, bots.STATE : bots.STATE + len(fightcore.STATE_NAMES)].mean(dim=(0, 1)).cpu().numpy()
+        for name, share in zip(fightcore.STATE_NAMES, state_share):
+            writer.add_scalar(f"states/{name}", share, global_step)
         # OURS: per-move usage (share of all moves started) and hit rate. A move
         # stuck near 0% is either useless or badly tuned: fix it in data/moves.
         uses, hits = envs.move_uses.copy(), envs.move_hits.copy()
@@ -493,14 +550,28 @@ if __name__ == "__main__":
         if iteration % args.eval_every == 0:
             share = uses / max(uses.sum(), 1)
             print("  moves used: " + "  ".join(f"{n} {s:.0%}" for n, s in zip(fightcore.MOVE_NAMES, share)))
-        buttons = np.bincount(ACTIONS[b_actions.long().cpu().numpy()][:, 2], minlength=5) / args.batch_size
+            print(f"  mechanics per min: hits {st['hits'] / minutes:.1f}  combo hits {st['combo_hits'] / minutes:.1f} "
+                  f"(max {st['max_combo']:.0f})  blocks {st['blocks'] / minutes:.1f}  grabs {st['grabs'] / minutes:.1f}  "
+                  f"techs {st['techs'] / minutes:.1f}  short hops {st['short_hops'] / minutes:.1f}  "
+                  f"DI {ratio(st['di_used'], st['hits_taken']):.0%} of hits taken")
+        chosen = ACTIONS[b_actions.long().cpu().numpy()]
+        buttons = np.bincount(chosen[:, 2], minlength=5) / args.batch_size
         for name, frac_used in zip(("none", "jump", "light", "heavy", "dodge"), buttons):
             writer.add_scalar(f"actions/{name}", frac_used, global_step)
+        for axis, col in (("x", 0), ("y", 1)):  # stick directions (egocentric)
+            for name, v in (("neg", -1), ("zero", 0), ("pos", 1)):
+                writer.add_scalar(f"actions/stick_{axis}_{name}", (chosen[:, col] == v).mean(), global_step)
+        # How many distinct actions are really in use (exp of the action entropy
+        # of this batch's choices): 45 = all equally, 1 = always the same one.
+        counts = np.bincount(b_actions.long().cpu().numpy(), minlength=len(ACTIONS)) / args.batch_size
+        nz = counts[counts > 0]
+        writer.add_scalar("actions/effective_count", float(np.exp(-(nz * np.log(nz)).sum())), global_step)
 
         if args.opponent == "selfplay":  # OURS: the gate
             gate_rate = gate_wins / max(gate_games, 1)
             writer.add_scalar("selfplay/win_rate_vs_frozen", gate_rate, global_step)
             writer.add_scalar("selfplay/generation", generation, global_step)
+            writer.add_scalar("selfplay/pool_size", len(pool), global_step)
             beaten = gate_games >= args.gate_min_games and gate_rate >= args.gate_win_rate
             if beaten or iteration - gen_start_iter >= args.gate_max_iters:
                 pool.append({k: v.detach().cpu().clone() for k, v in frozen.state_dict().items()})
