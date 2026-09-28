@@ -587,10 +587,8 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
     ev = StepEvents{};
     if (s.over) return;
     uint8_t before[2] = {s.f[0].state, s.f[1].state};  // to spot state changes for the events
-    for (Fighter& f : s.f) {
+    for (Fighter& f : s.f)
         if (f.combo_timer < 65535) f.combo_timer += 1;
-        if (f.combo_timer > cfg.combo_window) f.combo = 0;  // too slow: the combo is over
-    }
 
     for (int p = 0; p < 2; ++p) {
         Fighter& f = s.f[p];
@@ -638,6 +636,9 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
     // Find both players' hits first, then apply them, so a "trade" (both hit
     // on the same frame) treats both players the same. Attacks beat grabs: a
     // grabber who gets hit this frame doesn't get the grab. Two grabs cancel.
+    // Was each fighter still stunned just before this frame's hits? (For combos.)
+    bool victim_stunned[2];
+    for (int p = 0; p < 2; ++p) victim_stunned[p] = s.f[p].state == ST_HITSTUN || s.f[p].state == ST_KNOCKDOWN;
     PendingHit hit[2];
     for (int p = 0; p < 2; ++p) {
         if (s.f[p].hitlag > 0) continue;
@@ -645,12 +646,17 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
         hit[p].move = s.f[p].move;
         hit[p].power = stale_power(s.f[p], s.f[p].move, cfg);
     }
+    // Decide both cancellations before changing anything, so the result
+    // doesn't depend on which player is checked first.
+    bool cancel[2];
     for (int p = 0; p < 2; ++p) {
         bool hurt = hit[1 - p].kind == HIT_ATTACK || hit[1 - p].kind == HIT_THROW;
-        if (hit[p].kind == HIT_GRAB && (hurt || hit[1 - p].kind == HIT_GRAB)) {
-            hit[p].kind = HIT_NONE;
-            s.f[p].move_hit = true;  // the grab is used up
-        }
+        cancel[p] = hit[p].kind == HIT_GRAB && (hurt || hit[1 - p].kind == HIT_GRAB);
+    }
+    for (int p = 0; p < 2; ++p) {
+        if (!cancel[p]) continue;
+        hit[p].kind = HIT_NONE;
+        s.f[p].move_hit = true;  // the grab is used up
     }
     for (int p = 0; p < 2; ++p) {
         Fighter& a = s.f[p];
@@ -677,22 +683,30 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
         }
     }
 
-    // Combos, for both players at once (so a trade treats them the same): a
-    // hit soon after your last one continues your combo; getting hit ends it;
-    // in a trade, both combos restart at 1.
+    // Combos, for both players at once (so a trade treats them the same).
+    // Like Smash's combo counter, only *true* combos count: a hit continues
+    // your combo only if the victim was still stunned (in hitstun or lying
+    // on the floor) when it landed. Getting hit ends your combo; in a trade,
+    // both restart at 1. (A "hit within a second" rule also rewarded
+    // interrupting an opponent who had already recovered.)
     bool landed[2], was_hit[2];
     for (int p = 0; p < 2; ++p) landed[p] = hit[p].kind == HIT_ATTACK || hit[p].kind == HIT_THROW;
     for (int p = 0; p < 2; ++p) was_hit[p] = landed[1 - p];
     for (int p = 0; p < 2; ++p) {
         Fighter& f = s.f[p];
         if (landed[p]) {
-            bool continues = !was_hit[p] && f.combo > 0 && f.combo_timer <= cfg.combo_window;
+            bool continues = !was_hit[p] && f.combo > 0 && victim_stunned[1 - p];
             f.combo = continues ? uint8_t(std::min(f.combo + 1, 255)) : 1;
             f.combo_timer = 0;
             ev.combo[p] = f.combo;
         } else if (was_hit[p]) {
             f.combo = 0;
         }
+    }
+    // Once the opponent can act again, the combo is over.
+    for (int p = 0; p < 2; ++p) {
+        const Fighter& v = s.f[1 - p];
+        if (!landed[p] && v.state != ST_HITSTUN && v.state != ST_KNOCKDOWN) s.f[p].combo = 0;
     }
 
     // Events that are just state changes.

@@ -178,8 +178,9 @@ struct Fighter {
     int8_t stale[9] = {MOVE_NONE, MOVE_NONE, MOVE_NONE, MOVE_NONE, MOVE_NONE,
                        MOVE_NONE, MOVE_NONE, MOVE_NONE, MOVE_NONE};
     // Combo counter (like Smash's training mode): hits in this fighter's
-    // current string. A hit within GameConfig::combo_window frames of the
-    // previous one continues it; getting hit, or waiting too long, ends it.
+    // current true combo. A hit continues it only if the opponent was still
+    // stunned (hitstun or knocked down); it ends when they can act again,
+    // or when this fighter gets hit.
     uint8_t combo = 0;
     uint16_t combo_timer = 0;  // frames since the string's last hit
     // Last frame's button. Holding jump must jump only once, so jumps react to
@@ -257,7 +258,7 @@ struct GameConfig {
     // appears. A move not in the queue at all gets fresh_bonus.
     float stale_steps[9] = {0.08f, 0.07594f, 0.06782f, 0.06028f, 0.05274f, 0.0452f, 0.03766f, 0.03012f, 0.02258f};
     float fresh_bonus = 1.05f;
-    int combo_window = 60;  // a hit within this many frames of your last one continues your combo
+    int combo_window = 60;  // scale for the "frames since my last hit" observation
     // Stage: surface 0 is the main floor; 1-3 are pass-through platforms
     // (the "Battlefield" layout). Dropping through ignores platforms this long.
     Surface surfaces[NUM_SURFACES] = {{-30, 30, 0}, {-17, -7, 8}, {7, 17, 8}, {-5, 5, 15}};

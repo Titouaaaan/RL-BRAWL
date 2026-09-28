@@ -86,9 +86,12 @@ terms give a denser learning signal early on, then fade out:
   it can't be farmed by standing next to the opponent forever.
 - **Combo bonus:** the damage reward of the k-th hit of a combo is
   multiplied by 1.15^(k-1), capped at 2× (`--combo-growth`, `--combo-cap`):
-  hit 2 counts 1.15×, hit 5 about 1.75×, hit 6+ double. A combo is a string
-  of hits, each within 1 second of the last, without getting hit back (the
-  game tracks it, and the agent observes its own count). It's zero-sum: the
+  hit 2 counts 1.15×, hit 5 about 1.75×, hit 6+ double. Only *true* combos
+  count, like Smash's combo counter: a hit continues your combo only if the
+  victim was still stunned (in hitstun or knocked down). The game tracks it,
+  and the agent observes its own count. (A first version counted any hit
+  within a second without being hit back; that also rewarded interrupting
+  an opponent who had already recovered, and helped up-tilt take over.) It's zero-sum: the
   player being comboed loses exactly as much. The game itself keeps combos
   honest: stale moves weaken repeats and the victim can DI out.
 - **Annealing:** all of these are multiplied by a scale that goes linearly

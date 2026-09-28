@@ -26,13 +26,16 @@ def test_same_egocentric_action_gives_identical_obs():
     # Observations AND actions are egocentric (player 1's world is mirrored).
     # The start is symmetric, so if both players send the same action, both
     # must see exactly the same observation, every step.
-    env = fightcore.VecEnv(1, MOVES)
-    assert np.array_equal(env.obs[0, 0], env.obs[0, 1])
-    rng = np.random.default_rng(0)
-    for _ in range(300):
-        a = (rng.integers(-1, 2), rng.integers(-1, 2), rng.integers(0, 5))
-        env.step(acts(1, p1=a, p2=a))
+    # Many seeds and long games: rare situations (same-frame grabs, trades,
+    # DI) have broken the symmetry before.
+    for seed in range(12):
+        env = fightcore.VecEnv(1, MOVES)
         assert np.array_equal(env.obs[0, 0], env.obs[0, 1])
+        rng = np.random.default_rng(seed)
+        for _ in range(1500):
+            a = (rng.integers(-1, 2), rng.integers(-1, 2), rng.integers(0, 5))
+            env.step(acts(1, p1=a, p2=a))
+            assert np.array_equal(env.obs[0, 0], env.obs[0, 1])
 
 
 def test_player1_stick_is_mirrored():
@@ -118,24 +121,43 @@ def test_timeout_tie_breaker_rewards_the_player_ahead():
     assert np.allclose(env.reward[0], [0.3, -0.3])
 
 
-def test_combo_bonus_grows_the_damage_reward():
-    # Two quick hits: the second continues the combo, so with combo_growth=2
-    # its damage reward counts double. Zero-sum: P2 loses what P1 gains.
+def test_only_true_combos_count_and_get_the_bonus():
+    # Jab, then jab again after P2 has recovered: not a combo. A low down-tilt
+    # at 80% knocks P2 down nearby, and hitting them on the floor is a true combo: the
+    # damage reward of that hit is doubled (combo_growth=2), zero-sum.
     env = fightcore.VecEnv(1, MOVES, frame_skip=1, damage_reward=0.01, combo_growth=2.0, combo_cap=4.0)
     while env.fighter(0, 1)["x"] - env.fighter(0, 0)["x"] > 3.2:
         env.step(acts(1, p1=(1, 0, 0)))
     for _ in range(20):
         env.step(acts(1))
-    rewards, combos = [], []
-    for _ in range(60):  # hold jab: the second jab lands while P2 is still close
+    combos = []
+    for _ in range(40):  # hold jab: P2 recovers between jabs (jab is -2 on hit)
         env.step(acts(1, p1=(0, 0, 2)))
         if env.reward[0, 0] > 0:
-            rewards.append(env.reward[0, 0])
             combos.append(env.fighter(0, 0)["combo"])
-        assert env.reward[0, 0] == -env.reward[0, 1]
-    assert combos[:2] == [1, 2]
-    dmg1, dmg2 = rewards[0] / 0.01, rewards[1] / 0.01 / 2.0  # undo the reward scale and the 2x combo bonus
-    assert 0 < dmg2 < dmg1  # the 2nd jab is stale (weaker), but its reward was doubled
+    assert combos and all(c == 1 for c in combos)
+
+    env = fightcore.VecEnv(1, MOVES, frame_skip=1, damage_reward=0.01, combo_growth=2.0, combo_cap=4.0)
+    for _ in range(200):  # face off in the middle
+        a = (1, 0, 0) if env.fighter(0, 0)["x"] < -1.5 else (0, 0, 0)
+        b = (1, 0, 0) if env.fighter(0, 1)["x"] > 1.5 else (0, 0, 0)
+        env.step(acts(1, p1=a, p2=b))
+    env.set_percent(0, 1, 80.0)
+    for _ in range(20):
+        env.step(acts(1, p1=(0, -1, 2)))  # down-tilt: combo 1
+        if env.fighter(0, 1)["state"] == fightcore.ST_HITSTUN:
+            break
+    assert env.fighter(0, 0)["combo"] == 1
+    knocked = fightcore.STATE_NAMES.index("KNOCKDOWN")
+    for _ in range(120):  # P2 lands and is knocked down; P1 follows and down-tilts them
+        p1, p2 = env.fighter(0, 0), env.fighter(0, 1)
+        close = abs(p2["x"] - p1["x"]) < 2.5
+        a = (0, -1, 2) if close and p2["state"] == knocked else ((1, 0, 0) if p2["x"] > p1["x"] else (-1, 0, 0))
+        env.step(acts(1, p1=a))
+        if env.fighter(0, 0)["combo"] == 2:
+            break
+    assert env.fighter(0, 0)["combo"] == 2
+    assert env.reward[0, 0] == -env.reward[0, 1] > 0
 
 
 def test_stats_count_the_learners_actions():
