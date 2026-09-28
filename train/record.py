@@ -1,5 +1,6 @@
 """Record one game of a trained checkpoint against a bot (or itself), to watch in Godot.
 
+    python train/record.py latest --opponent jabber      # newest run's newest weights
     python train/record.py runs/<run>/agent_00600.pt --opponent jabber
     play.bat replay
 """
@@ -17,10 +18,15 @@ from ppo import ACTIONS, ROOT, Agent, net_policy  # noqa: E402
 import fightcore  # noqa: E402
 
 p = argparse.ArgumentParser()
-p.add_argument("checkpoint")
+p.add_argument("checkpoint", help="a .pt file, or 'latest' for the newest run's agent_latest.pt")
 p.add_argument("--opponent", default="jabber", help="dummy, random, jabber, spacer, or self")
 p.add_argument("--hidden", type=int, default=256)
 args = p.parse_args()
+
+if args.checkpoint == "latest":
+    newest = max((ROOT / "runs").glob("*/agent_latest.pt"), key=lambda f: f.stat().st_mtime)
+    args.checkpoint = str(newest)
+    print(f"using {newest.parent.name}")
 
 agent = Agent(fightcore.OBS_DIM, len(ACTIONS), args.hidden)
 agent.load_state_dict(torch.load(args.checkpoint, map_location="cpu"))

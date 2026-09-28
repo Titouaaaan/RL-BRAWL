@@ -150,7 +150,7 @@ builds of the core disagree: a bug worth reporting).
 To watch a specific checkpoint against a specific opponent:
 
 ```
-python train/record.py runs\<run>\agent_latest.pt --opponent jabber   # dummy, random, jabber, spacer, or self
+python train/record.py latest --opponent jabber   # the newest run (or give a path to any .pt); opponents: dummy, random, jabber, spacer, self
 play.bat replay
 ```
 
