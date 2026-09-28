@@ -188,6 +188,8 @@ struct StepEvents {
     bool hit[2] = {false, false};    // player p hit the other player
     float damage[2] = {0, 0};        // damage player p dealt
     bool ko[2] = {false, false};     // player p lost a stock
+    int8_t move_started[2] = {MOVE_NONE, MOVE_NONE};  // move player p started this frame
+    int8_t hit_move[2] = {MOVE_NONE, MOVE_NONE};      // move player p hit with this frame
 };
 
 // An active hitbox placed in the world, e.g. for drawing it or for observations.

@@ -107,7 +107,8 @@ VecEnv::VecEnv(int n, const GameConfig& c, const EnvParams& p)
     : cfg(c), params(p), num_envs(n),
       games(n), history(size_t(n) * (p.reaction_delay + 1)),
       obs(size_t(n) * 2 * OBS_DIM), final_obs(size_t(n) * 2 * OBS_DIM),
-      reward(size_t(n) * 2), terminated(n), truncated(n), winner(n), final_hash(n) {
+      reward(size_t(n) * 2), terminated(n), truncated(n), winner(n), final_hash(n),
+      move_uses(NUM_MOVES), move_hits(NUM_MOVES) {
     if (n < 1 || p.frame_skip < 1 || p.reaction_delay < 0)
         throw std::invalid_argument("need num_envs >= 1, frame_skip >= 1, reaction_delay >= 0");
     reset_all();
@@ -162,6 +163,8 @@ void VecEnv::step(const int8_t* actions) {
                 r[p] += params.damage_reward * (ev.damage[p] - ev.damage[1 - p]);
             }
             history[size_t(i) * hist + (g.frame % hist)] = g;
+            if (ev.move_started[0] >= 0) move_uses[ev.move_started[0]] += 1;
+            if (ev.hit_move[0] >= 0) move_hits[ev.hit_move[0]] += 1;
         }
         reward[i * 2] = r[0];
         reward[i * 2 + 1] = r[1];

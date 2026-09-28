@@ -332,6 +332,8 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
 
     step_fighter(s.f[0], in[0], cfg);
     step_fighter(s.f[1], in[1], cfg);
+    for (int p = 0; p < 2; ++p)
+        if (s.f[p].state == ST_ATTACK && s.f[p].state_frame == 1) ev.move_started[p] = s.f[p].move;
     push_apart(s.f[0], s.f[1], cfg);
 
     // Find both players' hits first, then apply them. If both hit each other
@@ -343,6 +345,7 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
         apply_hit(s.f[p], s.f[1 - p], *hit[p], cfg);
         ev.hit[p] = true;
         ev.damage[p] = hit[p]->damage;
+        ev.hit_move[p] = s.f[p].move;
     }
 
     for (int p = 0; p < 2; ++p) {

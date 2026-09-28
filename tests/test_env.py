@@ -95,3 +95,10 @@ def test_reaction_delay_shows_the_past():
         history.append(now.obs.copy())
         t = len(history) - 1
         assert np.array_equal(late.obs, history[max(t - 3, 0)])
+
+
+def test_move_stats_count_player0_moves():
+    env = fightcore.VecEnv(1, MOVES, frame_skip=1)
+    env.step(acts(1, p1=(0, 1, 2), p2=(0, 0, 2)))  # P1 up-tilt, P2 jab (not counted)
+    assert env.move_uses[fightcore.MOVE_NAMES.index("up_tilt")] == 1
+    assert env.move_uses.sum() == 1

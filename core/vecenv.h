@@ -52,6 +52,10 @@ struct VecEnv {
     std::vector<uint8_t> truncated;  // [num_envs] game ended by the time limit (cut short)
     std::vector<int8_t> winner;      // [num_envs] if it ended: 0, 1, or -1 = draw
     std::vector<uint64_t> final_hash; // [num_envs] if it ended: hash_state of the last state (replay check)
+    // Player 0's move statistics summed over all games, for logging. They
+    // only grow; the training script zeroes them after reading.
+    std::vector<int64_t> move_uses;  // [NUM_MOVES] times each move was started
+    std::vector<int64_t> move_hits;  // [NUM_MOVES] times each move hit
 
     VecEnv(int num_envs, const GameConfig& cfg, const EnvParams& params);
 

@@ -79,6 +79,10 @@ NB_MODULE(fightcore, m) {
                      nb::rv_policy::reference_internal)
         .def_prop_ro("final_hash", [](VecEnv& e) { return view(e.final_hash, e.num_envs); },
                      nb::rv_policy::reference_internal)
+        .def_prop_ro("move_uses", [](VecEnv& e) { return view(e.move_uses, NUM_MOVES); },
+                     nb::rv_policy::reference_internal)
+        .def_prop_ro("move_hits", [](VecEnv& e) { return view(e.move_hits, NUM_MOVES); },
+                     nb::rv_policy::reference_internal)
         .def_prop_ro("num_envs", [](const VecEnv& e) { return e.num_envs; })
         // Settable, so training can anneal it.
         .def_prop_rw("damage_reward", [](const VecEnv& e) { return e.params.damage_reward; },

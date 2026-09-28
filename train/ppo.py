@@ -444,6 +444,18 @@ if __name__ == "__main__":
                   f"win {win.mean():.2f}  length {length.mean():.0f}")
             ep_stats.clear()
         writer.add_scalar("charts/shaping_scale", shaping, global_step)
+        # OURS: per-move usage (share of all moves started) and hit rate. A move
+        # stuck near 0% is either useless or badly tuned: fix it in data/moves.
+        uses, hits = envs.move_uses.copy(), envs.move_hits.copy()
+        envs.move_uses[:] = 0
+        envs.move_hits[:] = 0
+        for m, name in enumerate(fightcore.MOVE_NAMES):
+            writer.add_scalar(f"moves/{name}_use", uses[m] / max(uses.sum(), 1), global_step)
+            if uses[m] > 0:
+                writer.add_scalar(f"moves/{name}_hit_rate", hits[m] / uses[m], global_step)
+        if iteration % args.eval_every == 0:
+            share = uses / max(uses.sum(), 1)
+            print("  moves used: " + "  ".join(f"{n} {s:.0%}" for n, s in zip(fightcore.MOVE_NAMES, share)))
         buttons = np.bincount(ACTIONS[b_actions.long().cpu().numpy()][:, 2], minlength=5) / args.batch_size
         for name, frac_used in zip(("none", "jump", "light", "heavy", "dodge"), buttons):
             writer.add_scalar(f"actions/{name}", frac_used, global_step)

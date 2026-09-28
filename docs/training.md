@@ -88,7 +88,9 @@ terms give a denser learning signal early on, then fade out:
 | `losses/entropy` | slowly falling from ln 45 ≈ 3.81 | collapses fast: stuck on one strategy |
 | `losses/approx_kl` | ~0.01–0.02 | > 0.05 regularly: updates too big |
 | `losses/explained_variance` | rising toward 1 | stays ≤ 0: the critic learns nothing |
-| `actions/*` | several buttons used | a button at 0%: the move is useless or the agent is stuck |
+| `actions/*` | several buttons used | a button at 0%: the agent is stuck |
+| `moves/*_use` | every move above a few % | a move at ~0%: it's dominated by another move; tune it in `data/moves/` |
+| `moves/*_hit_rate` | varies by move | a move used a lot but almost never hitting: the agent is flailing |
 
 ## Useful options
 
