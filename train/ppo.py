@@ -16,6 +16,11 @@
 #      real endings; with 3-minute games that are often timeouts early on,
 #      that would teach the critic the wrong values).
 #   5. Hyperparameters: gamma 0.995 (design doc), 256-unit MLP, 256 envs.
+#   5b. Reward shaping, annealed to zero: potential-based approach shaping
+#      (F = gamma*phi(s') - phi(s), phi = -distance; Ng et al. 1999, doesn't
+#      change the optimal policy) and a damage reward that starts at 0.02 per %.
+#      Both scale linearly from 1 to 0 over the first shaping_anneal of training,
+#      leaving only the +-1 KO reward.
 #   6. Logging/eval: win rates vs fixed bots, button usage, checkpoints,
 #      snapshot pool for self-play, replays for watching in Godot.
 import copy  # OURS
@@ -64,15 +69,19 @@ class Args:
 
     # OURS: environment and opponent
     opponent: str = "dummy"
-    """who player 1 is: dummy, random, scripted (jabber + spacer), or selfplay"""
+    """who player 1 is: dummy, random, scripted (all four bots mixed), or selfplay"""
     moves_dir: str = str(ROOT / "data" / "moves")
     """folder with the move JSON files"""
     frame_skip: int = 4
     """sim frames per decision"""
     reaction_delay: int = 0
     """observe the game this many frames late"""
-    damage_reward: float = 0.01
-    """reward per % of damage dealt (and penalty per % taken)"""
+    damage_reward: float = 0.02
+    """reward per % of damage dealt (and penalty per % taken), at the start (annealed)"""
+    approach_reward: float = 0.1
+    """potential-based shaping: reward per 10 units of distance closed, at the start (annealed)"""
+    shaping_anneal: float = 0.5
+    """fraction of training over which both shaping terms fade to 0 (0 = no shaping at all)"""
     snapshot_every: int = 20
     """selfplay: add the current weights to the opponent pool every N iterations"""
     pool_frac: float = 0.2
@@ -228,7 +237,10 @@ if __name__ == "__main__":
     # OURS: the opponent (player 1). Bots are plain functions; self-play uses
     # the live agent (frozen for the rollout: weights only change in the update
     # phase) plus a pool of past snapshots for pool_frac of the envs.
-    opp_bots = {"dummy": [bots.dummy], "random": [bots.random], "scripted": [bots.jabber, bots.spacer]}
+    # "scripted" mixes all four bots: training only against bots that attack taught
+    # an agent to wait for them, and it then stood idle against a passive dummy.
+    opp_bots = {"dummy": [bots.dummy], "random": [bots.random],
+                "scripted": [bots.jabber, bots.spacer, bots.dummy, bots.random]}
     pool = []  # past agent weights (CPU state_dicts)
     pool_agent = copy.deepcopy(agent)  # holds whichever snapshot is being played
     n_pool = int(args.num_envs * args.pool_frac) if args.opponent == "selfplay" else 0
@@ -248,6 +260,13 @@ if __name__ == "__main__":
     ep_return = np.zeros(args.num_envs)  # OURS: running episode stats for player 0
     ep_len = np.zeros(args.num_envs, dtype=np.int64)
     ep_stats = []  # (return, length, win) of games finished since the last log
+
+    # OURS: approach shaping potential. phi = -coef * (distance in units) / 10.
+    DXI = 2 * fightcore.OBS_FIGHTER  # obs index of dx (/blast_x); dy (/blast_top) follows
+
+    def phi(o):
+        dist = np.hypot(o[:, DXI] * bots.BLAST_X, o[:, DXI + 1] * 40.0)
+        return -args.approach_reward * dist / 10.0
 
     # ALGO Logic: Storage setup
     obs = torch.zeros((args.num_steps, args.num_envs) + obs_shape).to(device)  # OURS: obs_shape
@@ -271,6 +290,11 @@ if __name__ == "__main__":
             lrnow = frac * args.learning_rate
             optimizer.param_groups[0]["lr"] = lrnow
 
+        # OURS: shaping scale, 1 -> 0 over the first shaping_anneal of training.
+        progress = (iteration - 1.0) / args.num_iterations
+        shaping = max(0.0, 1.0 - progress / args.shaping_anneal) if args.shaping_anneal > 0 else 0.0
+        envs.damage_reward = args.damage_reward * shaping
+
         if pool:  # OURS: a fresh pool opponent for this rollout
             pool_agent.load_state_dict(random.choice(pool))
 
@@ -288,9 +312,15 @@ if __name__ == "__main__":
 
             # OURS: execute the game. Both players act; only player 0's step is stored.
             joint = np.stack([ACTIONS[action.cpu().numpy()], opponent_actions(envs.obs[:, 1])], axis=1)
+            phi_before = phi(envs.obs[:, 0])
             envs.step(joint)
             reward = envs.reward[:, 0].copy()
             terminations, truncations = envs.terminated.astype(bool), envs.truncated.astype(bool)
+            if shaping > 0:  # OURS: potential-based approach shaping
+                phi_after = phi(envs.obs[:, 0])  # for finished games this is already the NEXT game...
+                phi_after[truncations] = phi(envs.final_obs[truncations, 0])  # ...so use its last obs
+                phi_after[terminations] = 0.0  # a real ending has potential 0 by convention
+                reward += shaping * (args.gamma * phi_after - phi_before)
             if truncations.any():  # OURS: bootstrap through time-limit cutoffs
                 with torch.no_grad():
                     final_v = agent.get_value(torch.Tensor(envs.final_obs[truncations, 0].copy()).to(device))
@@ -409,6 +439,7 @@ if __name__ == "__main__":
             print(f"iter {iteration}/{args.num_iterations}  games {len(r)}  return {r.mean():.2f}  "
                   f"win {win.mean():.2f}  length {length.mean():.0f}")
             ep_stats.clear()
+        writer.add_scalar("charts/shaping_scale", shaping, global_step)
         buttons = np.bincount(ACTIONS[b_actions.long().cpu().numpy()][:, 2], minlength=5) / args.batch_size
         for name, frac_used in zip(("none", "jump", "light", "heavy", "dodge"), buttons):
             writer.add_scalar(f"actions/{name}", frac_used, global_step)

@@ -164,6 +164,8 @@ Step 0 is done at the end of phase 4; each phase has a gate that must pass befor
 - Action space implemented as Discrete(36), so CleanRL's PPO is used unchanged apart from marked adaptations (`train/ppo.py`).
 - Learner is always player 0; only its experience is trained on (both sides of latest-vs-latest games could be added later for 2x data).
 - Timeouts are truncations: PPO bootstraps with γ·V(final observation).
+- Reward shaping: potential-based approach shaping (Φ = −distance) plus a damage term, both annealed linearly to 0 over the first half of training, leaving KO-only reward. No per-step time penalty: γ already favors fast KOs, and a penalty invites self-destructing when behind.
+- The `scripted` rung trains against all four bots mixed; jabber+spacer only produced an agent that never attacked a passive opponent.
 - Replays are JSON: per-frame inputs of both players, a copy of the move files, and the final state hash. Godot re-simulates and verifies the hash, which also checks that the Python and Godot builds of the core agree.
 - No Gymnasium wrapper: two-player self-play doesn't fit its single-agent API.
 - A move's hitboxes each have a start..end frame window (instead of a list per active frame); respawn uses an invulnerability timer instead of a Respawning state.

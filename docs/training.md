@@ -20,7 +20,7 @@ more training.
 |---|---|---|---|
 | 1 | `--opponent dummy` | wins ~100% vs dummy, games get short | env, reward, observation bugs |
 | 2 | `--opponent random` | wins > 95% vs random | basic combat |
-| 3 | `--opponent scripted` | clearly beats jabber and spacer | real skill, reward hacking |
+| 3 | `--opponent scripted` | beats all four bots (the mix trains against all of them) | real skill, reward hacking, over-fitting to one opponent |
 | 4 | `--opponent selfplay` | win rate vs the bots keeps rising; replays look like real play | the goal |
 
 Self-play reward hovers around zero by design (you're playing yourself), so
@@ -48,17 +48,32 @@ header lists them; `git log -p train/ppo.py` shows the exact diff).
    and one recorded game (`replays/<run>/iter_*.json`).
 
 **Opponents:** `dummy` never moves. `random` presses random buttons.
-`scripted` splits the games between two bots in `train/bots.py`: *jabber*
-walks up and jabs, *spacer* keeps its distance and punishes whiffs with the
-heavy. `selfplay`: 80% of games against the current weights, 20% against a
+`scripted` splits the games evenly between four bots in `train/bots.py`:
+*jabber* walks up and jabs, *spacer* keeps its distance and punishes whiffs
+with the heavy, plus dummy and random. (Training against jabber and spacer
+only produced an agent that waited for the opponent to come to it, and
+stood idle against a dummy.) `selfplay`: 80% of games against the current weights, 20% against a
 random past snapshot (one is added every 20 iterations), so the agent
 doesn't forget how to beat older versions of itself.
 
-**Actions** are 36 discrete choices: stick x (3) × stick y (3) × button
-(none, jump, light, heavy). **Observations** are 107 numbers from the
+**Actions** are 45 discrete choices: stick x (3) × stick y (3) × button
+(none, jump, light, heavy, dodge). **Observations** are 107 numbers from the
 player's own point of view; player 1's world is mirrored so that both
 players see themselves starting on the left (layout in `core/vecenv.h`).
-**Rewards:** +1 for a KO, −1 for being KO'd, ±0.01 per % of damage dealt/taken.
+**Rewards:** +1 for a KO, −1 for being KO'd. On top of that, two shaping
+terms give a denser learning signal early on, then fade out:
+
+- **Damage:** ±0.02 per % of damage dealt/taken (`--damage-reward`).
+- **Approach:** potential-based shaping. With Φ = −0.1 × distance / 10
+  (`--approach-reward`), each step gets γ·Φ(next) − Φ(now): closing in pays,
+  backing off costs. Because it's a difference of potentials, it provably
+  doesn't change which policy is optimal (Ng, Harada & Russell, 1999), so
+  it can't be farmed by standing next to the opponent forever.
+- **Annealing:** both terms are multiplied by a scale that goes linearly
+  from 1 to 0 over the first half of training (`--shaping-anneal 0.5`),
+  leaving only the KO reward. `charts/shaping_scale` shows it. The
+  `charts/episodic_return` chart includes the damage term, so it drifts as
+  the scale falls; judge progress by the win rates.
 
 ## Reading TensorBoard
 
@@ -67,7 +82,7 @@ players see themselves starting on the left (layout in `core/vecenv.h`).
 | `eval/win_vs_*` | rising | stuck at 0 on an easy rung |
 | `charts/episodic_length` | falls as the agent learns to KO | always the maximum (2700 decisions = time out) |
 | `charts/episodic_return` | rising (except self-play: ~0) | |
-| `losses/entropy` | slowly falling from ln 36 ≈ 3.58 | collapses fast: stuck on one strategy |
+| `losses/entropy` | slowly falling from ln 45 ≈ 3.81 | collapses fast: stuck on one strategy |
 | `losses/approx_kl` | ~0.01–0.02 | > 0.05 regularly: updates too big |
 | `losses/explained_variance` | rising toward 1 | stays ≤ 0: the critic learns nothing |
 | `actions/*` | several buttons used | a button at 0%: the move is useless or the agent is stuck |
@@ -76,7 +91,8 @@ players see themselves starting on the left (layout in `core/vecenv.h`).
 
 `python train/ppo.py --help` lists them all. Common ones: `--total-timesteps`
 (learner decisions, default 20M), `--seed`, `--num-envs`, `--ent-coef`,
-`--frame-skip`, `--reaction-delay`, `--eval-every`.
+`--damage-reward`, `--approach-reward`, `--shaping-anneal` (0 turns shaping
+off), `--frame-skip`, `--reaction-delay`, `--eval-every`.
 
 ## Watching games
 

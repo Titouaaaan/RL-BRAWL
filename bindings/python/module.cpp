@@ -77,6 +77,9 @@ NB_MODULE(fightcore, m) {
         .def_prop_ro("final_hash", [](VecEnv& e) { return view(e.final_hash, e.num_envs); },
                      nb::rv_policy::reference_internal)
         .def_prop_ro("num_envs", [](const VecEnv& e) { return e.num_envs; })
+        // Settable, so training can anneal it.
+        .def_prop_rw("damage_reward", [](const VecEnv& e) { return e.params.damage_reward; },
+                     [](VecEnv& e, float v) { e.params.damage_reward = v; })
 
         // Debug helpers, used by the tests. Not for the training loop.
         .def("hashes",
