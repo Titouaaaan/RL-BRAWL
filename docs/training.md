@@ -94,6 +94,15 @@ terms give a denser learning signal early on, then fade out:
   an opponent who had already recovered, and helped up-tilt take over.) It's zero-sum: the
   player being comboed loses exactly as much. The game itself keeps combos
   honest: stale moves weaken repeats and the victim can DI out.
+- **Counterattack bonus:** +0.1 at the start (`--counter-reward`, zero-sum,
+  annealed like the rest) for a hit that is either a **counter**, landed within
+  1 second of a successful defense (dodging through an attack with i-frames, a
+  parry, or a shield block), or a **whiff punish**, landed on an opponent stuck
+  in the recovery of a missed attack or grab, an aerial's landing lag, or a
+  clank rebound. One bonus per hit even if it's both. Defending by itself earns
+  nothing, so dodge spam isn't rewarded; the defense has to be converted. The
+  zero-sum side makes whiffing costly, which pushes against spamming one move.
+  The agent observes how much of its (and the opponent's) counter window is left.
 - **Annealing:** all of these are multiplied by a scale that goes linearly
   from 1 down to 0.2 over the first half of training (`--shaping-anneal 0.5`,
   `--shaping-floor 0.2`), so KOs dominate later on. (Fading all the way to 0
@@ -128,6 +137,7 @@ terms give a denser learning signal early on, then fade out:
 | `mech/*_per_min` | hits, blocks, grabs, techs, short hops all > 0 | a mechanic at 0: unused (worth checking why) |
 | `mech/combo_hit_share`, `mech/max_combo` | some combos (share 10-40%) | near 100% with max_combo climbing: a loop is being farmed |
 | `mech/di_rate`, `mech/tech_rate`, `mech/short_hop_share` | rising: the agent learns defense and movement tech | |
+| `mech/counter_hit_share`, `mech/whiff_punish_share`, `mech/evade_conversion` | rising: defenses turn into punishes | `evades_per_min` high with conversion near 0: dodging for its own sake |
 
 ## Useful options
 

@@ -59,16 +59,18 @@ NB_MODULE(fightcore, m) {
         // we build the VecEnv inside it with "placement new" (new (ptr) T(...)).
         .def("__init__",
              [](VecEnv* self, int num_envs, const std::string& moves_dir, int frame_skip, int reaction_delay,
-                float damage_reward, float timeout_reward, float combo_growth, float combo_cap) {
+                float damage_reward, float timeout_reward, float combo_growth, float combo_cap,
+                float counter_reward) {
                  GameConfig cfg;
                  std::string err = load_moves(cfg, moves_dir);
                  if (!err.empty()) throw std::invalid_argument(err);
                  new (self) VecEnv(num_envs, cfg,
-                                   EnvParams{frame_skip, reaction_delay, damage_reward, timeout_reward, combo_growth, combo_cap});
+                                   EnvParams{frame_skip, reaction_delay, damage_reward, timeout_reward, combo_growth, combo_cap,
+                                             counter_reward});
              },
              nb::arg("num_envs"), nb::arg("moves_dir"), nb::arg("frame_skip") = 4, nb::arg("reaction_delay") = 0,
              nb::arg("damage_reward") = 0.01f, nb::arg("timeout_reward") = 0.0f, nb::arg("combo_growth") = 1.0f,
-             nb::arg("combo_cap") = 1.0f)
+             nb::arg("combo_cap") = 1.0f, nb::arg("counter_reward") = 0.0f)
 
         .def("step",
              [](VecEnv& e, ActionArray actions) {
@@ -104,6 +106,8 @@ NB_MODULE(fightcore, m) {
         // Settable, so training can anneal it.
         .def_prop_rw("damage_reward", [](const VecEnv& e) { return e.params.damage_reward; },
                      [](VecEnv& e, float v) { e.params.damage_reward = v; })
+        .def_prop_rw("counter_reward", [](const VecEnv& e) { return e.params.counter_reward; },
+                     [](VecEnv& e, float v) { e.params.counter_reward = v; })
 
         // Debug helpers, used by the tests. Not for the training loop.
         .def("hashes",
@@ -139,6 +143,7 @@ NB_MODULE(fightcore, m) {
                  d["surface"] = (int)f.surface;
                  d["landing_lag"] = (int)f.landing_lag;
                  d["combo"] = (int)f.combo;
+                 d["since_defense"] = (int)f.since_defense;
                  d["tumble"] = f.tumble;
                  d["ledge_side"] = (int)f.ledge_side;
                  d["ledge_grabs"] = (int)f.ledge_grabs;

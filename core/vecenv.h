@@ -12,18 +12,18 @@
 #include "sim.h"
 
 // Observation layout (all float32, roughly scaled to [-1, 1]):
-//   [0, 58)    me:  fighter features (see write_fighter in vecenv.cpp)
-//   [58, 116)  opponent: same 58 features
-//   [116, 119) relative dx, dy, and time left
-//   [119, 167) 4 hitbox slots x 12 features (the opponent's hitboxes first)
+//   [0, 59)    me:  fighter features (see write_fighter in vecenv.cpp)
+//   [59, 118)  opponent: same 59 features
+//   [118, 121) relative dx, dy, and time left
+//   [121, 169) 4 hitbox slots x 12 features (the opponent's hitboxes first)
 // "Me" is always the observing player, and x is mirrored for player 1, so
 // both players see themselves start on the left. That's the egocentric
 // canonicalization from the design doc. Actions are mirrored the same way:
 // player 1's stick_x is negated before it reaches the game.
-const int OBS_FIGHTER = 34 + NUM_STATES;  // 58: 34 features + the state one-hot
+const int OBS_FIGHTER = 35 + NUM_STATES;  // 59: 35 features + the state one-hot
 const int OBS_HITBOXES = 4;
 const int OBS_HITBOX = 12;
-const int OBS_DIM = 2 * OBS_FIGHTER + 3 + OBS_HITBOXES * OBS_HITBOX;  // 167
+const int OBS_DIM = 2 * OBS_FIGHTER + 3 + OBS_HITBOXES * OBS_HITBOX;  // 169
 
 struct EnvParams {
     int frame_skip = 4;          // sim frames per decision; the action repeats for each
@@ -35,6 +35,10 @@ struct EnvParams {
     // damage reward: the victim loses exactly what the attacker gains.
     float combo_growth = 1.0f;
     float combo_cap = 1.0f;
+    // Counterattack bonus: a hit that is a counter (right after a successful
+    // dodge / parry / shield block) or a whiff punish earns this on top of the
+    // damage reward (once, even if both). Zero-sum. 0 = off.
+    float counter_reward = 0.0f;
 };
 
 // Statistics about player 0 (the learner in training), summed over all games
@@ -48,6 +52,10 @@ enum Stat {
     STAT_GRABS, STAT_GOT_GRABBED, STAT_TECHS, STAT_KNOCKDOWNS,
     STAT_FULL_JUMPS, STAT_SHORT_HOPS, STAT_DI_USED,
     STAT_PARRIES, STAT_GOT_PARRIED, STAT_CLANKS, STAT_LEDGE_GRABS, STAT_ESCAPES,
+    STAT_EVADES,          // attacks player 0 dodged through (i-frames)
+    STAT_COUNTERS,        // player 0 hits within counter_window of a successful defense
+    STAT_WHIFF_PUNISHES,  // player 0 hits on an opponent recovering from a missed move
+    STAT_COUNTERS_TAKEN,  // counters or whiff punishes player 0 suffered
     STAT_FRAMES_AIRBORNE, STAT_FRAMES_ON_PLATFORM, STAT_FRAMES_CLOSE,  // close = within 4 units
     NUM_STATS,
 };

@@ -116,6 +116,7 @@ static void start_attack(Fighter& f, MoveId m) {
     f.tumble = false;
     f.move = m;
     f.move_hit = false;
+    f.move_evaded = false;
     f.state = ST_ATTACK;
     f.state_frame = 0;
 }
@@ -613,7 +614,23 @@ static bool circle_hits_box(float cx, float cy, float r, float left, float botto
     return dx * dx + dy * dy <= r * r;
 }
 
-enum HitKind { HIT_NONE, HIT_ATTACK, HIT_SHIELD, HIT_GRAB, HIT_THROW, HIT_PARRY };
+// Stuck in the recovery of a missed attack or grab (past its last active
+// frame without hitting), in an aerial's landing lag, or rebounding from a
+// clank: the textbook moments to punish in Smash.
+static bool punishable(const Fighter& f, const GameConfig& cfg) {
+    if (f.state == ST_REBOUND) return true;
+    if (f.state == ST_LANDING) return f.landing_lag > cfg.landing_lag;  // longer than a plain landing
+    if (f.state != ST_ATTACK || f.move_hit || f.move < 0) return false;
+    const MoveDef& m = cfg.moves[f.move];
+    if (m.is_throw || m.hitboxes.empty()) return false;
+    int last_active = 0;
+    for (const HitboxDef& hb : m.hitboxes) last_active = std::max(last_active, hb.end);
+    return f.state_frame > last_active;
+}
+
+// HIT_EVADED: the hitbox touched a dodging (intangible) victim. Nothing
+// happens to either fighter; it only counts as a successful defense.
+enum HitKind { HIT_NONE, HIT_ATTACK, HIT_SHIELD, HIT_GRAB, HIT_THROW, HIT_PARRY, HIT_EVADED };
 
 struct PendingHit {
     HitKind kind = HIT_NONE;
@@ -636,7 +653,11 @@ static PendingHit find_hit(const Fighter& a, const Fighter& v, const GameConfig&
             out = {HIT_THROW, &m.hitboxes[0]};
         return out;
     }
-    if (intangible(v, cfg) || v.state == ST_GRABBED) return out;
+    // Intangible from a dodge (not from respawn / ledge invulnerability or a
+    // get-up): the hitbox still "touches" and we report an evade.
+    const bool dodging = v.invuln == 0 && intangible(v, cfg) &&
+                         (v.state == ST_SPOTDODGE || v.state == ST_ROLL || v.state == ST_AIRDODGE);
+    if ((intangible(v, cfg) && !dodging) || v.state == ST_GRABBED) return out;
     const float half_w = cfg.hurtbox_w / 2;
     const float h = hurt_height(v, cfg);
     for (const HitboxDef& hb : m.hitboxes) {
@@ -645,7 +666,8 @@ static PendingHit find_hit(const Fighter& a, const Fighter& v, const GameConfig&
         float cy = a.y + hb.y;
         if (!circle_hits_box(cx, cy, hb.radius, v.x - half_w, v.y, v.x + half_w, v.y + h)) continue;
         bool parrying = v.state == ST_SHIELDDROP && v.parry_ok && v.state_frame <= cfg.parry_window;
-        if (hb.grab) out = {HIT_GRAB, &hb};                       // grabs go through shields
+        if (dodging) out = {HIT_EVADED, &hb};                     // went through the dodge's i-frames
+        else if (hb.grab) out = {HIT_GRAB, &hb};                       // grabs go through shields
         else if (parrying) out = {HIT_PARRY, &hb};                // let go of the shield just in time
         else if (shielding(v)) out = {HIT_SHIELD, &hb};           // shields stop attacks
         else out = {HIT_ATTACK, &hb};
@@ -907,8 +929,10 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
     ev = StepEvents{};
     if (s.over) return;
     uint8_t before[2] = {s.f[0].state, s.f[1].state};  // to spot state changes for the events
-    for (Fighter& f : s.f)
+    for (Fighter& f : s.f) {
         if (f.combo_timer < 65535) f.combo_timer += 1;
+        if (f.since_defense < 65535) f.since_defense += 1;
+    }
 
     for (int p = 0; p < 2; ++p) {
         Fighter& f = s.f[p];
@@ -977,6 +1001,9 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
     // Was each fighter still stunned just before this frame's hits? (For combos.)
     bool victim_stunned[2];
     for (int p = 0; p < 2; ++p) victim_stunned[p] = s.f[p].state == ST_HITSTUN || s.f[p].state == ST_KNOCKDOWN;
+    // ...and stuck recovering from their own mistake? (For whiff punishes.)
+    bool victim_punishable[2];
+    for (int p = 0; p < 2; ++p) victim_punishable[p] = punishable(s.f[p], cfg);
 
     // Find both players' hits first, then apply them, so a "trade" (both hit
     // on the same frame) treats both players the same.
@@ -1019,6 +1046,10 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
             apply_parry(a, v, hit[p], cfg);
             ev.parry[1 - p] = true;
             break;
+        case HIT_EVADED:
+            ev.evade[1 - p] = !a.move_evaded;
+            a.move_evaded = true;
+            break;
         case HIT_GRAB:
             ev.hit_move[p] = static_cast<int8_t>(hit[p].move);
             apply_grab(a, v, cfg);
@@ -1027,6 +1058,24 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
         default:
             break;
         }
+    }
+
+    // Counterattacks and punishes, for both players at once. A successful
+    // defense opens a counter_window; a hit inside it is a counter (and uses
+    // it up). Getting hit closes it.
+    for (int p = 0; p < 2; ++p) {
+        bool defended = hit[1 - p].kind == HIT_EVADED || hit[1 - p].kind == HIT_PARRY || hit[1 - p].kind == HIT_SHIELD;
+        if (defended) s.f[p].since_defense = 0;
+    }
+    for (int p = 0; p < 2; ++p) {
+        Fighter& f = s.f[p];
+        bool lands = hit[p].kind == HIT_ATTACK || hit[p].kind == HIT_THROW;
+        bool got_hit = hit[1 - p].kind == HIT_ATTACK || hit[1 - p].kind == HIT_THROW;
+        if (lands && !got_hit) {
+            ev.counter[p] = f.since_defense <= cfg.counter_window;
+            ev.whiff_punish[p] = victim_punishable[1 - p];
+        }
+        if (lands || got_hit) f.since_defense = 65535;
     }
 
     // Combos, for both players at once (so a trade treats them the same).
@@ -1179,6 +1228,8 @@ uint64_t hash_state(const GameState& s) {
         mix(h, f.stale, sizeof f.stale);
         mix(h, &f.combo, sizeof f.combo);
         mix(h, &f.combo_timer, sizeof f.combo_timer);
+        mix(h, &f.since_defense, sizeof f.since_defense);
+        mix(h, &f.move_evaded, sizeof f.move_evaded);
         mix(h, &f.prev_button, sizeof f.prev_button);
     }
     mix(h, &s.frame, sizeof s.frame);

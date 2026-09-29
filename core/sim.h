@@ -192,6 +192,7 @@ struct Fighter {
     uint8_t stocks = 3;       // lives left
     int8_t move = MOVE_NONE;  // current move while state == ST_ATTACK
     bool move_hit = false;    // this use of the move already connected (each use hits at most once)
+    bool move_evaded = false; // this use of the move went through a dodging opponent (counted once)
     int16_t hitstun = 0;      // frames of hitstun left
     bool tumble = false;      // launched by a strong hit (knockback > 80) and still tumbling: lasts past
                               // the hitstun until you act (jump, attack, ledge) or land (tech or knockdown)
@@ -232,6 +233,10 @@ struct Fighter {
     // or when this fighter gets hit.
     uint8_t combo = 0;
     uint16_t combo_timer = 0;  // frames since the string's last hit
+    // Frames since this fighter last defended successfully (dodged through a
+    // hitbox, parried, or blocked with the shield); 65535 = no defense pending.
+    // A hit within cfg.counter_window of it is a counterattack.
+    uint16_t since_defense = 65535;
     // Last frame's button. Holding jump must jump only once, so jumps react to
     // the frame the button goes from released to pressed.
     uint8_t prev_button = BTN_NONE;
@@ -350,6 +355,9 @@ struct GameConfig {
     float stale_steps[9] = {0.08f, 0.07594f, 0.06782f, 0.06028f, 0.05274f, 0.0452f, 0.03766f, 0.03012f, 0.02258f};
     float fresh_bonus = 1.05f;
     int combo_window = 60;  // scale for the "frames since my last hit" observation
+    // Counterattacks: a hit landed within this many frames of a successful
+    // defense (dodge through a hitbox, parry, shield block) is a counter.
+    int counter_window = 60;
     // Stage: Battlefield. Surface 0 is the main floor; 1-3 are pass-through
     // platforms. Dropping through ignores platforms this long.
     Surface surfaces[NUM_SURFACES] = {{-17.6f, 17.6f, 0}, {-13.1f, -6.05f, 4.8f}, {6.05f, 13.1f, 4.8f}, {-3.5f, 3.5f, 9.4f}};
@@ -389,6 +397,12 @@ struct StepEvents {
     bool clank[2] = {false, false};         // p's attack clanked (p rebounded)
     bool ledge_grab[2] = {false, false};    // p grabbed the ledge
     bool escaped[2] = {false, false};       // p struggled out of a grab
+    bool evade[2] = {false, false};         // p dodged through an attack (i-frames), once per attack
+    // If p hit: why it was a punish. counter = within counter_window of p's
+    // successful defense; whiff_punish = the victim was stuck recovering from
+    // a missed attack or grab, an aerial's landing lag, or a clank rebound.
+    bool counter[2] = {false, false};
+    bool whiff_punish[2] = {false, false};
 };
 
 // An active hitbox placed in the world, e.g. for drawing it or for observations.

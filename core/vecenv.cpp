@@ -12,6 +12,7 @@ const char* const STAT_NAMES[NUM_STATS] = {
     "grabs", "got_grabbed", "techs", "knockdowns",
     "full_jumps", "short_hops", "di_used",
     "parries", "got_parried", "clanks", "ledge_grabs", "escapes",
+    "evades", "counters", "whiff_punishes", "counters_taken",
     "frames_airborne", "frames_on_platform", "frames_close",
 };
 
@@ -60,6 +61,9 @@ static void write_fighter(const Fighter& f, const GameConfig& cfg, float m, floa
     *o++ = f.tumble;  // tumbling: techable, knockdown if the landing isn't teched
     *o++ = float(f.ledge_grabs) / std::max(cfg.ledge_max_grabs, 1);  // ledge regrabs used (less intangibility)
     *o++ = f.dodge_stale / 5.0f;  // dodge staleness: 1 = fully stale (longer, later i-frames)
+    // How much of the counter window is left (1 = just defended, 0 = none):
+    // the counter bonus depends on it, so the agent must be able to see it.
+    *o++ = (f.since_defense <= cfg.counter_window) ? 1.0f - float(f.since_defense) / cfg.counter_window : 0.0f;
     // Distances to the blast zones and stage edges. They're linear in x/y,
     // but handing them over directly makes "near the edge" easy to learn.
     *o++ = (cfg.blast_x - x) / cfg.blast_x;
@@ -192,6 +196,10 @@ void VecEnv::record_stats(const GameState& g, const StepEvents& ev) {
     st[STAT_CLANKS] += ev.clank[0];
     st[STAT_LEDGE_GRABS] += ev.ledge_grab[0];
     st[STAT_ESCAPES] += ev.escaped[0];
+    st[STAT_EVADES] += ev.evade[0];
+    st[STAT_COUNTERS] += ev.counter[0];
+    st[STAT_WHIFF_PUNISHES] += ev.whiff_punish[0];
+    st[STAT_COUNTERS_TAKEN] += (ev.counter[1] || ev.whiff_punish[1]);
     st[STAT_FRAMES_CLOSE] += (std::abs(g.f[1].x - me.x) < 4.0f && std::abs(g.f[1].y - me.y) < 4.0f);
 }
 
@@ -220,6 +228,8 @@ void VecEnv::step(const int8_t* actions) {
                     // Damage reward, grown for hits deep in a combo; zero-sum.
                     float mult = std::min(std::pow(params.combo_growth, float(ev.combo[p]) - 1.0f), params.combo_cap);
                     float bonus = params.damage_reward * ev.damage[p] * std::max(mult, 1.0f);
+                    // Counterattack / whiff-punish bonus, zero-sum.
+                    if (ev.counter[p] || ev.whiff_punish[p]) bonus += params.counter_reward;
                     r[p] += bonus;
                     r[1 - p] -= bonus;
                 }

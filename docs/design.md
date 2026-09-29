@@ -101,6 +101,7 @@ In v0 these are flattened into an MLP input. Because hitboxes are already entiti
 - +1 for KOing the opponent, −1 for being KOed.
 - Shaping: c × (damage dealt − damage taken), c ≈ 0.01 per percent; consider annealing c toward 0.
 - No positional shaping such as "stay near center"; it is easy to hack.
+- Counterattack bonus (Sep 29, 2026): a zero-sum bonus for hits that follow a successful defense (dodge through a hitbox, parry, shield block) within 60 frames, or that punish a whiffed move. Emitted by `step()` as `StepEvents::counter` / `whiff_punish`; the counter window is in the observation so the reward stays Markov.
 
 ### Vectorization
 

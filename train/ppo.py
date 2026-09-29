@@ -32,6 +32,10 @@
 #      bonus grows the damage reward for hits deep in a combo (zero-sum,
 #      capped, annealed with the damage reward); and extensive logging of
 #      moves, states, actions and mechanics (the mech/ charts) to spot it.
+#  10. Counterattack bonus (zero-sum, annealed with the damage reward): a hit
+#      right after a successful dodge / parry / shield block, or on an opponent
+#      recovering from a missed move, earns counter_reward. Defending alone
+#      earns nothing, so dodge spam isn't rewarded; whiffing gets punished.
 import copy  # OURS
 import os
 import random
@@ -91,6 +95,9 @@ class Args:
     """the k-th hit of a combo gets its damage reward times combo_growth^(k-1)..."""
     combo_cap: float = 2.0
     """...up to this multiplier (so hit 6+ counts double). 1.0 turns the combo bonus off"""
+    counter_reward: float = 0.1
+    """bonus for a counterattack or whiff punish (half a 10% hit's damage reward at the start;
+    annealed with it). 0 turns it off"""
     bot_frac: float = 0.1
     """selfplay: fraction of games against the scripted bots, so beating simple play is never forgotten"""
     ent_coef_final: float = 0.01
@@ -272,7 +279,8 @@ if __name__ == "__main__":
 
     # OURS: env setup. envs.obs etc. are NumPy views that step() updates in place.
     envs = fightcore.VecEnv(args.num_envs, args.moves_dir, args.frame_skip, args.reaction_delay,
-                            args.damage_reward, args.timeout_reward, args.combo_growth, args.combo_cap)
+                            args.damage_reward, args.timeout_reward, args.combo_growth, args.combo_cap,
+                            args.counter_reward)
     obs_shape, n_actions = (fightcore.OBS_DIM,), len(ACTIONS)
 
     agent = Agent(fightcore.OBS_DIM, n_actions, args.hidden).to(device)
@@ -367,6 +375,7 @@ if __name__ == "__main__":
         shaping = max(0.0, 1.0 - progress / args.shaping_anneal) if args.shaping_anneal > 0 else 0.0
         shaping = max(shaping, args.shaping_floor) if args.shaping_anneal > 0 else 0.0
         envs.damage_reward = args.damage_reward * shaping
+        envs.counter_reward = args.counter_reward * shaping
         ent_now = args.ent_coef_final + (args.ent_coef - args.ent_coef_final) * max(0.0, 1.0 - progress / args.ent_anneal)
 
         if pool:  # OURS: a fresh pool opponent for this rollout
@@ -536,6 +545,10 @@ if __name__ == "__main__":
         writer.add_scalar("mech/di_rate", ratio(st["di_used"], st["hits_taken"]), global_step)
         writer.add_scalar("mech/tech_rate", ratio(st["techs"], st["techs"] + st["knockdowns"]), global_step)
         writer.add_scalar("mech/short_hop_share", ratio(st["short_hops"], st["short_hops"] + st["full_jumps"]), global_step)
+        # Share of hits that were counters / whiff punishes, and how often an evade got punished back.
+        writer.add_scalar("mech/counter_hit_share", ratio(st["counters"], st["hits"]), global_step)
+        writer.add_scalar("mech/whiff_punish_share", ratio(st["whiff_punishes"], st["hits"]), global_step)
+        writer.add_scalar("mech/evade_conversion", ratio(st["counters"], st["evades"] + st["parries"] + st["blocks"]), global_step)
 
         # OURS: share of the learner's time in each state (from its own
         # observations: the state one-hot starts at index bots.STATE).
@@ -558,6 +571,9 @@ if __name__ == "__main__":
                   f"(max {st['max_combo']:.0f})  blocks {st['blocks'] / minutes:.1f}  grabs {st['grabs'] / minutes:.1f}  "
                   f"techs {st['techs'] / minutes:.1f}  short hops {st['short_hops'] / minutes:.1f}  "
                   f"DI {ratio(st['di_used'], st['hits_taken']):.0%} of hits taken")
+            print(f"  defense per min: evades {st['evades'] / minutes:.1f}  parries {st['parries'] / minutes:.1f}  "
+                  f"counters {st['counters'] / minutes:.1f}  whiff punishes {st['whiff_punishes'] / minutes:.1f}  "
+                  f"punished {st['counters_taken'] / minutes:.1f}")
         chosen = ACTIONS[b_actions.long().cpu().numpy()]
         buttons = np.bincount(chosen[:, 2], minlength=5) / args.batch_size
         for name, frac_used in zip(("none", "jump", "light", "heavy", "dodge"), buttons):
