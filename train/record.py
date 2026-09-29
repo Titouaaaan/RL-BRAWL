@@ -19,7 +19,7 @@ import fightcore  # noqa: E402
 
 p = argparse.ArgumentParser()
 p.add_argument("checkpoint", help="a .pt file, or 'latest' for the newest run's agent_latest.pt")
-p.add_argument("--opponent", default="jabber", help="dummy, random, jabber, spacer, or self")
+p.add_argument("--opponent", default="jabber", help="dummy, random, jabber, spacer, fighter, or self")
 p.add_argument("--hidden", type=int, default=256)
 args = p.parse_args()
 

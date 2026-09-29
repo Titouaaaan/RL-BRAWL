@@ -295,7 +295,7 @@ if __name__ == "__main__":
     # "scripted" mixes all four bots: training only against bots that attack taught
     # an agent to wait for them, and it then stood idle against a passive dummy.
     opp_bots = {"dummy": [bots.dummy], "random": [bots.random],
-                "scripted": [bots.jabber, bots.spacer, bots.dummy, bots.random]}
+                "scripted": [bots.fighter, bots.jabber, bots.spacer, bots.dummy, bots.random]}
     frozen = copy.deepcopy(agent)  # the current opponent; starts as the untrained agent
     generation, gen_start_iter, gate_games, gate_wins = 0, 1, 0, 0
     pool = []  # retired opponents' weights (CPU state_dicts)
@@ -305,7 +305,7 @@ if __name__ == "__main__":
     n_pool = int(args.num_envs * args.pool_frac) if selfplay else 0
     n_bots = int(args.num_envs * args.bot_frac) if selfplay else 0
     n_frozen = args.num_envs - n_pool - n_bots  # envs [0, n_frozen) face the frozen opponent
-    selfplay_bots = [bots.jabber, bots.spacer, bots.dummy, bots.random]
+    selfplay_bots = [bots.fighter, bots.jabber, bots.spacer, bots.dummy, bots.random]
 
     def group_of(i):  # which kind of opponent env i faces, for logging
         if not selfplay:
@@ -605,7 +605,7 @@ if __name__ == "__main__":
 
         if iteration % args.eval_every == 0 or iteration == args.num_iterations:
             me = net_policy(agent, device)
-            for name in ("dummy", "random", "jabber", "spacer"):
+            for name in ("dummy", "random", "jabber", "spacer", "fighter"):
                 w, l, d = evaluate(me, bots.BOTS[name], args, args.eval_games)
                 writer.add_scalar(f"eval/win_vs_{name}", w, global_step)
                 print(f"  eval vs {name:7s} win {w:.2f} loss {l:.2f} draw {d:.2f}")

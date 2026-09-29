@@ -48,17 +48,22 @@ header lists them; `git log -p train/ppo.py` shows the exact diff).
 3. **Update.** 4 epochs over the rollout in 4 minibatches: the clipped PPO
    objective, clipped value loss, entropy bonus, gradient clipping. Then the
    rollout is thrown away (PPO is on-policy: no replay buffer).
-4. **Every 25 iterations:** 32 games each against dummy, random, jabber and
-   spacer (the `eval/win_vs_*` charts) and `runs/<run>/agent_latest.pt`.
+4. **Every 25 iterations:** 32 games each against dummy, random, jabber,
+   spacer and fighter (the `eval/win_vs_*` charts) and `runs/<run>/agent_latest.pt`.
    A permanent checkpoint every 250 iterations (`agent_*.pt`, ~1 MB each)
    and a recorded game every 100 (`replays/<run>/iter_*.json`), so a long
    run stays around 20-40 MB. `runs/` and `replays/` are not in git; delete
    old runs freely.
 
 **Opponents:** `dummy` never moves. `random` presses random buttons.
-`scripted` splits the games evenly between four bots in `train/bots.py`:
+`scripted` splits the games evenly between five bots in `train/bots.py`:
 *jabber* walks up and jabs, *spacer* keeps its distance and punishes whiffs
-with the heavy, plus dummy and random. (Training against jabber and spacer
+with the heavy, *fighter* uses the whole toolkit (shields, spot dodges and rolls
+away from attacks it sees starting, then counterattacks: grab out of shield,
+tilts, smashes at high %; punishes whiffs; juggles; throws toward the edge;
+techs; mixes get-up and ledge options), plus dummy and random. Under the
+6-frame reaction delay the fighter beats dummy and random ~97% and jabber ~75%,
+and splits ~50/50 with spacer: `eval/win_vs_fighter` is the strongest fixed yardstick. (Training against jabber and spacer
 only produced an agent that waited for the opponent to come to it, and
 stood idle against a dummy.) `selfplay`: 70% of games against the current
 opponent, 20% against a random retired opponent (so the agent doesn't forget
@@ -165,7 +170,7 @@ builds of the core disagree: a bug worth reporting).
 To watch a specific checkpoint against a specific opponent:
 
 ```
-python train/record.py latest --opponent jabber   # the newest run (or give a path to any .pt); opponents: dummy, random, jabber, spacer, self
+python train/record.py latest --opponent jabber   # the newest run (or give a path to any .pt); opponents: dummy, random, jabber, spacer, fighter, self
 play.bat replay
 ```
 
