@@ -124,6 +124,8 @@ public:
         d["shield_hp"] = f.shield_hp;
         d["hitlag"] = f.hitlag;
         d["combo"] = f.combo;
+        d["ledge_side"] = f.ledge_side;
+        d["tumble"] = f.tumble;
         return d;
     }
 
@@ -161,7 +163,9 @@ public:
         d["time_limit_frames"] = cfg.time_limit_frames;
         d["dash_frames"] = cfg.dash_frames;
         d["shield_max"] = cfg.shield_max;
-        d["knockdown_frames"] = cfg.knockdown_frames;
+        d["crouch_h"] = cfg.crouch_h;
+        d["lying_h"] = cfg.lying_h;
+        d["stage_depth"] = cfg.stage_depth;
         Array surfaces;  // [x0, x1, y] per floor; the first is the main stage
         for (const Surface& s : cfg.surfaces) {
             Array one;

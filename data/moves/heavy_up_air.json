@@ -1,12 +1,11 @@
-// Heavy up-air (heavy + up, in the air): the strong version of up-air. It
-// launches much higher than the light one: the finisher after a juggle.
+// Heavy up air (heavy + up, in the air): a stronger, slower up air for
+// finishing juggles. Frame 7-10, 11%, 38 frames, 10 frames landing lag.
 {
-    "total_frames": 32,
-    "landing_lag": 9,
-    "autocancel_before": 6,
+    "total_frames": 38,
+    "landing_lag": 10,
+    "autocancel_before": 7,
     "autocancel_after": 26,
     "hitboxes": [
-        {"start": 7, "end": 10, "x": 0.3, "y": 3.9, "radius": 1.5,
-         "damage": 13, "base_kb": 0.65, "kb_growth": 0.014, "angle": 88}
+        {"start": 7, "end": 10, "x": 0.3, "y": 3.7, "radius": 1.4, "damage": 11.0, "base_kb": 30, "kb_growth": 110, "angle": 80}
     ]
 }

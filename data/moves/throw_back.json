@@ -1,11 +1,10 @@
-// Back throw: turns and throws behind you. The strongest throw: it can KO
-// near the edge at high %.
+// Back throw. Mario's spin: released on frame 44, 11%, 59 frames: his kill
+// throw near the edge.
 {
-    "total_frames": 26,
+    "total_frames": 59,
     "throw": true,
     "landing_lag": 0,
     "hitboxes": [
-        {"start": 10, "end": 10, "x": 0, "y": 0, "radius": 1,
-         "damage": 9, "base_kb": 0.6, "kb_growth": 0.015, "angle": 140}
+        {"start": 44, "end": 44, "x": 0, "y": 0, "radius": 1, "damage": 11.0, "base_kb": 60, "kb_growth": 70, "angle": 135}
     ]
 }

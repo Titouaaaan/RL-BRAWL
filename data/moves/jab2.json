@@ -1,0 +1,9 @@
+// Jab 2 (light again during jab 1). Mario: frame 2-3, 2.2%, 21 frames; keep
+// pressing from frame 6 for jab 3. Same tiny knockback as jab 1.
+{
+    "total_frames": 21,
+    "landing_lag": 0,
+    "hitboxes": [
+        {"start": 2, "end": 3, "x": 1.5, "y": 1.8, "radius": 0.8, "damage": 2.2, "base_kb": 20, "kb_growth": 15, "angle": 361}
+    ]
+}

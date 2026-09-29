@@ -1,18 +1,14 @@
-// Heavy down-air (heavy + down, in the air): a slow stomp below your feet.
-// The clean hit is a "spike": it launches DOWNWARD (negative angle), so an
-// opponent hit off the stage is sent toward the bottom blast zone. That's
-// what makes edgeguarding (attacking someone trying to get back) worth it.
-// On a grounded opponent it just pops them along the floor.
-// Slow (7 startup) with big landing lag (14): risky to throw out carelessly.
+// Heavy down air (heavy + down, in the air): the spike (meteor), modelled
+// on Mario's forward air sweet spot: frame 16-18, 14%, sends DOWNWARD
+// (angle -80), then a weaker late hit; 59 frames, 17 frames landing
+// lag. Slow and committal: an edgeguarding tool.
 {
-    "total_frames": 32,
-    "landing_lag": 13,
-    "autocancel_before": 7,
-    "autocancel_after": 28,
+    "total_frames": 59,
+    "landing_lag": 17,
+    "autocancel_before": 4,
+    "autocancel_after": 48,
     "hitboxes": [
-        {"start": 8, "end": 11, "x": 0.2, "y": -0.2, "radius": 1.2,
-         "damage": 12, "base_kb": 0.6, "kb_growth": 0.01, "angle": -80},
-        {"start": 12, "end": 18, "x": 0.2, "y": 0.0, "radius": 1.0,
-         "damage": 6, "base_kb": 0.35, "kb_growth": 0.005, "angle": 40}
+        {"start": 16, "end": 18, "x": 0.4, "y": -0.3, "radius": 1.1, "damage": 14.0, "base_kb": 30, "kb_growth": 78, "angle": -80},
+        {"start": 19, "end": 21, "x": 0.6, "y": 0.2, "radius": 1.0, "damage": 10.0, "base_kb": 30, "kb_growth": 80, "angle": 361}
     ]
 }

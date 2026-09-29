@@ -1,0 +1,10 @@
+// Ledge attack (light or heavy while hanging): climbs up swinging,
+// intangible until frame 21. 9%, BKB 90, low growth, 55 frames.
+{
+    "total_frames": 55,
+    "landing_lag": 0,
+    "intangible_until": 21,
+    "hitboxes": [
+        {"start": 22, "end": 25, "x": 1.4, "y": 1.0, "radius": 1.1, "damage": 9.0, "base_kb": 90, "kb_growth": 20, "angle": 361}
+    ]
+}

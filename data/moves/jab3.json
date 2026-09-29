@@ -1,0 +1,9 @@
+// Jab 3 (light again during jab 2). Mario: frame 3-4, 4.0%, 33 frames. The
+// finisher: pushes the opponent away (BKB 45).
+{
+    "total_frames": 33,
+    "landing_lag": 0,
+    "hitboxes": [
+        {"start": 3, "end": 4, "x": 1.6, "y": 1.6, "radius": 1.0, "damage": 4.0, "base_kb": 45, "kb_growth": 80, "angle": 361}
+    ]
+}

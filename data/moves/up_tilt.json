@@ -1,17 +1,11 @@
-// Up-tilt (light + up, on the ground): an arc above the head that launches
-// upward. Its job is anti-air (hitting someone jumping at you) and starting
-// juggles into up-air, not a general-purpose poke.
-// Frame data: 5 startup, hits on frames 6-9, recovery until frame 24.
-// History: a first self-play run found an up-tilt -> up-tilt loop. After a
-// knockback fix, a later run still drifted to 43% up-tilt: it was fast
-// (4 startup), covered the area just in front, and recovered quickly, so it
-// beat the opponent's attacks. Now slower, higher (less of a ground poke)
-// and laggier, so shielding it and punishing is a real answer.
+// Up tilt (light + up on the ground). Mario: frame 5-11, 5.5%, 29 frames,
+// angle 96 (slightly behind), high knockback growth (130): Mario's juggle
+// starter at low %, sends too far to follow at high %. Hitbox mostly above
+// the head (anti-air), so it's a poor ground poke.
 {
-    "total_frames": 24,
+    "total_frames": 29,
     "landing_lag": 0,
     "hitboxes": [
-        {"start": 6, "end": 9, "x": 0.5, "y": 3.5, "radius": 1.25,
-         "damage": 6, "base_kb": 0.55, "kb_growth": 0.013, "angle": 80}
+        {"start": 5, "end": 11, "x": 0.4, "y": 3.3, "radius": 1.2, "damage": 5.5, "base_kb": 28, "kb_growth": 130, "angle": 96}
     ]
 }

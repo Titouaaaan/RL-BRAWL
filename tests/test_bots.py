@@ -37,6 +37,6 @@ def test_spacer_waits_for_whiffs():
 def test_obs_indices_match_the_env():
     env = fightcore.VecEnv(1, str(ROOT / "data" / "moves"))
     o = env.obs[0, 0]
-    assert abs(o[bots.DX] * bots.BLAST_X - 20.0) < 1e-4  # players start 20 apart
+    assert abs(o[bots.DX] * bots.BLAST_X - 16.0) < 1e-4  # players start 16 apart
     assert o[bots.ME + bots.GROUNDED] == 1 and o[bots.ME + bots.STATE + 0] == 1  # grounded, IDLE
-    assert abs(o[bots.ME + bots.EDGE_LEFT] * bots.STAGE_HALF - 20.0) < 1e-4  # x=-10: 20 from the left edge
+    assert abs(o[bots.ME + bots.EDGE_LEFT] * bots.STAGE_HALF - 8.0) < 1e-4  # x=-8: 8 from the left edge

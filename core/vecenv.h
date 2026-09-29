@@ -12,18 +12,18 @@
 #include "sim.h"
 
 // Observation layout (all float32, roughly scaled to [-1, 1]):
-//   [0, 49)    me:  fighter features (see write_fighter in vecenv.cpp)
-//   [49, 98)   opponent: same 49 features
-//   [98, 101)  relative dx, dy, and time left
-//   [101, 149) 4 hitbox slots x 12 features (the opponent's hitboxes first)
+//   [0, 58)    me:  fighter features (see write_fighter in vecenv.cpp)
+//   [58, 116)  opponent: same 58 features
+//   [116, 119) relative dx, dy, and time left
+//   [119, 167) 4 hitbox slots x 12 features (the opponent's hitboxes first)
 // "Me" is always the observing player, and x is mirrored for player 1, so
 // both players see themselves start on the left. That's the egocentric
 // canonicalization from the design doc. Actions are mirrored the same way:
 // player 1's stick_x is negated before it reaches the game.
-const int OBS_FIGHTER = 31 + NUM_STATES;  // 49: 31 features + the state one-hot
+const int OBS_FIGHTER = 34 + NUM_STATES;  // 58: 34 features + the state one-hot
 const int OBS_HITBOXES = 4;
 const int OBS_HITBOX = 12;
-const int OBS_DIM = 2 * OBS_FIGHTER + 3 + OBS_HITBOXES * OBS_HITBOX;  // 149
+const int OBS_DIM = 2 * OBS_FIGHTER + 3 + OBS_HITBOXES * OBS_HITBOX;  // 167
 
 struct EnvParams {
     int frame_skip = 4;          // sim frames per decision; the action repeats for each
@@ -47,6 +47,7 @@ enum Stat {
     STAT_BLOCKS, STAT_GOT_BLOCKED, STAT_SHIELD_BREAKS, STAT_SHIELD_BREAKS_CAUSED,
     STAT_GRABS, STAT_GOT_GRABBED, STAT_TECHS, STAT_KNOCKDOWNS,
     STAT_FULL_JUMPS, STAT_SHORT_HOPS, STAT_DI_USED,
+    STAT_PARRIES, STAT_GOT_PARRIED, STAT_CLANKS, STAT_LEDGE_GRABS, STAT_ESCAPES,
     STAT_FRAMES_AIRBORNE, STAT_FRAMES_ON_PLATFORM, STAT_FRAMES_CLOSE,  // close = within 4 units
     NUM_STATS,
 };

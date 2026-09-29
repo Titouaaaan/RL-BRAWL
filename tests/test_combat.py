@@ -11,14 +11,21 @@ import pytest
 import fightcore
 
 MOVES = Path(__file__).parent.parent / "data" / "moves"
-HITSTUN_PER_KB = 25.0  # GameConfig::hitstun_per_kb in core/sim.h
 FRESH = 1.05           # GameConfig::fresh_bonus: a move not used recently hits a bit harder
+WEIGHT = fightcore.WEIGHT
 S = {name: i for i, name in enumerate(fightcore.STATE_NAMES)}
 
 
 def load_move(name):
     text = (MOVES / f"{name}.json").read_text()
     return json.loads(re.sub(r"//.*", "", text))  # strip // comments
+
+
+def smash_knockback(hb, percent_after, damage):
+    """SmashWiki "Knockback" formula (core/sim.cpp knockback())."""
+    p = percent_after
+    kb = (p / 10 + p * damage / 20) * 200 / (WEIGHT + 100) * 1.4 + 18
+    return kb * hb["kb_growth"] / 100 + hb["base_kb"]
 
 
 def move_id(name):
@@ -94,12 +101,13 @@ def test_jab_damage_knockback_hitstun():
     hb = load_move("jab")["hitboxes"][0]
     victim = f(env, 1)
     damage = hb["damage"] * FRESH
-    kb = (hb["base_kb"] + hb["kb_growth"] * damage) * FRESH  # uses % *after* the hit
+    kb = smash_knockback(hb, damage, damage)  # uses % *after* the hit
     assert victim["percent"] == pytest.approx(damage)
     assert victim["state"] == fightcore.ST_HITSTUN
-    assert victim["hitstun"] == round(kb * HITSTUN_PER_KB)
-    assert victim["launch_vx"] > 0  # sent away from P1, to the right
-    assert abs(np.hypot(victim["launch_vx"], victim["launch_vy"]) - kb) < 1e-5
+    assert victim["hitstun"] == int(kb * 0.4) - 1  # Ultimate: 0.4 frames per knockback unit, minus 1
+    assert victim["launch_vx"] > 0  # sent away from P1, to the right...
+    assert victim["launch_vy"] == 0  # ...along the ground: a weak Sakurai-angle hit
+    assert victim["launch_vx"] == pytest.approx(kb * fightcore.LAUNCH_SPEED_SCALE)
 
 
 def test_hitlag_freezes_both_fighters():
@@ -119,12 +127,13 @@ def test_hitlag_freezes_both_fighters():
 def test_walk_off_stage_loses_stock_and_respawns():
     env = new_env()
     for _ in range(600):
-        act(env, p2=(-1, 0, 0))  # P2 runs off the right edge
+        # P2 runs off the right edge, holding down once airborne so it doesn't grab the ledge
+        act(env, p2=(-1, 0, 0) if f(env, 1)["grounded"] else (-1, -1, 0))
         if f(env, 1)["stocks"] < 3:
             break
     p2 = f(env, 1)
     assert p2["stocks"] == 2
-    assert p2["x"] == 10.0 and p2["invuln"] > 0  # back at spawn, protected
+    assert p2["x"] == fightcore.SPAWN_X and p2["invuln"] > 0  # back at spawn, protected
 
 
 def test_bad_move_file_gives_readable_error(tmp_path):
@@ -142,9 +151,9 @@ def test_dash_then_run():
         act(env, p1=(1, 0, 0))
         xs.append(f(env, 0)["x"])
     speeds = np.diff(xs)
-    assert speeds[0] > 0.3                       # an instant burst: that's the dash
-    assert max(speeds[:11]) == pytest.approx(0.48, abs=1e-4)  # dash speed...
-    assert speeds[-1] == pytest.approx(0.36, abs=1e-4)        # ...settling into the run
+    assert speeds[0] > 0.25                        # an instant burst: that's the dash
+    assert max(speeds[:12]) == pytest.approx(0.387, abs=1e-4)  # Mario's dash speed...
+    assert speeds[-1] == pytest.approx(0.352, abs=1e-4)        # ...settling into his run
 
 
 def test_grounded_fighters_cannot_overlap():
@@ -192,13 +201,13 @@ def test_holding_down_fast_falls():
 
 
 def test_land_on_a_platform_and_drop_through():
-    env = new_env()  # P1 starts at x = -10, under the left platform (y = 8)
+    env = new_env()  # P1 starts at x = -8, under the left platform (y = 4.8)
     act(env, p1=(0, 0, 1))
     for _ in range(120):
         act(env, p1=(0, 0, 1))
         if f(env, 0)["grounded"] and f(env, 0)["y"] > 0:
             break
-    assert f(env, 0)["y"] == pytest.approx(8.0) and f(env, 0)["surface"] == 1
+    assert f(env, 0)["y"] == pytest.approx(4.8) and f(env, 0)["surface"] == 1
     for _ in range(120):
         act(env, p1=(0, -1, 0))  # down: drop through
         if f(env, 0)["grounded"] and f(env, 0)["y"] == 0:
@@ -212,7 +221,7 @@ def test_stick_picks_the_move():
     env = new_env()
     act(env, p1=(0, 1, 2))  # light + up on the ground
     assert f(env, 0)["move"] == move_id("up_tilt")
-    hold(env, 25)
+    hold(env, 30)  # up-tilt lasts 29 frames
     act(env, p1=(0, 0, 1))  # jump...
     hold(env, 4)
     act(env, p1=(0, -1, 3))  # ...heavy + down in the air
@@ -265,13 +274,12 @@ def test_holding_down_after_a_down_air_does_not_fast_fall():
 def test_two_missed_air_attacks_lock_air_attacks_until_landing():
     env = new_env()
     to_center(env)  # far from P2: every air attack misses
-    act(env, p1=(0, 0, 1))
-    hold(env, 4)
-    act(env, p1=(0, 0, 2))  # first air attack, misses
+    hold(env, 5, p1=(0, 0, 1))  # full hop
+    act(env, p1=(0, 1, 2))  # first air attack (up-air: short enough to finish in the air), misses
     run_out_move(env)
     assert not f(env, 0)["air_attack_locked"]  # one miss is allowed
     act(env, p1=(0, 0, 1))  # double jump for more air time
-    act(env, p1=(0, 0, 2))  # second air attack, misses
+    act(env, p1=(0, 1, 2))  # second air attack, misses
     run_out_move(env)
     assert f(env, 0)["air_attack_locked"] and not f(env, 0)["grounded"]
     act(env, p1=(0, 0, 3))  # another attack: refused
@@ -288,9 +296,8 @@ def test_two_missed_air_attacks_lock_air_attacks_until_landing():
 def test_connected_air_attack_keeps_air_attacks():
     env = new_env()
     face_off(env)
-    act(env, p1=(0, 0, 1), p2=(0, 0, 1))  # both jump together, so they're level...
-    hold(env, 3)
-    act(env, p1=(0, 0, 2))  # ...and P1 air-attacks into P2
+    hold(env, 5, p1=(0, 0, 1), p2=(0, 0, 1))  # both full hop together, so they're level...
+    act(env, p1=(0, 1, 2))  # ...and P1 up-airs into P2
     run_out_move(env)
     assert f(env, 1)["percent"] > 0 and not f(env, 0)["grounded"]  # it connected, still airborne
     assert not f(env, 0)["air_attack_locked"]
@@ -425,17 +432,24 @@ def test_spot_dodge_beats_grab_and_attack_beats_grab():
 
 
 def test_tech_or_knockdown_on_a_hard_landing():
-    for p2_input, expected in (((0, 0, 0), "KNOCKDOWN"), (None, "TECH")):
+    for tech, expected in ((False, "KNOCKDOWN"), (True, "TECH")):
         env = new_env()
         face_off(env)
-        env.set_percent(0, 1, 50.0)
+        env.set_percent(0, 1, 80.0)
         for _ in range(20):
-            act(env, p1=(0, 0, 3))  # heavy
+            act(env, p1=(0, -1, 2))  # down-tilt: pops P2 up, tumbling
             if f(env, 1)["state"] == fightcore.ST_HITSTUN:
                 break
+        assert f(env, 1)["tumble"]
+        pressed = False
         for t in range(200):
-            # For the tech, P2 taps dodge every other frame while flying.
-            b = p2_input or ((0, 0, 4) if t % 2 else (0, 0, 0))
+            # For the tech, P2 presses dodge once, just before landing (the
+            # window is 11 frames; mashing earlier would hit the lockout).
+            v = f(env, 1)
+            falling = v["vy"] + v["launch_vy"] < 0
+            b = (0, 0, 0)
+            if tech and not pressed and falling and v["y"] < 1.0 and v["hitlag"] == 0:
+                b, pressed = (0, 0, 4), True
             act(env, p2=b)
             if f(env, 1)["state"] in (S["KNOCKDOWN"], S["TECH"]):
                 break

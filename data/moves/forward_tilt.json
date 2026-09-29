@@ -1,0 +1,9 @@
+// Forward tilt (light + left/right on the ground). Mario: frame 5-6, 7%, 25
+// frames. A mid-range poke; Sakurai angle.
+{
+    "total_frames": 25,
+    "landing_lag": 0,
+    "hitboxes": [
+        {"start": 5, "end": 6, "x": 1.9, "y": 1.5, "radius": 0.9, "damage": 7.0, "base_kb": 8, "kb_growth": 100, "angle": 361}
+    ]
+}

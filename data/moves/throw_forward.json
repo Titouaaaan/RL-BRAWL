@@ -1,12 +1,11 @@
-// Forward throw: sends the opponent away at a low angle, toward the edge.
-// Throws are "throw": true moves: the one hitbox is applied to the held
-// opponent on frame `start` (x, y and radius are unused).
+// Forward throw. Mario: released on frame 13, 8%, 27 frames, angle 45.
+// Throws are "throw": true: the hitbox is applied to the held opponent on
+// frame `start` (x, y and radius are unused).
 {
-    "total_frames": 22,
+    "total_frames": 27,
     "throw": true,
     "landing_lag": 0,
     "hitboxes": [
-        {"start": 8, "end": 8, "x": 0, "y": 0, "radius": 1,
-         "damage": 7, "base_kb": 0.6, "kb_growth": 0.012, "angle": 40}
+        {"start": 13, "end": 13, "x": 0, "y": 0, "radius": 1, "damage": 8.0, "base_kb": 60, "kb_growth": 70, "angle": 45}
     ]
 }

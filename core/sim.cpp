@@ -1,13 +1,14 @@
 #include "sim.h"
 
 #include <algorithm>  // std::min, std::max, std::clamp
-#include <cmath>      // std::sqrt, std::cos, std::sin, std::atan2, std::lround
+#include <cmath>      // std::sqrt, std::cos, std::sin, std::atan2, std::lround, std::floor
 
 static const float DEG_TO_RAD = 3.14159265f / 180.0f;
 
 const char* const STATE_NAMES[NUM_STATES] = {
-    "IDLE",   "RUN",        "JUMPSQUAT", "AIRBORNE", "LANDING",     "ATTACK",  "HITSTUN", "SPOTDODGE", "AIRDODGE",
-    "HELPLESS", "SHIELD", "SHIELDSTUN", "ROLL",    "SHIELDBREAK", "HOLDING", "GRABBED", "KNOCKDOWN", "TECH",
+    "IDLE",        "RUN",     "JUMPSQUAT", "AIRBORNE", "LANDING", "ATTACK",  "HITSTUN",     "SPOTDODGE",
+    "AIRDODGE",    "HELPLESS", "SHIELD",   "SHIELDSTUN", "ROLL",  "SHIELDBREAK", "HOLDING", "GRABBED",
+    "KNOCKDOWN",   "TECH",    "CROUCH",    "REBOUND",  "LEDGE",   "LEDGE_CLIMB", "GETUP",   "SHIELDDROP",
 };
 
 void reset(GameState& s, const GameConfig& cfg) {
@@ -20,16 +21,19 @@ void reset(GameState& s, const GameConfig& cfg) {
     }
 }
 
-float knockback(const HitboxDef& hb, float victim_percent) {
-    return hb.base_kb + hb.kb_growth * victim_percent;
+float knockback(const HitboxDef& hb, float p, float d, float w) {
+    // Smash's formula (Brawl onward), SmashWiki "Knockback".
+    float kb = (p / 10.0f + p * d / 20.0f) * 200.0f / (w + 100.0f) * 1.4f + 18.0f;
+    return kb * hb.kb_growth / 100.0f + hb.base_kb;
 }
 
 int hitstun_frames(float kb, const GameConfig& cfg) {
-    return static_cast<int>(std::lround(kb * cfg.hitstun_per_kb));
+    // Ultimate: 0.4 frames per knockback unit, minus one frame.
+    return std::max(0, static_cast<int>(std::floor(kb * cfg.hitstun_per_kb)) - 1);
 }
 
 int hitlag_frames(float damage, const GameConfig& cfg) {
-    int frames = static_cast<int>(std::lround(cfg.hitlag_base + damage * cfg.hitlag_per_damage));
+    int frames = static_cast<int>(std::floor(damage * cfg.hitlag_per_damage + cfg.hitlag_base));
     return std::min(frames, cfg.hitlag_max);
 }
 
@@ -51,6 +55,9 @@ float stale_power(const Fighter& f, int m, const GameConfig& cfg) {
 // ---------------------------------------------------------------------------
 
 static void set_state(Fighter& f, FighterState st) {
+    // Tumbling lasts through hitstun, then free fall and an air dodge (which
+    // can still tech), and stops as soon as you do anything else.
+    if (st != ST_AIRBORNE && st != ST_AIRDODGE) f.tumble = false;
     if (f.state != st) {
         f.state = st;
         f.state_frame = 0;
@@ -74,14 +81,21 @@ static float approach(float v, float target, float amount) {
 
 // States where the fighter is free to act on input.
 static bool actionable(const Fighter& f) {
-    return f.state == ST_IDLE || f.state == ST_RUN || f.state == ST_AIRBORNE;
+    return f.state == ST_IDLE || f.state == ST_RUN || f.state == ST_AIRBORNE || f.state == ST_CROUCH;
 }
 
 static bool shielding(const Fighter& f) {
     return f.state == ST_SHIELD || f.state == ST_SHIELDSTUN;
 }
 
+static float hurt_height(const Fighter& f, const GameConfig& cfg) {
+    if (f.state == ST_CROUCH) return cfg.crouch_h;
+    if (f.state == ST_KNOCKDOWN) return cfg.lying_h;
+    return cfg.hurtbox_h;
+}
+
 // The move table from sim.h: [air?][heavy?][stick down / neutral / up].
+// (Light + side on the ground is the forward tilt; see the caller.)
 static MoveId pick_move(bool grounded, uint8_t button, int8_t stick_y) {
     static const MoveId table[2][2][3] = {
         {{MOVE_DOWN_TILT, MOVE_JAB, MOVE_UP_TILT}, {MOVE_DOWN_HEAVY, MOVE_HEAVY, MOVE_UP_HEAVY}},
@@ -94,7 +108,12 @@ static bool is_aerial(int m) {
     return m >= MOVE_DOWN_AIR && m <= MOVE_HEAVY_UP_AIR;
 }
 
+static bool is_smash(int m) {
+    return m == MOVE_DOWN_HEAVY || m == MOVE_HEAVY || m == MOVE_UP_HEAVY;
+}
+
 static void start_attack(Fighter& f, MoveId m) {
+    f.tumble = false;
     f.move = m;
     f.move_hit = false;
     f.state = ST_ATTACK;
@@ -107,14 +126,73 @@ static void start_jumpsquat(Fighter& f, const Input& in) {
     set_state(f, ST_JUMPSQUAT);
 }
 
-static void start_roll(Fighter& f, int8_t dir) {
-    f.roll_dir = (dir > 0) ? 1 : 2;
-    f.state = ST_ROLL;
+// Starts a spot dodge, roll or air dodge, applying dodge staling: dodging again
+// within dodge_stale_reset frames makes it longer and its intangibility later.
+static void start_dodge(Fighter& f, FighterState st, int base_len, const GameConfig& cfg) {
+    if (f.dodge_timer >= cfg.dodge_stale_reset) f.dodge_stale = 0;
+    float extra = std::min(f.dodge_stale * cfg.dodge_stale_step, 0.3f);
+    f.dodge_len = static_cast<int16_t>(std::lround(base_len * (1.0f + extra)));
+    f.dodge_shift = static_cast<uint8_t>(std::lround(3.0f * f.dodge_stale / 5.0f));
+    f.dodge_stale = std::min<uint8_t>(f.dodge_stale + 1, 5);
+    f.dodge_timer = 0;
+    f.state = st;
     f.state_frame = 0;
 }
 
+static void start_roll(Fighter& f, int8_t dir, const GameConfig& cfg, bool stales = true) {
+    f.roll_dir = (dir > 0) ? 1 : 2;
+    if (stales) {
+        start_dodge(f, ST_ROLL, cfg.roll_frames, cfg);
+    } else {  // tech rolls and get-up / ledge rolls don't count as dodges
+        f.dodge_len = static_cast<int16_t>(cfg.roll_frames);
+        f.dodge_shift = 0;
+        f.state = ST_ROLL;
+        f.state_frame = 0;
+    }
+}
+
+// Puts a fighter who was hanging from ledge `side` onto the stage, `inset`
+// units in from the edge, facing inward.
+static void place_on_stage(Fighter& f, int side, float inset, const GameConfig& cfg) {
+    const Surface& s = cfg.surfaces[0];
+    f.x = (side > 0) ? s.x1 - inset : s.x0 + inset;
+    f.y = s.y;
+    f.grounded = true;
+    f.surface = 0;
+    f.vx = f.vy = f.launch_vx = f.launch_vy = 0;
+    f.facing = static_cast<int8_t>(-side);
+    f.ledge_side = 0;
+}
+
+// The main stage is a solid block (its top is surface 0): an airborne fighter
+// can't pass through its sides or its underside. Coming from the side, you
+// stop against the wall (and can slide up it to the ledge); from below, you
+// bonk against the underside.
+static void collide_stage_body(Fighter& f, float prev_x, float prev_y, const GameConfig& cfg) {
+    const Surface& s = cfg.surfaces[0];
+    const float half = cfg.hurtbox_w / 2, h = cfg.hurtbox_h;
+    const float top = s.y, bottom = s.y - cfg.stage_depth;
+    bool overlap = f.x + half > s.x0 && f.x - half < s.x1 && f.y + h > bottom && f.y < top;
+    if (!overlap || prev_y >= top) return;  // not inside, or coming from above (that's a landing)
+    if (prev_y + h <= bottom) {  // from below: bonk
+        f.y = bottom - h;
+        f.vy = std::min(f.vy, 0.0f);
+        f.launch_vy = std::min(f.launch_vy, 0.0f);
+    } else {  // from the side: stop against the wall
+        bool left = prev_x < (s.x0 + s.x1) / 2;
+        f.x = left ? s.x0 - half : s.x1 + half;
+        if (left) {
+            f.vx = std::min(f.vx, 0.0f);
+            f.launch_vx = std::min(f.launch_vx, 0.0f);
+        } else {
+            f.vx = std::max(f.vx, 0.0f);
+            f.launch_vx = std::max(f.launch_vx, 0.0f);
+        }
+    }
+}
+
 // Touching a floor (surface `surf`) after being in the air.
-static void land(Fighter& f, int surf, const GameConfig& cfg) {
+static void land(Fighter& f, int surf, const Input& in, const GameConfig& cfg) {
     f.y = cfg.surfaces[surf].y;
     f.surface = static_cast<int8_t>(surf);
     f.vy = 0;
@@ -123,6 +201,29 @@ static void land(Fighter& f, int surf, const GameConfig& cfg) {
     f.fastfall = false;
     f.jumps_left = 2;
     f.air_whiffs = 0;
+    f.ledge_grabs = 0;
+    // Landing while tumbling (Smash): tech if dodge was pressed within
+    // tech_window frames and not mashed (the press before that one was at
+    // least tech_lockout frames earlier); otherwise you're knocked down.
+    // An air dodge started while tumbling still techs, but a missed tech
+    // just lands out of the air dodge.
+    bool tumbling = f.tumble && (f.state == ST_HITSTUN || f.state == ST_AIRBORNE || f.state == ST_AIRDODGE);
+    bool teched = tumbling && f.dodge_ago <= cfg.tech_window && f.dodge_prev_gap >= cfg.tech_lockout;
+    f.tumble = false;
+    if (teched || (tumbling && f.state != ST_AIRDODGE)) {
+        f.vx = f.launch_vx = 0;
+        f.hitstun = 0;
+        f.airdodge_dir = false;
+        if (!teched) {
+            set_state(f, ST_KNOCKDOWN);
+        } else if (in.stick_x != 0) {
+            start_roll(f, in.stick_x, cfg, false);  // tech roll
+            f.invuln = std::max<int16_t>(f.invuln, 4);
+        } else {
+            set_state(f, ST_TECH);  // tech in place
+        }
+        return;
+    }
     switch (f.state) {
     case ST_ATTACK: {
         // Landing during an aerial costs its landing lag, unless it lands in
@@ -140,23 +241,12 @@ static void land(Fighter& f, int surf, const GameConfig& cfg) {
         break;
     case ST_AIRDODGE:
     case ST_HELPLESS:
-        f.landing_lag = static_cast<int16_t>(cfg.dodge_landing_lag);
+        f.landing_lag = static_cast<int16_t>(f.airdodge_dir ? cfg.dir_dodge_landing_lag : cfg.dodge_landing_lag);
+        f.airdodge_dir = false;
         set_state(f, ST_LANDING);  // touching the ground is what ends helpless
         break;
-    case ST_HITSTUN:
-        // Tech: pressed dodge just before impact. Otherwise a hard landing
-        // (enough hitstun left) knocks you down; a light one you just slide.
-        if (f.dodge_ago <= cfg.tech_window) {
-            f.vx = f.launch_vx = 0;
-            f.hitstun = 0;
-            set_state(f, ST_TECH);
-        } else if (f.hitstun >= cfg.knockdown_hitstun) {
-            f.vx = f.launch_vx = 0;
-            f.hitstun = 0;
-            set_state(f, ST_KNOCKDOWN);
-        }
-        break;
-    default:
+    default:  // including a weak (non-tumble) hitstun: slide on the floor until it ends
+
         break;
     }
 }
@@ -169,46 +259,99 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
     const Input in = sanitize(raw_in);
     const bool jump_pressed = (in.button == BTN_JUMP && f.prev_button != BTN_JUMP);
     const bool attacking = (in.button == BTN_LIGHT || in.button == BTN_HEAVY);
-    if (in.button == BTN_DODGE && f.prev_button != BTN_DODGE) f.dodge_ago = 0;
-    else if (f.dodge_ago < 255) f.dodge_ago += 1;
+    if (in.button == BTN_DODGE && f.prev_button != BTN_DODGE) {
+        f.dodge_prev_gap = f.dodge_ago;
+        f.dodge_ago = 0;
+    } else if (f.dodge_ago < 255) {
+        f.dodge_ago += 1;
+    }
+    if (f.dodge_timer < 65535) f.dodge_timer += 1;
+    if (f.ledge_cooldown > 0) f.ledge_cooldown -= 1;
+    // Struggling in a grab: every fresh button press counts.
+    f.mash = (f.state == ST_GRABBED && in.button != BTN_NONE && in.button != f.prev_button) ? 1 : 0;
 
-    // 1. Leave timed states whose time is up. The fighter can act again on
-    //    this same frame (that's what "actionable on frame N" means).
+    // 1. Leave timed states whose time is up (the fighter can act again on
+    //    this same frame), and the options that exist only inside a state.
     switch (f.state) {
-    case ST_HITSTUN:
+    case ST_HITSTUN: {
         f.hitstun -= 1;
-        if (f.hitstun <= 0) set_state(f, f.grounded ? ST_IDLE : ST_AIRBORNE);
+        if (f.hitstun <= 0) {
+            set_state(f, f.grounded ? ST_IDLE : ST_AIRBORNE);  // still tumbling if airborne
+            break;
+        }
+        // Hitstun cancelling: late in a long hitstun, once the launch has
+        // slowed down, a fighter may air dodge or attack out of it.
+        if (f.grounded) break;
+        float speed = std::sqrt(f.launch_vx * f.launch_vx + f.launch_vy * f.launch_vy);
+        bool dodge_out = in.button == BTN_DODGE && f.state_frame >= cfg.hitstun_cancel_dodge &&
+                         speed < cfg.hitstun_cancel_dodge_speed;
+        bool attack_out = attacking && f.state_frame >= cfg.hitstun_cancel_attack &&
+                          speed < cfg.hitstun_cancel_attack_speed;
+        if (dodge_out || attack_out) {
+            f.hitstun = 0;
+            set_state(f, ST_AIRBORNE);  // the input below takes it from here
+        }
         break;
+    }
     case ST_ATTACK:
-        if (f.state_frame >= cfg.moves[f.move].total_frames) {
+        // Jab combo: keep pressing (or holding) light to go jab 1 -> 2 -> 3.
+        if (f.move == MOVE_JAB && f.state_frame >= 5 && in.button == BTN_LIGHT) {
+            start_attack(f, MOVE_JAB2);
+        } else if (f.move == MOVE_JAB2 && f.state_frame >= 6 && in.button == BTN_LIGHT) {
+            start_attack(f, MOVE_JAB3);
+        } else if (f.state_frame >= cfg.moves[f.move].total_frames) {
             if (!f.grounded && !f.move_hit && is_aerial(f.move)) f.air_whiffs += 1;  // a missed air attack
             f.move = MOVE_NONE;
             set_state(f, f.grounded ? ST_IDLE : ST_AIRBORNE);
         }
         break;
     case ST_LANDING:
+        if (f.state_frame >= f.landing_lag) set_state(f, ST_IDLE);
+        break;
+    case ST_REBOUND:
+        if (f.state_frame >= f.landing_lag) set_state(f, f.grounded ? ST_IDLE : ST_AIRBORNE);
+        break;
     case ST_KNOCKDOWN:
-        if (f.state == ST_KNOCKDOWN ? f.state_frame >= cfg.knockdown_frames : f.state_frame >= f.landing_lag)
-            set_state(f, ST_IDLE);
+        // Lying on the floor: after a moment, choose how to get up (or it
+        // happens by itself).
+        if (f.state_frame >= cfg.knockdown_min) {
+            if (attacking) {
+                start_attack(f, MOVE_GETUP_ATTACK);
+            } else if (in.button == BTN_DODGE && in.stick_x != 0) {
+                start_roll(f, in.stick_x, cfg, false);  // get-up roll
+                f.invuln = std::max<int16_t>(f.invuln, 4);
+            } else if (in.stick_y > 0 || jump_pressed || f.state_frame >= cfg.knockdown_max) {
+                set_state(f, ST_GETUP);
+            }
+        }
+        break;
+    case ST_GETUP:
+        if (f.state_frame >= cfg.getup_frames) set_state(f, ST_IDLE);
         break;
     case ST_TECH:
         if (f.state_frame >= cfg.tech_frames) set_state(f, ST_IDLE);
         break;
+    case ST_LEDGE_CLIMB:
+        if (f.state_frame >= cfg.ledge_climb_frames) set_state(f, ST_IDLE);
+        break;
     case ST_SPOTDODGE:
-        if (f.state_frame >= cfg.spotdodge_frames) set_state(f, f.grounded ? ST_IDLE : ST_AIRBORNE);
+        if (f.state_frame >= f.dodge_len) set_state(f, f.grounded ? ST_IDLE : ST_AIRBORNE);
         break;
     case ST_ROLL:
-        if (f.state_frame >= cfg.roll_frames) {
+        if (f.state_frame >= f.dodge_len) {
             f.facing = (f.roll_dir == 1) ? -1 : 1;  // end facing back where you came from, like Smash
             set_state(f, f.grounded ? ST_IDLE : ST_AIRBORNE);
         }
         break;
     case ST_AIRDODGE:
         // An air dodge doesn't end in freedom: you stay helpless until you land.
-        if (f.state_frame >= cfg.airdodge_frames) set_state(f, ST_HELPLESS);
+        if (f.state_frame >= f.dodge_len) set_state(f, ST_HELPLESS);
         break;
     case ST_SHIELDSTUN:
         if (f.state_frame >= f.landing_lag) set_state(f, ST_SHIELD);  // the shield input below decides what's next
+        break;
+    case ST_SHIELDDROP:
+        if (f.state_frame >= cfg.shield_drop_lag) set_state(f, ST_IDLE);
         break;
     case ST_SHIELDBREAK:
         if (f.state_frame >= cfg.shieldbreak_frames) {
@@ -225,9 +368,9 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
         }
         break;
     case ST_HOLDING:
-        // Throw in the direction pressed (after a few frames), or forward when
-        // the hold runs out.
-        if ((f.state_frame >= 4 && (in.stick_x != 0 || in.stick_y != 0)) || f.state_frame >= cfg.grab_hold_max) {
+        // Throw in the direction pressed (after a few frames). If you hold on
+        // too long, the opponent breaks free (see step()).
+        if (f.state_frame >= 4 && (in.stick_x != 0 || in.stick_y != 0)) {
             MoveId t = MOVE_THROW_FORWARD;
             if (in.stick_y > 0) t = MOVE_THROW_UP;
             else if (in.stick_y < 0) t = MOVE_THROW_DOWN;
@@ -239,32 +382,72 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
         break;
     }
 
-    // 2. Read the controller, if the fighter is free to act (or shielding).
-    //    Attacks come out whenever the button is held (holding light = repeated
-    //    jabs); jumps only on a fresh press.
+    // 2. Read the controller, if the fighter is free to act (or shielding,
+    //    or hanging from a ledge). Attacks come out whenever the button is
+    //    held (holding light = jab combo); jumps only on a fresh press.
     if (f.state == ST_SHIELD) {
         if (in.button == BTN_DODGE) {
-            if (in.stick_x != 0) start_roll(f, in.stick_x);
-            else if (in.stick_y < 0) set_state(f, ST_SPOTDODGE);
+            if (in.stick_x != 0) start_roll(f, in.stick_x, cfg);
+            else if (in.stick_y < 0) start_dodge(f, ST_SPOTDODGE, cfg.spotdodge_frames, cfg);
             // else: keep holding the shield
         } else if (jump_pressed) {
             start_jumpsquat(f, in);  // jump out of shield
         } else if (in.button == BTN_LIGHT) {
             start_attack(f, MOVE_GRAB);  // grab out of shield (Smash: attack while shielding)
         } else {
-            f.landing_lag = static_cast<int16_t>(cfg.shield_drop_lag);  // letting go of the shield
-            set_state(f, ST_LANDING);
+            // Letting go of the shield. Its first frames are the parry window,
+            // if the shield had been up for a moment (no parry by mashing).
+            f.parry_ok = f.state_frame >= cfg.parry_min_shield;
+            set_state(f, ST_SHIELDDROP);
+        }
+    } else if (f.state == ST_LEDGE) {
+        const int side = f.ledge_side;
+        const int8_t inward = static_cast<int8_t>(-side);
+        if (f.state_frame >= cfg.ledge_min_frames) {
+            if (jump_pressed) {  // ledge jump
+                f.ledge_side = 0;
+                f.grounded = false;
+                f.vy = cfg.jump_velocity;
+                f.vx = inward * 0.1f;
+                f.jumps_left = 1;
+                f.ledge_cooldown = 20;
+                f.invuln = std::max<int16_t>(f.invuln, 5);
+                set_state(f, ST_AIRBORNE);
+            } else if (attacking) {  // ledge attack: climb up swinging
+                place_on_stage(f, side, 1.3f, cfg);
+                start_attack(f, MOVE_LEDGE_ATTACK);
+            } else if (in.button == BTN_DODGE) {  // ledge roll onto the stage
+                place_on_stage(f, side, 0.5f, cfg);
+                start_roll(f, inward, cfg, false);
+                f.invuln = std::max<int16_t>(f.invuln, static_cast<int16_t>(cfg.ledge_option_invuln));
+            } else if (in.stick_x == inward || in.stick_y > 0) {  // climb up
+                place_on_stage(f, side, 1.3f, cfg);
+                f.invuln = std::max<int16_t>(f.invuln, static_cast<int16_t>(cfg.ledge_climb_invuln));
+                set_state(f, ST_LEDGE_CLIMB);
+            } else if (in.stick_x == side || in.stick_y < 0 || f.state_frame >= cfg.ledge_hang_max) {  // let go
+                f.ledge_side = 0;
+                f.grounded = false;
+                f.ledge_cooldown = 30;
+                f.jumps_left = std::max<uint8_t>(f.jumps_left, 1);
+                set_state(f, ST_AIRBORNE);
+            }
         }
     } else if (actionable(f)) {
         if (f.grounded) {
             if (jump_pressed) {
                 start_jumpsquat(f, in);
             } else if (attacking) {
-                if (in.stick_x != 0) f.facing = in.stick_x;  // attack the way the stick points
-                start_attack(f, pick_move(true, in.button, in.stick_y));
+                if (f.state == ST_RUN && in.button == BTN_LIGHT && in.stick_y == 0) {
+                    start_attack(f, MOVE_DASH_ATTACK);  // keeps the running momentum
+                } else {
+                    if (in.stick_x != 0) f.facing = in.stick_x;  // attack the way the stick points
+                    MoveId m = pick_move(true, in.button, in.stick_y);
+                    if (m == MOVE_JAB && in.stick_x != 0) m = MOVE_FORWARD_TILT;
+                    start_attack(f, m);
+                }
             } else if (in.button == BTN_DODGE) {
-                if (in.stick_x != 0) start_roll(f, in.stick_x);
-                else if (in.stick_y < 0) set_state(f, ST_SPOTDODGE);
+                if (in.stick_x != 0) start_roll(f, in.stick_x, cfg);
+                else if (in.stick_y < 0) start_dodge(f, ST_SPOTDODGE, cfg.spotdodge_frames, cfg);
                 else set_state(f, ST_SHIELD);
             } else if (in.stick_y < 0 && f.surface != 0) {
                 // Down on a platform: drop through it.
@@ -272,6 +455,8 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
                 f.drop_frames = static_cast<uint8_t>(cfg.drop_through_frames);
                 f.jumps_left = std::min<uint8_t>(f.jumps_left, 1);
                 set_state(f, ST_AIRBORNE);
+            } else if (in.stick_y < 0) {
+                set_state(f, ST_CROUCH);
             } else if (in.stick_x != 0) {
                 // Start moving, or turn around: either way a fresh dash begins,
                 // with an instant burst of speed (that's what makes it a dash).
@@ -295,16 +480,26 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
                 f.jumps_left -= 1;
                 f.vy = cfg.double_jump_velocity;
                 f.fastfall = false;
+                f.tumble = false;
             } else if (attacking && f.air_whiffs < cfg.air_whiff_limit) {
                 start_attack(f, pick_move(false, in.button, in.stick_y));
             } else if (in.button == BTN_DODGE) {
                 f.fastfall = false;
-                set_state(f, ST_AIRDODGE);
+                start_dodge(f, ST_AIRDODGE, cfg.airdodge_frames, cfg);
+                // Directional air dodge: a burst of speed in the stick's direction.
+                f.airdodge_dir = (in.stick_x != 0 || in.stick_y != 0);
+                if (f.airdodge_dir) {
+                    float len = std::sqrt(float(in.stick_x * in.stick_x + in.stick_y * in.stick_y));
+                    f.vx = in.stick_x / len * cfg.airdodge_speed;
+                    f.vy = in.stick_y / len * cfg.airdodge_speed;
+                    f.launch_vx = f.launch_vy = 0;
+                }
             }
         }
     }
 
     // 3. Horizontal velocity.
+    const bool dir_dodging = f.state == ST_AIRDODGE && f.airdodge_dir && f.state_frame < cfg.airdodge_move_frames;
     if (f.grounded) {
         if (f.state == ST_RUN) {
             float target = f.facing * (f.state_frame < cfg.dash_frames ? cfg.dash_speed : cfg.run_speed);
@@ -315,7 +510,9 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
         } else {
             f.vx = approach(f.vx, 0.0f, cfg.ground_friction);
         }
-    } else if (f.state != ST_HITSTUN && f.state != ST_AIRDODGE && f.state != ST_GRABBED) {
+    } else if (dir_dodging) {
+        f.vx = approach(f.vx, 0.0f, cfg.airdodge_speed / cfg.airdodge_move_frames);
+    } else if (f.state != ST_HITSTUN && f.state != ST_AIRDODGE && f.state != ST_GRABBED && f.state != ST_LEDGE) {
         if (in.stick_x != 0) f.vx = approach(f.vx, cfg.air_speed * in.stick_x, cfg.air_accel);
         else f.vx = approach(f.vx, 0.0f, cfg.air_friction);
     }
@@ -328,10 +525,14 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
     if (in.stick_y >= 0) f.fastfall_blocked = false;  // stick released: down is "fresh" again
     bool counts = in.stick_y < 0 && !attacking && !f.fastfall_blocked;
     f.down_frames = counts ? uint8_t(std::min(f.down_frames + 1, 255)) : 0;
-    if (!f.grounded && f.state != ST_GRABBED) {
-        bool can_fastfall = f.state != ST_HITSTUN && f.state != ST_AIRDODGE;
-        if (can_fastfall && f.down_frames >= cfg.fastfall_hold && f.vy <= 0) f.fastfall = true;
-        f.vy = f.fastfall ? -cfg.fastfall_speed : std::max(f.vy - cfg.gravity, -cfg.max_fall_speed);
+    if (!f.grounded && f.state != ST_GRABBED && f.state != ST_LEDGE) {
+        if (dir_dodging) {
+            f.vy = approach(f.vy, 0.0f, cfg.airdodge_speed / cfg.airdodge_move_frames);  // no gravity during the slingshot
+        } else {
+            bool can_fastfall = f.state != ST_HITSTUN && f.state != ST_AIRDODGE;
+            if (can_fastfall && f.down_frames >= cfg.fastfall_hold && f.vy <= 0) f.fastfall = true;
+            f.vy = f.fastfall ? -cfg.fastfall_speed : std::max(f.vy - cfg.gravity, -cfg.max_fall_speed);
+        }
     }
     if (f.drop_frames > 0) f.drop_frames -= 1;
 
@@ -343,9 +544,10 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
         f.launch_vy *= scale;
     }
 
-    // 6. Move, then collide with the floors.
-    if (f.state != ST_GRABBED) {  // a held fighter is placed by step()
-        float prev_y = f.y;
+    // 6. Move, then collide with the floors. (Held and hanging fighters are
+    //    placed by step().)
+    if (f.state != ST_GRABBED && f.state != ST_LEDGE) {
+        float prev_x = f.x, prev_y = f.y;
         f.x += f.vx + f.launch_vx;
         f.y += f.vy + f.launch_vy;
         if (f.grounded) {
@@ -359,7 +561,8 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
                 // Walked off the edge or got launched upward.
                 f.grounded = false;
                 if (!on) f.jumps_left = std::min<uint8_t>(f.jumps_left, 1);
-                if (f.state == ST_IDLE || f.state == ST_RUN || f.state == ST_LANDING || f.state == ST_SHIELD)
+                if (f.state == ST_IDLE || f.state == ST_RUN || f.state == ST_LANDING || f.state == ST_SHIELD ||
+                    f.state == ST_CROUCH || f.state == ST_SHIELDDROP)
                     set_state(f, ST_AIRBORNE);
             } else {
                 f.y = s.y;  // a downward launch on the ground just stops at the floor
@@ -376,8 +579,9 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
                 bool crossed = prev_y >= s.y && f.y <= s.y && f.x >= s.x0 && f.x <= s.x1;
                 if (crossed && (best < 0 || s.y > cfg.surfaces[best].y)) best = i;
             }
-            if (best >= 0) land(f, best, cfg);
+            if (best >= 0) land(f, best, in, cfg);
         }
+        if (!f.grounded) collide_stage_body(f, prev_x, prev_y, cfg);
     }
 
     // 7. The shield shrinks while held and slowly grows back otherwise.
@@ -409,7 +613,7 @@ static bool circle_hits_box(float cx, float cy, float r, float left, float botto
     return dx * dx + dy * dy <= r * r;
 }
 
-enum HitKind { HIT_NONE, HIT_ATTACK, HIT_SHIELD, HIT_GRAB, HIT_THROW };
+enum HitKind { HIT_NONE, HIT_ATTACK, HIT_SHIELD, HIT_GRAB, HIT_THROW, HIT_PARRY };
 
 struct PendingHit {
     HitKind kind = HIT_NONE;
@@ -433,13 +637,16 @@ static PendingHit find_hit(const Fighter& a, const Fighter& v, const GameConfig&
         return out;
     }
     if (intangible(v, cfg) || v.state == ST_GRABBED) return out;
+    const float half_w = cfg.hurtbox_w / 2;
+    const float h = hurt_height(v, cfg);
     for (const HitboxDef& hb : m.hitboxes) {
         if (a.state_frame < hb.start || a.state_frame > hb.end) continue;
         float cx = a.x + a.facing * hb.x;
         float cy = a.y + hb.y;
-        float half_w = cfg.hurtbox_w / 2;
-        if (!circle_hits_box(cx, cy, hb.radius, v.x - half_w, v.y, v.x + half_w, v.y + cfg.hurtbox_h)) continue;
+        if (!circle_hits_box(cx, cy, hb.radius, v.x - half_w, v.y, v.x + half_w, v.y + h)) continue;
+        bool parrying = v.state == ST_SHIELDDROP && v.parry_ok && v.state_frame <= cfg.parry_window;
         if (hb.grab) out = {HIT_GRAB, &hb};                       // grabs go through shields
+        else if (parrying) out = {HIT_PARRY, &hb};                // let go of the shield just in time
         else if (shielding(v)) out = {HIT_SHIELD, &hb};           // shields stop attacks
         else out = {HIT_ATTACK, &hb};
         return out;
@@ -454,27 +661,41 @@ static void push_stale(Fighter& a, int m) {
 
 static void apply_hit(Fighter& a, Fighter& v, const PendingHit& h, const GameConfig& cfg) {
     const HitboxDef& hb = *h.hb;
-    float power = h.power;
-    float damage = hb.damage * power;
+    const bool crouching = v.state == ST_CROUCH;
+    float damage = hb.damage * h.power;  // staleness weakens the damage, and so the knockback
     v.percent += damage;
-    // Knockback uses the damage *after* this hit, so a strong hit at 0% still sends you a bit.
-    float kb = knockback(hb, v.percent) * power;
-    float angle = hb.angle * DEG_TO_RAD;
-    v.launch_vx = a.facing * kb * std::cos(angle);
-    v.launch_vy = kb * std::sin(angle);
+    float kb = knockback(hb, v.percent, damage, cfg.weight);
+    if (crouching) kb *= cfg.crouch_kb_mult;  // crouch cancel
+    // Launch angle. 361 = the Sakurai angle: along the ground for weak hits on
+    // a grounded opponent, rising to ~38 degrees; always ~38 in the air.
+    float deg = hb.angle;
+    if (hb.angle == 361.0f) {
+        if (!v.grounded || kb >= 88.0f) deg = 38.0f;
+        else if (kb < 60.0f) deg = 0.0f;
+        else deg = 38.0f * (kb - 60.0f) / 28.0f;
+    }
+    float angle = deg * DEG_TO_RAD;
+    float launch = kb * cfg.launch_speed_scale;
+    v.launch_vx = a.facing * launch * std::cos(angle);
+    v.launch_vy = launch * std::sin(angle);
     v.vx = 0;
     v.vy = 0;
     v.fastfall = false;
     v.move = MOVE_NONE;  // getting hit cancels whatever you were doing
     v.air_whiffs = 0;
+    v.ledge_grabs = 0;   // hitstun resets the ledge-grab count
+    v.ledge_side = 0;
+    v.airdodge_dir = false;
     v.hitstun = static_cast<int16_t>(hitstun_frames(kb, cfg));
+    v.tumble = kb > cfg.tumble_kb;
     v.state = ST_HITSTUN;
     v.state_frame = 0;
     // Both freeze for a moment (hitlag); the victim's stick meanwhile is DI.
     // max(): in a trade, both freeze for the longer of the two hitlags.
-    uint8_t lag = static_cast<uint8_t>(hitlag_frames(damage, cfg));
-    v.hitlag = std::max(v.hitlag, lag);
-    a.hitlag = std::max(a.hitlag, lag);
+    int lag = hitlag_frames(damage, cfg);
+    if (crouching) lag = static_cast<int>(lag * 0.67f);
+    v.hitlag = std::max<uint8_t>(v.hitlag, static_cast<uint8_t>(lag));
+    a.hitlag = std::max<uint8_t>(a.hitlag, static_cast<uint8_t>(lag));
     v.di_x = v.di_y = 0;
     a.move_hit = true;
     push_stale(a, h.move);
@@ -482,14 +703,16 @@ static void apply_hit(Fighter& a, Fighter& v, const PendingHit& h, const GameCon
 
 static void apply_shield_hit(Fighter& a, Fighter& v, const PendingHit& h, const GameConfig& cfg) {
     float damage = h.hb->damage * h.power;
-    v.shield_hp -= damage * cfg.shield_damage_mult;
-    // Shield stun (Smash: roughly damage * 0.8 + 2 frames) and pushback.
-    v.landing_lag = static_cast<int16_t>(std::lround(damage * 0.8f + 2.0f));
+    v.shield_hp -= damage;
+    // Shield stun (Ultimate): floor(0.8 * d * t + 2), t = 0.725 for smash
+    // attacks, 0.33 for aerials, 1 otherwise. Plus pushback.
+    float t = is_smash(h.move) ? 0.725f : is_aerial(h.move) ? 0.33f : 1.0f;
+    v.landing_lag = static_cast<int16_t>(std::floor(0.8f * damage * t + 2.0f));
     v.state = ST_SHIELDSTUN;
     v.state_frame = 0;
     float away = (v.x >= a.x) ? 1.0f : -1.0f;
-    v.launch_vx = away * (0.1f + 0.02f * damage);
-    uint8_t lag = static_cast<uint8_t>(std::lround(hitlag_frames(damage, cfg) * 0.67f));
+    v.launch_vx = away * (0.04f + 0.01f * damage);
+    uint8_t lag = static_cast<uint8_t>(hitlag_frames(damage, cfg) * 0.67f);
     v.hitlag = std::max(v.hitlag, lag);
     a.hitlag = std::max(a.hitlag, lag);
     a.move_hit = true;
@@ -501,14 +724,26 @@ static void apply_shield_hit(Fighter& a, Fighter& v, const PendingHit& h, const 
     }
 }
 
-static void apply_grab(Fighter& a, Fighter& v) {
+// A parry: the defender is free at once, the attacker freezes for longer and
+// then still has to finish its move: a guaranteed chance to punish.
+static void apply_parry(Fighter& a, Fighter& v, const PendingHit& h, const GameConfig& cfg) {
+    float damage = h.hb->damage * h.power;
+    a.hitlag = static_cast<uint8_t>(std::min(255, hitlag_frames(damage, cfg) + cfg.parry_attacker_lag));
+    a.move_hit = true;
+    v.state = ST_IDLE;
+    v.state_frame = 0;
+}
+
+static void apply_grab(Fighter& a, Fighter& v, const GameConfig& cfg) {
     a.move = MOVE_NONE;
     a.move_hit = true;
     a.state = ST_HOLDING;
     a.state_frame = 0;
     a.vx = 0;
+    a.grab_timer = static_cast<int16_t>(cfg.grab_hold_base + cfg.grab_hold_per_percent * v.percent);
     v.move = MOVE_NONE;
     v.state = ST_GRABBED;
+    v.tumble = false;
     v.state_frame = 0;
     v.hitstun = 0;
     v.fastfall = false;
@@ -560,6 +795,54 @@ static void push_apart(Fighter& a, Fighter& b, const GameConfig& cfg) {
     }
 }
 
+// The strongest active hitbox damage of a grounded attack that can clank, or 0.
+static float clank_damage(const Fighter& f, const GameConfig& cfg) {
+    if (f.state != ST_ATTACK || f.move_hit || f.hitlag > 0 || !f.grounded) return 0;
+    if (is_aerial(f.move) || cfg.moves[f.move].is_throw || f.move == MOVE_GRAB) return 0;
+    float d = 0;
+    for (const HitboxDef& hb : cfg.moves[f.move].hitboxes)
+        if (f.state_frame >= hb.start && f.state_frame <= hb.end) d = std::max(d, hb.damage);
+    return d * stale_power(f, f.move, cfg);
+}
+
+// Clanks: when two grounded attacks' active hitboxes touch, the weaker one
+// (by damage) rebounds, or both do if within clank_range %. Aerials, grabs
+// and throws never clank (as in Smash).
+static void resolve_clank(GameState& s, const GameConfig& cfg, StepEvents& ev) {
+    float dmg[2] = {clank_damage(s.f[0], cfg), clank_damage(s.f[1], cfg)};
+    if (dmg[0] <= 0 || dmg[1] <= 0) return;
+    bool touch = false;
+    for (const HitboxDef& ha : cfg.moves[s.f[0].move].hitboxes) {
+        if (s.f[0].state_frame < ha.start || s.f[0].state_frame > ha.end) continue;
+        for (const HitboxDef& hb : cfg.moves[s.f[1].move].hitboxes) {
+            if (s.f[1].state_frame < hb.start || s.f[1].state_frame > hb.end) continue;
+            float dx = (s.f[0].x + s.f[0].facing * ha.x) - (s.f[1].x + s.f[1].facing * hb.x);
+            float dy = (s.f[0].y + ha.y) - (s.f[1].y + hb.y);
+            float r = ha.radius + hb.radius;
+            if (dx * dx + dy * dy <= r * r) touch = true;
+        }
+    }
+    if (!touch) return;
+    // Both rebound, unless one is stronger by more than clank_range: then it
+    // keeps going and only the weaker one rebounds.
+    bool rebound[2] = {true, true};
+    if (dmg[0] > dmg[1] + cfg.clank_range) rebound[0] = false;
+    if (dmg[1] > dmg[0] + cfg.clank_range) rebound[1] = false;
+    float dmax = std::max(dmg[0], dmg[1]);
+    int frames = std::min(cfg.rebound_max, static_cast<int>(std::floor((dmax + 4.0f) * 15.0f / 8.0f)));
+    uint8_t lag = static_cast<uint8_t>(hitlag_frames(dmax, cfg));
+    for (int p = 0; p < 2; ++p) {
+        if (!rebound[p]) continue;
+        Fighter& f = s.f[p];
+        f.move = MOVE_NONE;
+        f.state = ST_REBOUND;
+        f.state_frame = 0;
+        f.landing_lag = static_cast<int16_t>(frames);
+        f.hitlag = std::max(f.hitlag, lag);
+        ev.clank[p] = true;
+    }
+}
+
 static bool outside_blast_zone(const Fighter& f, const GameConfig& cfg) {
     return f.x < -cfg.blast_x || f.x > cfg.blast_x || f.y > cfg.blast_top || f.y < cfg.blast_bottom;
 }
@@ -577,6 +860,43 @@ static void respawn(Fighter& f, int player, const GameConfig& cfg) {
     fresh.invuln = static_cast<int16_t>(cfg.respawn_invuln);
     fresh.prev_button = f.prev_button;  // so a held jump doesn't fire on respawn
     f = fresh;
+}
+
+// Grabs a ledge if an airborne fighter is falling next to one (not holding
+// down, not in hitstun, the ledge free, grab limit not reached).
+static void try_ledge_grab(Fighter& f, const Fighter& other, const Input& raw_in, int p, const GameConfig& cfg,
+                           StepEvents& ev) {
+    Input in = sanitize(raw_in);
+    bool can = !f.grounded && f.hitlag == 0 && f.ledge_cooldown == 0 && in.stick_y >= 0 &&
+               (f.state == ST_AIRBORNE || f.state == ST_HELPLESS || f.state == ST_AIRDODGE) &&
+               f.vy + f.launch_vy <= 0 && f.ledge_grabs < cfg.ledge_max_grabs;
+    if (!can) return;
+    const Surface& stage = cfg.surfaces[0];
+    for (int side = -1; side <= 1; side += 2) {
+        if (other.state == ST_LEDGE && other.ledge_side == side) continue;  // taken: edge-hogged
+        float ex = (side > 0) ? stage.x1 : stage.x0;
+        float out = (f.x - ex) * side;              // how far past the edge (outward) the fighter is
+        float top = f.y + cfg.hurtbox_h - stage.y;  // hands' height relative to the ledge
+        if (out < -0.5f || out > 2.2f || top < -0.6f || top > 1.4f) continue;
+        static const float invuln_mult[4] = {1.0f, 0.8f, 0.5f, 0.0f};
+        f.state = ST_LEDGE;
+        f.tumble = false;
+        f.state_frame = 0;
+        f.ledge_side = static_cast<int8_t>(side);
+        f.x = ex + side * cfg.ledge_hang_x;
+        f.y = stage.y + cfg.ledge_hang_y;
+        f.vx = f.vy = f.launch_vx = f.launch_vy = 0;
+        f.facing = static_cast<int8_t>(-side);
+        f.jumps_left = 2;
+        f.air_whiffs = 0;
+        f.fastfall = false;
+        f.airdodge_dir = false;
+        int16_t iv = static_cast<int16_t>(cfg.ledge_invuln * invuln_mult[std::min<int>(f.ledge_grabs, 3)]);
+        f.invuln = std::max(f.invuln, iv);
+        f.ledge_grabs += 1;
+        ev.ledge_grab[p] = true;
+        return;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -605,7 +925,10 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
                     ev.di[p] = (f.di_x != 0 || f.di_y != 0);
                 }
             }
-            if (i.button == BTN_DODGE && f.prev_button != BTN_DODGE) f.dodge_ago = 0;
+            if (i.button == BTN_DODGE && f.prev_button != BTN_DODGE) {
+                f.dodge_prev_gap = f.dodge_ago;
+                f.dodge_ago = 0;
+            }
             f.prev_button = i.button;
             continue;
         }
@@ -613,16 +936,31 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
         if (f.state == ST_ATTACK && f.state_frame == 1) ev.move_started[p] = f.move;
     }
 
-    // A held fighter sits in front of the holder. If the holder is no longer
-    // holding or throwing, the grab is over.
+    // Ledges: falling fighters next to one grab it.
+    for (int p = 0; p < 2; ++p) try_ledge_grab(s.f[p], s.f[1 - p], in[p], p, cfg, ev);
+
+    // Grabs: a held fighter sits in front of the holder; the hold runs out
+    // (faster when the victim mashes) and the victim breaks free.
     for (int p = 0; p < 2; ++p) {
         Fighter& h = s.f[p];
         Fighter& v = s.f[1 - p];
         if (v.state != ST_GRABBED) continue;
-        bool holding = h.state == ST_HOLDING || (h.state == ST_ATTACK && cfg.moves[h.move].is_throw);
-        if (!holding) {
+        bool throwing = h.state == ST_ATTACK && cfg.moves[h.move].is_throw;
+        if (h.state != ST_HOLDING && !throwing) {
             set_state(v, v.grounded ? ST_IDLE : ST_AIRBORNE);
             continue;
+        }
+        if (h.state == ST_HOLDING && h.hitlag == 0) {
+            h.grab_timer -= 1 + v.mash * cfg.grab_mash;
+            if (h.grab_timer <= 0) {  // broke free: both stumble apart
+                v.x = h.x + h.facing * (cfg.grab_hold_distance + 0.3f);
+                v.launch_vx = h.facing * 0.12f;
+                v.landing_lag = h.landing_lag = static_cast<int16_t>(cfg.grab_release_lag);
+                v.state = h.state = ST_LANDING;
+                v.state_frame = h.state_frame = 0;
+                ev.escaped[1 - p] = true;
+                continue;
+            }
         }
         v.x = h.x + h.facing * cfg.grab_hold_distance;
         v.y = h.y;
@@ -633,12 +971,15 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
 
     push_apart(s.f[0], s.f[1], cfg);
 
-    // Find both players' hits first, then apply them, so a "trade" (both hit
-    // on the same frame) treats both players the same. Attacks beat grabs: a
-    // grabber who gets hit this frame doesn't get the grab. Two grabs cancel.
+    // Clanks first: a rebounding attack can't hit anyone.
+    resolve_clank(s, cfg, ev);
+
     // Was each fighter still stunned just before this frame's hits? (For combos.)
     bool victim_stunned[2];
     for (int p = 0; p < 2; ++p) victim_stunned[p] = s.f[p].state == ST_HITSTUN || s.f[p].state == ST_KNOCKDOWN;
+
+    // Find both players' hits first, then apply them, so a "trade" (both hit
+    // on the same frame) treats both players the same.
     PendingHit hit[2];
     for (int p = 0; p < 2; ++p) {
         if (s.f[p].hitlag > 0) continue;
@@ -646,8 +987,9 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
         hit[p].move = s.f[p].move;
         hit[p].power = stale_power(s.f[p], s.f[p].move, cfg);
     }
-    // Decide both cancellations before changing anything, so the result
-    // doesn't depend on which player is checked first.
+    // Attacks beat grabs: a grabber who gets hit this frame doesn't get the
+    // grab; two grabs cancel. Decide both before changing anything, so the
+    // result doesn't depend on which player is checked first.
     bool cancel[2];
     for (int p = 0; p < 2; ++p) {
         bool hurt = hit[1 - p].kind == HIT_ATTACK || hit[1 - p].kind == HIT_THROW;
@@ -673,9 +1015,13 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
             apply_shield_hit(a, v, hit[p], cfg);
             ev.shield_block[1 - p] = true;
             break;
+        case HIT_PARRY:
+            apply_parry(a, v, hit[p], cfg);
+            ev.parry[1 - p] = true;
+            break;
         case HIT_GRAB:
             ev.hit_move[p] = static_cast<int8_t>(hit[p].move);
-            apply_grab(a, v);
+            apply_grab(a, v, cfg);
             ev.grab[p] = true;
             break;
         default:
@@ -687,8 +1033,7 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
     // Like Smash's combo counter, only *true* combos count: a hit continues
     // your combo only if the victim was still stunned (in hitstun or lying
     // on the floor) when it landed. Getting hit ends your combo; in a trade,
-    // both restart at 1. (A "hit within a second" rule also rewarded
-    // interrupting an opponent who had already recovered.)
+    // both restart at 1.
     bool landed[2], was_hit[2];
     for (int p = 0; p < 2; ++p) landed[p] = hit[p].kind == HIT_ATTACK || hit[p].kind == HIT_THROW;
     for (int p = 0; p < 2; ++p) was_hit[p] = landed[1 - p];
@@ -713,7 +1058,7 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
     for (int p = 0; p < 2; ++p) {
         const Fighter& f = s.f[p];
         if (f.state == before[p]) continue;
-        if (f.state == ST_TECH) ev.tech[p] = true;
+        if (f.state == ST_TECH || (f.state == ST_ROLL && before[p] == ST_HITSTUN)) ev.tech[p] = true;
         if (f.state == ST_KNOCKDOWN) ev.knockdown[p] = true;
         if (f.state == ST_SHIELDBREAK) ev.shield_break[p] = true;
         if (before[p] == ST_JUMPSQUAT && f.state == ST_AIRBORNE) ev.jump[p] = f.short_hop ? 2 : 1;
@@ -736,12 +1081,14 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
 bool intangible(const Fighter& f, const GameConfig& cfg) {
     if (f.invuln > 0) return true;
     int t = f.state_frame;
+    int shift = f.dodge_shift;
     switch (f.state) {
-    case ST_SPOTDODGE: return t >= cfg.spotdodge_iframe_start && t <= cfg.spotdodge_iframe_end;
-    case ST_AIRDODGE: return t >= cfg.airdodge_iframe_start && t <= cfg.airdodge_iframe_end;
-    case ST_ROLL: return t >= cfg.roll_iframe_start && t <= cfg.roll_iframe_end;
+    case ST_SPOTDODGE: return t >= cfg.spotdodge_iframe_start + shift && t <= cfg.spotdodge_iframe_end;
+    case ST_AIRDODGE: return t >= cfg.airdodge_iframe_start + shift && t <= cfg.airdodge_iframe_end;
+    case ST_ROLL: return t >= cfg.roll_iframe_start + shift && t <= cfg.roll_iframe_end;
     case ST_TECH: return t <= cfg.tech_iframes;
-    case ST_KNOCKDOWN: return t > cfg.knockdown_frames - 10;  // the get-up is protected
+    case ST_GETUP: return t <= cfg.getup_iframes;
+    case ST_ATTACK: return f.move >= 0 && t <= cfg.moves[f.move].intangible_until;
     default: return false;
     }
 }
@@ -809,13 +1156,26 @@ uint64_t hash_state(const GameState& s) {
         mix(h, &f.move, sizeof f.move);
         mix(h, &f.move_hit, sizeof f.move_hit);
         mix(h, &f.hitstun, sizeof f.hitstun);
+        mix(h, &f.tumble, sizeof f.tumble);
         mix(h, &f.landing_lag, sizeof f.landing_lag);
         mix(h, &f.invuln, sizeof f.invuln);
         mix(h, &f.hitlag, sizeof f.hitlag);
         mix(h, &f.di_x, sizeof f.di_x);
         mix(h, &f.di_y, sizeof f.di_y);
         mix(h, &f.roll_dir, sizeof f.roll_dir);
+        mix(h, &f.dodge_stale, sizeof f.dodge_stale);
+        mix(h, &f.dodge_timer, sizeof f.dodge_timer);
+        mix(h, &f.dodge_len, sizeof f.dodge_len);
+        mix(h, &f.dodge_shift, sizeof f.dodge_shift);
+        mix(h, &f.airdodge_dir, sizeof f.airdodge_dir);
         mix(h, &f.dodge_ago, sizeof f.dodge_ago);
+        mix(h, &f.dodge_prev_gap, sizeof f.dodge_prev_gap);
+        mix(h, &f.ledge_grabs, sizeof f.ledge_grabs);
+        mix(h, &f.ledge_side, sizeof f.ledge_side);
+        mix(h, &f.ledge_cooldown, sizeof f.ledge_cooldown);
+        mix(h, &f.grab_timer, sizeof f.grab_timer);
+        mix(h, &f.mash, sizeof f.mash);
+        mix(h, &f.parry_ok, sizeof f.parry_ok);
         mix(h, f.stale, sizeof f.stale);
         mix(h, &f.combo, sizeof f.combo);
         mix(h, &f.combo_timer, sizeof f.combo_timer);

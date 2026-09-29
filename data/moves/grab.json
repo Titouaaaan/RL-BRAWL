@@ -1,13 +1,10 @@
-// Grab (press light while shielding). A short-range grab box: it catches the
-// opponent even through their shield (grabs beat shields), but it's slow to
-// come out and has a lot of whiff lag, so an attack beats it (attacks beat
-// grabs) and a spot dodge or roll avoids it. Once caught, press any direction
-// to throw (see throw_*.json), or the hold ends in a forward throw.
+// Grab (light while shielding). Mario: frame 6-7, 34 frames. Catches the
+// opponent even through their shield; loses to attacks and dodges; a missed
+// grab is very punishable. Then press a direction to throw.
 {
-    "total_frames": 32,
+    "total_frames": 34,
     "landing_lag": 0,
     "hitboxes": [
-        {"start": 7, "end": 8, "x": 1.5, "y": 1.5, "radius": 1.0, "grab": true,
-         "damage": 0, "base_kb": 0, "kb_growth": 0, "angle": 0}
+        {"start": 6, "end": 7, "x": 1.4, "y": 1.5, "radius": 0.9, "damage": 0, "base_kb": 0, "kb_growth": 0, "angle": 0, "grab": true}
     ]
 }

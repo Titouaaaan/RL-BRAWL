@@ -1,11 +1,9 @@
-// Up-heavy (heavy + up, on the ground): a big, slow hit straight up. The main
-// way to KO off the top blast zone, and it punishes people landing on you.
-// 10 startup, huge recovery: very punishable if it misses.
+// Up smash (heavy + up). Mario: frame 9-12, 14%, 39 frames, angle 83: the
+// anti-air kill move. (Mario's head is intangible during it; ours isn't.)
 {
-    "total_frames": 38,
+    "total_frames": 39,
     "landing_lag": 0,
     "hitboxes": [
-        {"start": 11, "end": 15, "x": 0.4, "y": 3.4, "radius": 1.6,
-         "damage": 15, "base_kb": 0.7, "kb_growth": 0.015, "angle": 88}
+        {"start": 9, "end": 12, "x": 0.5, "y": 3.4, "radius": 1.4, "damage": 14.0, "base_kb": 32, "kb_growth": 94, "angle": 83}
     ]
 }

@@ -1,13 +1,12 @@
-// Down-air, light (light + down, in the air): a quick kick below you that
-// knocks slightly downward. Not a real spike (that's the heavy version), but
-// it's fast, so it's the safe way to hit someone underneath you.
+// Down air (light + down, in the air). Mario's is a multi-hit drill; ours is
+// one hit: frame 5-12, 6%, 37 frames, 15 frames landing lag. Pops the
+// opponent up in front: good to land with.
 {
-    "total_frames": 24,
-    "landing_lag": 7,
-    "autocancel_before": 4,
-    "autocancel_after": 18,
+    "total_frames": 37,
+    "landing_lag": 15,
+    "autocancel_before": 5,
+    "autocancel_after": 30,
     "hitboxes": [
-        {"start": 5, "end": 8, "x": 0.3, "y": -0.1, "radius": 1.1,
-         "damage": 7, "base_kb": 0.4, "kb_growth": 0.006, "angle": -60}
+        {"start": 5, "end": 12, "x": 0.3, "y": -0.2, "radius": 1.1, "damage": 6.0, "base_kb": 30, "kb_growth": 100, "angle": 75}
     ]
 }

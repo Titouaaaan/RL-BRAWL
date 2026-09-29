@@ -1,0 +1,12 @@
+// Get-up attack (light or heavy while lying down): hits both sides, the
+// attacker is intangible until frame 17. 7%, set-like knockback (BKB 80,
+// low growth), 44 frames.
+{
+    "total_frames": 44,
+    "landing_lag": 0,
+    "intangible_until": 17,
+    "hitboxes": [
+        {"start": 18, "end": 19, "x": 1.5, "y": 0.6, "radius": 1.0, "damage": 7.0, "base_kb": 80, "kb_growth": 50, "angle": 361},
+        {"start": 22, "end": 23, "x": -1.5, "y": 0.6, "radius": 1.0, "damage": 7.0, "base_kb": 80, "kb_growth": 50, "angle": 361}
+    ]
+}

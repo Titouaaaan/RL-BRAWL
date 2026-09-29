@@ -1,16 +1,11 @@
-// Down-heavy (heavy + down, on the ground): sweeps both sides at once (a
-// negative x means behind you). Low launch angle, so at high % it sends the
-// opponent sideways off the stage. Good when you're not sure where they are.
-// Covering both sides costs it: slower (12 startup) and much longer recovery
-// than the forward heavy, and a bit weaker. (It was 61% of moves vs the bots
-// when it was as fast as the forward heavy.)
+// Down smash (heavy + down). Mario: front hit frame 5-6 (10%), back hit
+// frame 14 (12%), 43 frames, low angle: covers both sides, sends
+// opponents off the stage.
 {
-    "total_frames": 46,
+    "total_frames": 43,
     "landing_lag": 0,
     "hitboxes": [
-        {"start": 13, "end": 16, "x": 1.7, "y": 0.5, "radius": 1.1,
-         "damage": 11, "base_kb": 0.55, "kb_growth": 0.012, "angle": 25},
-        {"start": 13, "end": 16, "x": -1.7, "y": 0.5, "radius": 1.1,
-         "damage": 11, "base_kb": 0.55, "kb_growth": 0.012, "angle": 155}
+        {"start": 5, "end": 6, "x": 1.7, "y": 0.4, "radius": 1.0, "damage": 10.0, "base_kb": 30, "kb_growth": 100, "angle": 30},
+        {"start": 14, "end": 15, "x": -1.7, "y": 0.4, "radius": 1.0, "damage": 12.0, "base_kb": 30, "kb_growth": 100, "angle": 150}
     ]
 }

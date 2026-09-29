@@ -1,11 +1,11 @@
-// Heavy (heavy, on the ground): slow, strong, KO move.
-// 13 frames of startup telegraph it; 23 frames of recovery make a whiff
-// easy to punish.
+// Forward smash (heavy, no direction or left/right). Mario: frame 15-17,
+// 17.7% tip / 14.6% close, 47 frames. Slow and punishable, but kills
+// around 100%.
 {
-    "total_frames": 40,
+    "total_frames": 47,
     "landing_lag": 0,
     "hitboxes": [
-        {"start": 14, "end": 17, "x": 2.2, "y": 1.5, "radius": 1.2,
-         "damage": 14, "base_kb": 0.6, "kb_growth": 0.014, "angle": 40}
+        {"start": 15, "end": 17, "x": 2.3, "y": 1.6, "radius": 1.0, "damage": 17.7, "base_kb": 25, "kb_growth": 103, "angle": 361},
+        {"start": 15, "end": 17, "x": 1.2, "y": 1.6, "radius": 0.9, "damage": 14.6, "base_kb": 25, "kb_growth": 99, "angle": 361}
     ]
 }

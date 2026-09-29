@@ -11,6 +11,7 @@ const char* const STAT_NAMES[NUM_STATS] = {
     "blocks", "got_blocked", "shield_breaks", "shield_breaks_caused",
     "grabs", "got_grabbed", "techs", "knockdowns",
     "full_jumps", "short_hops", "di_used",
+    "parries", "got_parried", "clanks", "ledge_grabs", "escapes",
     "frames_airborne", "frames_on_platform", "frames_close",
 };
 
@@ -56,6 +57,9 @@ static void write_fighter(const Fighter& f, const GameConfig& cfg, float m, floa
     *o++ = float(f.hitlag) / std::max(cfg.hitlag_max, 1);
     *o++ = std::min(f.combo, uint8_t(5)) / 5.0f;  // my current combo length (capped at 5)
     *o++ = (f.combo > 0) ? std::min<float>(f.combo_timer, float(cfg.combo_window)) / cfg.combo_window : 1.0f;
+    *o++ = f.tumble;  // tumbling: techable, knockdown if the landing isn't teched
+    *o++ = float(f.ledge_grabs) / std::max(cfg.ledge_max_grabs, 1);  // ledge regrabs used (less intangibility)
+    *o++ = f.dodge_stale / 5.0f;  // dodge staleness: 1 = fully stale (longer, later i-frames)
     // Distances to the blast zones and stage edges. They're linear in x/y,
     // but handing them over directly makes "near the edge" easy to learn.
     *o++ = (cfg.blast_x - x) / cfg.blast_x;
@@ -90,14 +94,17 @@ void write_obs(const GameState& s, const GameConfig& cfg, int player, float* out
             const ActiveHitbox& hb = all[k];
             if (hb.owner != owner) continue;
             const Fighter& victim = s.f[1 - owner];
-            // What it would do if it hit now, including stale-move weakening.
-            float kb = knockback(*hb.def, victim.percent + hb.def->damage * hb.power) * hb.power;
-            float angle = hb.def->angle * 3.14159265f / 180.0f;
+            // What it would do if it hit now, including stale-move weakening
+            // (knockback in Smash units, ~0-250; the Sakurai angle 361 shown as 38).
+            float dmg = hb.def->damage * hb.power;
+            float kb = knockback(*hb.def, victim.percent + dmg, dmg, cfg.weight);
+            float deg = (hb.def->angle == 361.0f) ? 38.0f : hb.def->angle;
+            float angle = deg * 3.14159265f / 180.0f;
             *o++ = m * (hb.x - me.x) / 10.0f;
             *o++ = (hb.y - me.y) / 10.0f;
             *o++ = hb.def->radius / 2.0f;
             *o++ = hb.def->damage * hb.power / 20.0f;
-            *o++ = kb / 3.0f;
+            *o++ = kb / 200.0f;
             *o++ = m * s.f[owner].facing * std::cos(angle);  // launch direction
             *o++ = std::sin(angle);
             *o++ = hb.frames_left / 10.0f;
@@ -180,6 +187,11 @@ void VecEnv::record_stats(const GameState& g, const StepEvents& ev) {
     st[STAT_DI_USED] += ev.di[0];
     st[STAT_FRAMES_AIRBORNE] += !me.grounded;
     st[STAT_FRAMES_ON_PLATFORM] += (me.grounded && me.surface != 0);
+    st[STAT_PARRIES] += ev.parry[0];
+    st[STAT_GOT_PARRIED] += ev.parry[1];
+    st[STAT_CLANKS] += ev.clank[0];
+    st[STAT_LEDGE_GRABS] += ev.ledge_grab[0];
+    st[STAT_ESCAPES] += ev.escaped[0];
     st[STAT_FRAMES_CLOSE] += (std::abs(g.f[1].x - me.x) < 4.0f && std::abs(g.f[1].y - me.y) < 4.0f);
 }
 

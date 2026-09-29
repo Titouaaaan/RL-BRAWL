@@ -23,6 +23,7 @@ const char* const MOVE_NAMES[NUM_MOVES] = {
     "down_air", "air", "up_air",
     "heavy_down_air", "heavy_air", "heavy_up_air",
     "grab", "throw_forward", "throw_back", "throw_up", "throw_down",
+    "jab2", "jab3", "forward_tilt", "dash_attack", "getup_attack", "ledge_attack",
 };
 
 static bool read_float(const json& obj, const char* key, float& out, std::string& err) {
@@ -79,6 +80,7 @@ static std::string parse_move(const std::string& text, MoveDef& out) {
     if (!read_opt_int(j, "autocancel_before", m.autocancel_before, err)) return err;
     if (!read_opt_int(j, "autocancel_after", m.autocancel_after, err)) return err;
     if (!read_opt_bool(j, "throw", m.is_throw, err)) return err;
+    if (!read_opt_int(j, "intangible_until", m.intangible_until, err)) return err;
     if (m.total_frames < 1) return "total_frames must be at least 1";
 
     auto list = j.find("hitboxes");

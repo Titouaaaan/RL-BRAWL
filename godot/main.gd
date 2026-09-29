@@ -283,8 +283,12 @@ func _draw() -> void:
 	var bz_tl := to_screen(-cfg.blast_x, cfg.blast_top)
 	var bz_br := to_screen(cfg.blast_x, cfg.blast_bottom)
 	draw_rect(Rect2(bz_tl, bz_br - bz_tl), Color(1, 1, 1, 0.15), false, 2.0)
+	# The main stage is a solid block: you can't pass through its sides or underside.
 	var stage_tl := to_screen(-w, 0)
-	draw_rect(Rect2(stage_tl, to_screen(w, -2) - stage_tl), Color(0.45, 0.45, 0.5))
+	draw_rect(Rect2(stage_tl, to_screen(w, -cfg.stage_depth) - stage_tl), Color(0.45, 0.45, 0.5))
+	# Ledges: the two top corners you can hang from.
+	for side in [-1, 1]:
+		draw_circle(to_screen(side * w, 0), px * 0.3, Color(0.9, 0.9, 0.6))
 	# Platforms (every floor after the first): thin, pass-through from below.
 	for k in range(1, cfg.surfaces.size()):
 		var s: Array = cfg.surfaces[k]
@@ -314,8 +318,17 @@ func draw_fighter(i: int, f: Dictionary, font: Font) -> void:
 	var h: float = cfg.hurtbox_h
 	if f.state == ST.KNOCKDOWN:
 		w = h * 1.1  # lying on the floor
-		h = cfg.hurtbox_w * 0.6
+		h = cfg.lying_h
+	elif f.state == ST.CROUCH:
+		h = cfg.crouch_h  # a smaller target: some high attacks miss
 	var hw := w / 2
+	# Tumbling (launched by a strong hit): the body spins until you act or land.
+	if f.tumble:
+		var center := to_screen(f.x, f.y + h / 2)
+		draw_set_transform(center, f.state_frame * 0.35, Vector2.ONE)
+		draw_rect(Rect2(-Vector2(w, h) * px / 2, Vector2(w, h) * px), COLORS[i].lerp(Color.WHITE, 0.6))
+		draw_set_transform(Vector2.ZERO)
+		return
 	var shake := 0.0
 	if f.hitlag > 0 and f.state == ST.HITSTUN:
 		shake = 0.18 * (1 if f.hitlag % 2 == 0 else -1)  # the victim shakes during the hit freeze
@@ -328,6 +341,10 @@ func draw_fighter(i: int, f: Dictionary, font: Font) -> void:
 		color = color.lerp(Color(0.6, 0.2, 0.8), 0.5)
 	elif f.state == ST.SHIELDBREAK:
 		color = color.lerp(Color(1, 0.9, 0.2), 0.5 + 0.3 * sin(f.state_frame * 0.4))  # dazed
+	elif f.state == ST.REBOUND:
+		color = color.lerp(Color(0.2, 0.2, 0.2), 0.5)  # clanked or parried: stuck, open to a punish
+	elif f.state == ST.SHIELDDROP and f.state_frame < 5:
+		color = color.lerp(Color(0.6, 1, 1), 0.6)  # the parry window
 	if f.invuln > 0 and (f.invuln / 6) % 2 == 0:
 		color.a = 0.35  # blink while invulnerable after respawning
 	if f.intangible and f.invuln == 0:
@@ -367,8 +384,8 @@ func draw_hud(font: Font) -> void:
 	if replay.is_empty():
 		draw_string(font, Vector2(16, 24), "P1: WASD, Space jump, J light, K heavy, L dodge (or controller 1)", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
 		draw_string(font, Vector2(16, 44), "P2: arrows, Enter jump, . light, / heavy, , dodge (or controller 2)", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
-		draw_string(font, Vector2(16, 64), "Attacks: light/heavy + up/down/neutral.  Dodge: shield (+ side = roll, + down = spot dodge); light while shielding = grab, then a direction throws.", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
-		draw_string(font, Vector2(16, 84), "Tap jump = short hop.  Hold down = fast-fall / drop through a platform.  Hold a direction when hit = DI.  Dodge as you land = tech.   R: restart  Esc: quit", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
+		draw_string(font, Vector2(16, 64), "Attacks: light/heavy + up/down/side/neutral; keep pressing light = jab combo; light while running = dash attack.  Dodge: shield (+ side = roll, + down = spot dodge); let go as a hit lands = parry; light while shielding = grab.", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
+		draw_string(font, Vector2(16, 84), "Tap jump = short hop.  Down = crouch / fast-fall / drop through.  Air dodge + direction = directional.  Dodge as you land = tech.  Ledge: toward = climb, jump, attack, dodge = roll.  R: restart  Esc: quit", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
 	else:
 		var status := "PAUSED" if paused else "%sx" % SPEEDS[speed_i]
 		var line := "REPLAY  frame %d / %d   %s" % [replay_frame, replay.inputs.size(), status]

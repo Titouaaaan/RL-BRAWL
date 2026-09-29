@@ -35,6 +35,9 @@ NB_MODULE(fightcore, m) {
     m.attr("BLAST_X") = defaults.blast_x;
     m.attr("BLAST_TOP") = defaults.blast_top;
     m.attr("STAGE_HALF_WIDTH") = defaults.stage_half_width;
+    m.attr("WEIGHT") = defaults.weight;
+    m.attr("LAUNCH_SPEED_SCALE") = defaults.launch_speed_scale;
+    m.attr("SPAWN_X") = defaults.spawn_x;
     nb::list names;
     for (const char* n : MOVE_NAMES) names.append(n);
     m.attr("MOVE_NAMES") = nb::tuple(names);
@@ -136,6 +139,12 @@ NB_MODULE(fightcore, m) {
                  d["surface"] = (int)f.surface;
                  d["landing_lag"] = (int)f.landing_lag;
                  d["combo"] = (int)f.combo;
+                 d["tumble"] = f.tumble;
+                 d["ledge_side"] = (int)f.ledge_side;
+                 d["ledge_grabs"] = (int)f.ledge_grabs;
+                 d["dodge_stale"] = (int)f.dodge_stale;
+                 d["dodge_len"] = (int)f.dodge_len;
+                 d["state_frame"] = f.state_frame;
                  d["vx"] = f.vx;
                  d["vy"] = f.vy;
                  d["move_hit"] = f.move_hit;

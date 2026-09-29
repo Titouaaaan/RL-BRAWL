@@ -38,21 +38,28 @@ To remap, edit the `PAD` table near the top of `godot/main.gd`.
 **R** reloads the move files and restarts. **Esc** quits.
 
 ### Moving
-- Moving starts with a fast **dash** (11 frames), then a **run**. Speed changes smoothly rather than instantly. Turning around during the dash dashes the other way (a "dash dance").
+- All speeds, jump heights and gravity are Mario's from Smash Ultimate, scaled so 1 unit = 5 Smash units (the stage is Battlefield: 32 wide, ledges at the ends, platforms at the same heights).
+- Moving starts with a fast **dash** (12 frames), then a **run**. Speed changes smoothly rather than instantly. Turning around during the dash dashes the other way (a "dash dance").
 - **Jump:** hold jump for a full jump; **tap** it (let go within 3 frames), or hold **down + jump**, for a lower **short hop**. One double jump in the air.
 - **Fast-fall:** hold **down without attacking** for 6 frames (0.1 s) while falling. Down + an attack does the down move instead. A down that was part of an attack is "used up": return the stick to neutral and press down again to fast-fall.
 - **Platforms:** three floating platforms (the "Battlefield" layout). Jump up through them from below; hold **down** while standing on one to drop through.
+- **Crouch:** hold **down** on the main stage. You're shorter (some high attacks miss) and you take 15% less knockback and a shorter hit freeze (*crouch cancel*). Down + light from a crouch = down-tilt.
+- **Ledges:** the two top corners of the main stage. Fall (or rise) next to one without holding down and you **grab** it automatically, briefly intangible. While hanging: **toward the stage or up** = climb, **jump** = ledge jump, **light/heavy** = ledge attack, **dodge** = ledge roll, **away or down** = let go. Each regrab before touching the stage gives less intangibility (none from the 4th), max 6 grabs. Only one fighter per ledge: grabbing it first blocks the opponent (*edge-hogging*). The stage is a solid block: you can't pass through its sides or underside.
 - Fighters on the same floor **push each other** apart instead of walking through each other. Nobody can be pushed off a floor: a fighter at the edge acts as a wall.
 
 ### Attacking
-- **Attacks:** light or heavy, combined with the stick's up/down, on the ground or in the air: 12 moves. Left/right only sets which way you face (hold it backward to turn and hit behind you, also in the air). Facing locks once the move starts. Holding the attack button repeats the move.
+- **Attacks:** light or heavy, combined with the stick, on the ground or in the air. Every move's frame data (startup, active frames, total length, landing lag), damage and knockback comes from Mario in Smash Ultimate (ultimateframedata.com, KuroganeHammer); each file in `data/moves/` says where its numbers come from. In the air, left/right only sets which way you face (hold it backward to turn and hit behind you). Facing locks once the move starts.
 
-  | | down | neutral / side | up |
-  |---|---|---|---|
-  | ground, light | down-tilt: low poke | jab | up-tilt: launches up, anti-air |
-  | ground, heavy | down-heavy: hits both sides | heavy | up-heavy: KOs upward |
-  | air, light | down-air: quick kick below | air | up-air: juggles |
-  | air, heavy | heavy down-air: **spike** (sends downward) | heavy air | heavy up-air: launches high |
+  | | down | neutral | side | up |
+  |---|---|---|---|---|
+  | ground, light | down-tilt: low poke, pops up | jab 1 → 2 → 3 (keep pressing) | forward tilt: mid-range poke | up-tilt: anti-air, juggle starter |
+  | ground, heavy | down-heavy: hits both sides | heavy (forward smash) | heavy | up-heavy (up smash): KOs upward |
+  | air, light | down-air | air (neutral air) | air | up-air: juggles |
+  | air, heavy | heavy down-air: **spike** (sends downward) | heavy air | heavy air | heavy up-air: launches high |
+
+  Plus: **light while running = dash attack** (fast, far, very punishable), **light while shielding = grab**, and the get-up attack and ledge attack.
+- **Knockback** follows Smash's formula: it grows with the victim's % *and* the hit's damage, and the heavy (forward smash) KOs Mario from the middle of the stage around 100%, up smash around 140%. Weak hits on a grounded opponent send them along the ground; stronger ones launch at up to ~38 degrees (the "Sakurai angle"). Knockback above 80 makes you **tumble** (spinning): you can act once the hitstun ends, but if you hit the ground still tumbling you must tech or be knocked down.
+- **Clank:** if two ground attacks hit each other at the same moment, they cancel. If their damage is within 9%, both fighters rebound (stuck briefly, drawn dark); otherwise only the weaker attack's owner does.
 - **Landing during an air attack** costs its landing lag, **unless** you land in its *auto-cancel* windows (the first few frames, or late in the move): then it's a normal, quick landing. A short hop into an early air attack lands clean.
 - **Missed air attacks:** after **two** air attacks that hit nothing, you can't attack again until you land (the HUD shows `[no air attacks]`). Movement, double jump and dodge still work. Hits don't count, so juggles work; getting hit clears it.
 - **Hitlag:** when a hit connects, both fighters freeze for a few frames (longer for stronger hits). That's the "impact" feel, and it's when DI happens.
@@ -62,9 +69,12 @@ To remap, edit the `PAD` table near the top of `godot/main.gd`.
 - **Shield:** hold **dodge** on the ground. Attacks bounce off (you're pushed back and stuck for a moment: *shield stun*), but the shield shrinks while held and when hit; the bar under your damage shows it. If it runs out: **shield break**, dazed for 2.5 seconds.
 - Out of your shield: **dodge + left/right = roll** (intangible for most of it, you end up facing back where you came from), **dodge + down = spot dodge** (intangible in place), **jump** = jump out of shield, **light = grab**, let go = drop the shield (a few frames of lag).
 - **Grab:** light while shielding. It catches the opponent **even through their shield**, but it's slow and has a lot of lag if it misses, so an attack or a dodge beats it. Once you hold someone: press a direction to **throw** (forward, back, up or down); the hold ends in a forward throw by itself. Down throw is the combo starter, back throw the strongest.
-- **Air dodge:** dodge in the air. Intangible for frames 3-18, then **helpless**: you can drift but can't jump, attack or dodge until you touch the ground (10 frames of landing lag). An air dodge off the stage is usually fatal.
+- **Parry:** let go of the shield (after holding it at least 3 frames) just as a hit arrives: if the hit lands in the first 5 frames of the shield drop, you take nothing and the attacker is frozen for extra frames, a free punish (the fighter flashes cyan during that window).
+- **Dodges get worse when spammed** (Ultimate's dodge staling): each dodge within a second of the last one lasts longer and its intangibility starts later.
+- **Air dodge:** dodge in the air, optionally with a direction to dash that way. Intangible for frames 3-18, then **helpless**: you can drift but can't jump, attack or dodge until you touch the ground (10 frames of landing lag, 14 after a directional one). An air dodge off the stage is usually fatal.
+- **Grabbed:** press buttons to struggle out faster. The hold lasts longer the more % you have.
 - **DI (directional influence):** when you get hit, hold a direction during the hit freeze to bend your launch angle by up to 15 degrees. Holding away from your opponent escapes combos; at high %, angling toward the stage helps you survive.
-- **Tech:** if you're launched and hit the ground while still stunned, press **dodge** just before impact (within 10 frames) to recover instantly, intangible. Miss it and you're **knocked down** (lying on the floor, open to attacks) for half a second.
+- **Tech:** if you hit the ground while tumbling, press **dodge** just before impact (within 11 frames) to recover instantly, intangible (+ left/right = tech roll). Mashing doesn't work: a press less than 40 frames after the previous one is ignored. Miss it and you're **knocked down**, lying on the floor: then **up/jump** = get up, **light/heavy** = get-up attack, **dodge + side** = get-up roll (all intangible at first), or wait and you get up by yourself after a second.
 - While intangible, a fighter is drawn see-through with a white outline.
 
 ### Rules
@@ -87,8 +97,9 @@ Each move is a file in `data/moves/`, named as in the table above (`jab.json`, `
 | `x`, `y` | Circle centre relative to the attacker's feet; `x` points the way they face. The body (hurtbox) is 2 wide, 3 tall. |
 | `radius` | Circle size. |
 | `damage` | % added to the victim. |
-| `base_kb`, `kb_growth` | Knockback (launch speed) = `base_kb + kb_growth * victim %`. Hitstun frames = knockback * 25. |
-| `angle` | Launch direction in degrees: 0 = straight forward, 90 = straight up, negative = downward (a spike), above 90 = backward. |
+| `base_kb`, `kb_growth` | Smash's BKB and KBG. Knockback = `((p/10 + p*d/20) * 200/(weight+100) * 1.4 + 18) * kb_growth/100 + base_kb` (p = victim % after the hit, d = damage). Launch speed = knockback * 0.006; hitstun = 0.4 frames per knockback, minus 1. |
+| `angle` | Launch direction in degrees: 0 = straight forward, 90 = straight up, negative = downward (a spike), above 90 = backward. 361 = the Sakurai angle (along the ground for weak hits on the ground, ~38 degrees otherwise). |
+| `intangible_until` | Optional: the attacker can't be hit before this move frame (get-up and ledge attacks). |
 | `grab` | Optional per hitbox, `true` for the grab: it catches instead of hitting, and goes through shields. |
 
 Everything else (dash and run speed, gravity, jump heights, dodge and roll frames, shield size and drain, hitlag, DI strength, stale-move steps, platforms, blast zones and so on) lives in `GameConfig` in `core/sim.h`. Those do need a rebuild, which `play.bat` does for you.

@@ -1,11 +1,10 @@
-// Up throw: straight up, weak but it puts the opponent above you for up-air
-// juggles and platform pressure.
+// Up throw. Mario: released on frame 18, 7%, 39 frames, straight up: sets up
+// up air juggles and platform pressure.
 {
-    "total_frames": 24,
+    "total_frames": 39,
     "throw": true,
     "landing_lag": 0,
     "hitboxes": [
-        {"start": 8, "end": 8, "x": 0, "y": 0, "radius": 1,
-         "damage": 6, "base_kb": 0.55, "kb_growth": 0.006, "angle": 90}
+        {"start": 18, "end": 18, "x": 0, "y": 0, "radius": 1, "damage": 7.0, "base_kb": 60, "kb_growth": 70, "angle": 90}
     ]
 }
