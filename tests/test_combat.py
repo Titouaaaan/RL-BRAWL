@@ -201,7 +201,7 @@ def test_holding_down_fast_falls():
 
 
 def test_land_on_a_platform_and_drop_through():
-    env = new_env()  # P1 starts at x = -8, under the left platform (y = 4.8)
+    env = new_env()  # P1 starts at x = -8.8, under the left platform (y = 4.8)
     act(env, p1=(0, 0, 1))
     for _ in range(120):
         act(env, p1=(0, 0, 1))

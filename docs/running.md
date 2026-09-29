@@ -38,13 +38,14 @@ To remap, edit the `PAD` table near the top of `godot/main.gd`.
 **R** reloads the move files and restarts. **Esc** quits.
 
 ### Moving
-- All speeds, jump heights and gravity are Mario's from Smash Ultimate, scaled so 1 unit = 5 Smash units (the stage is Battlefield: 32 wide, ledges at the ends, platforms at the same heights).
+- Speeds and jump heights are Mario's from Smash Ultimate, scaled so 1 unit = 5 Smash units; gravity and fall speed are 20% stronger than his for a less floaty feel. The stage is Battlefield made 10% wider (35 units, ledges at the ends, platforms at Battlefield's heights).
+- **Several buttons at once:** the game takes one button per frame, and the one you pressed most recently wins. So you can keep holding jump for a full hop and press light mid-jump for an air attack.
 - Moving starts with a fast **dash** (12 frames), then a **run**. Speed changes smoothly rather than instantly. Turning around during the dash dashes the other way (a "dash dance").
 - **Jump:** hold jump for a full jump; **tap** it (let go within 3 frames), or hold **down + jump**, for a lower **short hop**. One double jump in the air.
 - **Fast-fall:** hold **down without attacking** for 6 frames (0.1 s) while falling. Down + an attack does the down move instead. A down that was part of an attack is "used up": return the stick to neutral and press down again to fast-fall.
 - **Platforms:** three floating platforms (the "Battlefield" layout). Jump up through them from below; hold **down** while standing on one to drop through.
 - **Crouch:** hold **down** on the main stage. You're shorter (some high attacks miss) and you take 15% less knockback and a shorter hit freeze (*crouch cancel*). Down + light from a crouch = down-tilt.
-- **Ledges:** the two top corners of the main stage. Fall (or rise) next to one without holding down and you **grab** it automatically, briefly intangible. While hanging: **toward the stage or up** = climb, **jump** = ledge jump, **light/heavy** = ledge attack, **dodge** = ledge roll, **away or down** = let go. Each regrab before touching the stage gives less intangibility (none from the 4th), max 6 grabs. Only one fighter per ledge: grabbing it first blocks the opponent (*edge-hogging*). The stage is a solid block: you can't pass through its sides or underside.
+- **Ledges:** the two top corners of the main stage. Fall (or rise) next to one without holding down and you **grab** it automatically, briefly intangible. While hanging: **toward the stage or up** = climb, **jump** = ledge jump, **light/heavy** = ledge attack, **dodge** = ledge roll, **away or down** = let go. After 3 seconds you let go by yourself (the fighter flashes red in the last second). Each regrab before touching the stage gives less intangibility (none from the 4th), max 6 grabs. Only one fighter per ledge: grabbing it first blocks the opponent (*edge-hogging*). The stage is a solid block: you can't pass through its sides or underside.
 - Fighters on the same floor **push each other** apart instead of walking through each other. Nobody can be pushed off a floor: a fighter at the edge acts as a wall.
 
 ### Attacking

@@ -66,13 +66,13 @@ def test_ledge_grab_hang_and_climb():
     env = new_env()
     ledge_hang(env)
     me = f(env, 0)
-    assert me["intangible"] and me["ledge_side"] == -1 and me["x"] < -16  # hanging off the left ledge
+    assert me["intangible"] and me["ledge_side"] == -1 and me["x"] < -fightcore.STAGE_HALF_WIDTH  # hanging off the left ledge
     hold(env, 8)  # hang a moment, then climb (stick toward the stage)
     for _ in range(60):
         act(env, p1=(1, 0, 0))
         if f(env, 0)["grounded"] and f(env, 0)["state"] != S["LEDGE_CLIMB"]:
             break
-    assert f(env, 0)["grounded"] and f(env, 0)["x"] > -16 and f(env, 0)["stocks"] == 3
+    assert f(env, 0)["grounded"] and f(env, 0)["x"] > -fightcore.STAGE_HALF_WIDTH and f(env, 0)["stocks"] == 3
 
 
 def test_ledge_grabs_are_limited_and_lose_intangibility():
@@ -149,3 +149,12 @@ def test_directional_air_dodge_moves_you():
             break
         assert f(env, 0)["state"] in (S["AIRDODGE"], S["HELPLESS"])
     assert f(env, 0)["state"] == S["LANDING"] and f(env, 0)["landing_lag"] == 14
+
+
+def test_hanging_too_long_lets_go():
+    env = new_env()
+    ledge_hang(env)
+    hold(env, 179)
+    assert f(env, 0)["state"] == S["LEDGE"]
+    hold(env, 2)  # 3 seconds (ledge_hang_max) and you drop
+    assert f(env, 0)["state"] == S["AIRBORNE"]

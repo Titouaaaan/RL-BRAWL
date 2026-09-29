@@ -260,13 +260,15 @@ struct GameConfig {
     float air_accel = 0.016f;       // Mario air acceleration 0.08
     float air_friction = 0.002f;    // floaty: you keep your momentum in the air
     // Jumps: velocities that reach Mario's heights (full hop 36.3, short hop
-    // 17.5, double jump 36.3) under this gravity.
-    float jump_velocity = 0.503f;
-    float short_hop_velocity = 0.35f;
-    float double_jump_velocity = 0.503f;
-    float gravity = 0.0174f;        // Mario 0.087
-    float max_fall_speed = 0.3f;    // Mario 1.5
-    float fastfall_speed = 0.48f;   // Mario 2.4
+    // 17.5, double jump 36.3) under this gravity. Gravity and fall speeds are
+    // 20% above Mario's (0.087, 1.5, 2.4) for a snappier, less floaty feel;
+    // jump velocities are scaled by sqrt(1.2) so the heights stay Mario's.
+    float jump_velocity = 0.551f;
+    float short_hop_velocity = 0.383f;
+    float double_jump_velocity = 0.551f;
+    float gravity = 0.0209f;
+    float max_fall_speed = 0.36f;
+    float fastfall_speed = 0.576f;
     int fastfall_hold = 6;  // frames of holding down (no attack) before fast-falling
     int jumpsquat_frames = 3;       // universal in Ultimate
     int landing_lag = 2;    // after a normal landing (aerials use their own)
@@ -313,7 +315,7 @@ struct GameConfig {
     int ledge_invuln = 45;
     int ledge_max_grabs = 6;
     int ledge_min_frames = 8;       // hang at least this long before choosing an option
-    int ledge_hang_max = 390;       // then you let go (6.5 s)
+    int ledge_hang_max = 180;       // then you let go (3 s; Ultimate is 6.5 s, too safe here)
     int ledge_climb_frames = 30, ledge_climb_invuln = 26;
     int ledge_option_invuln = 20;   // ledge attack / roll start intangible
     float ledge_hang_x = 1.0f, ledge_hang_y = -2.6f;  // where you hang, relative to the ledge
@@ -350,14 +352,15 @@ struct GameConfig {
     int combo_window = 60;  // scale for the "frames since my last hit" observation
     // Stage: Battlefield. Surface 0 is the main floor; 1-3 are pass-through
     // platforms. Dropping through ignores platforms this long.
-    Surface surfaces[NUM_SURFACES] = {{-16, 16, 0}, {-11.9f, -5.5f, 4.8f}, {5.5f, 11.9f, 4.8f}, {-3.2f, 3.2f, 9.4f}};
+    Surface surfaces[NUM_SURFACES] = {{-17.6f, 17.6f, 0}, {-13.1f, -6.05f, 4.8f}, {6.05f, 13.1f, 4.8f}, {-3.5f, 3.5f, 9.4f}};
+    // (Battlefield's layout made 10% wider; the heights are unchanged.)
     int drop_through_frames = 12;
     float stage_depth = 6.0f;        // the main stage is a solid block this deep: walls and an underside
-    float blast_x = 48.0f;           // KO if |x| > 48...
+    float blast_x = 49.6f;           // KO if |x| > 49.6 (32 past each ledge, as on Battlefield)...
     float blast_top = 38.4f;         // ...or y > 38.4...
     float blast_bottom = -28.0f;     // ...or y < -28
-    float stage_half_width = 16.0f;  // = surfaces[0] extent: the ledges are at +-16
-    float spawn_x = 8.0f;
+    float stage_half_width = 17.6f;  // = surfaces[0] extent: the ledges are at +-17.6
+    float spawn_x = 8.8f;
     float respawn_y = 14.0f;
     int respawn_invuln = 120;
     uint8_t stocks = 3;

@@ -18,7 +18,7 @@ X, VY, GROUNDED, JUMPS = 0, 3, 8, 11
 STATE = 13  # the state one-hot starts here (order: FighterState in core/sim.h)
 ST_ATTACK, ST_LANDING, ST_HITSTUN = 5, 4, 6
 EDGE_RIGHT, EDGE_LEFT = F - 2, F - 1  # distance to the stage edges, / stage_half_width
-DX = 2 * F  # opponent x - my x, / blast_x
+DX, DY = 2 * F, 2 * F + 1  # opponent x - my x, / blast_x; opponent y - my y, / blast_top
 BLAST_X, BLAST_TOP, STAGE_HALF = fightcore.BLAST_X, fightcore.BLAST_TOP, fightcore.STAGE_HALF_WIDTH  # to turn scaled obs back into units
 NONE, JUMP, LIGHT, HEAVY, DODGE = 0, 1, 2, 3, 4
 
@@ -56,12 +56,17 @@ def _base(obs):
 
 
 def jabber(obs):
-    """Walks toward the opponent and jabs when close."""
+    """Walks toward the opponent and jabs when close. If they stand on a
+    platform above, jumps up to them and uses light (an aerial) there."""
     a, dist, toward, busy, at_edge = _base(obs)
     free = ~busy
     close = dist < 3.2
+    above = obs[:, DY] * BLAST_TOP > 2.0
+    grounded = obs[:, ME + GROUNDED] > 0
     a[free, 0] = np.where(close[free] | ~at_edge[free], toward[free], 0)
     a[free & close, 2] = LIGHT
+    climb = free & close & above
+    a[climb, 2] = np.where(grounded[climb], JUMP, LIGHT)
     return a
 
 

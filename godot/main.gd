@@ -26,6 +26,11 @@ const PAD := {
 	dodge = [JOY_BUTTON_LEFT_SHOULDER, JOY_BUTTON_RIGHT_SHOULDER],
 }
 const DEADZONE := 0.5  # how far the stick must be pushed to count as a direction
+const BUTTONS := ["jump", "light", "heavy", "dodge"]  # position + 1 = the Button enum in core/sim.h
+# The sim takes one button per frame, so when several are held we must pick
+# one. Per player: which buttons were held last frame, and the last one sent.
+var prev_held := [[false, false, false, false], [false, false, false, false]]
+var last_button := [0, 0]
 
 var game := FightGame.new()
 var move_names: PackedStringArray = game.get_move_names()  # from core/moves.cpp
@@ -175,7 +180,7 @@ func _physics_process(_delta: float) -> void:
 	if replay.is_empty():
 		var a := merge(read_input(KEYS[0]), read_pad(0))
 		var b := merge(read_input(KEYS[1]), read_pad(1))
-		game.step(a[0], a[1], a[2], b[0], b[1], b[2])
+		game.step(a[0], a[1], pick_button(0, a[2]), b[0], b[1], pick_button(1, b[2]))
 	elif not paused:
 		speed_acc += SPEEDS[speed_i]
 		while speed_acc >= 1.0:
@@ -222,26 +227,43 @@ func update_camera(delta: float) -> void:
 	px = lerp(px, target_px, k)
 
 
+# Keyboard: [stick_x, stick_y, [jump, light, heavy, dodge held?]].
 func read_input(k: Dictionary) -> Array:
 	var sx := int(held(k.right)) - int(held(k.left))
 	var sy := int(held(k.up)) - int(held(k.down))
-	var button := 0  # none; matches the Button enum in core/sim.h
-	if held(k.jump): button = 1
-	elif held(k.light): button = 2
-	elif held(k.heavy): button = 3
-	elif held(k.dodge): button = 4
-	return [sx, sy, button]
+	return [sx, sy, BUTTONS.map(func(n): return held(k[n]))]
+
+
+# The newest press wins: a button pressed this frame beats one that is still
+# held. Otherwise holding jump (for a full hop) would hide an attack pressed
+# mid-jump until jump was released, which feels like input lag.
+func pick_button(p: int, now: Array) -> int:
+	var b := 0  # none
+	for i in 4:
+		if now[i] and not prev_held[p][i]:
+			b = i + 1
+			break
+	if b == 0 and last_button[p] > 0 and now[last_button[p] - 1]:
+		b = last_button[p]  # keep holding the same button
+	if b == 0:
+		for i in 4:
+			if now[i]:
+				b = i + 1
+				break
+	prev_held[p] = now
+	last_button[p] = b
+	return b
 
 
 func held(key: Key) -> bool:
 	return Input.is_physical_key_pressed(key)
 
 
-# The player's controller (the n-th one connected), as [stick_x, stick_y, button].
+# The player's controller (the n-th one connected), as [stick_x, stick_y, held buttons].
 func read_pad(n: int) -> Array:
 	var pads := Input.get_connected_joypads()
 	if n >= pads.size():
-		return [0, 0, 0]
+		return [0, 0, [false, false, false, false]]
 	var dev: int = pads[n]
 	var x := Input.get_joy_axis(dev, JOY_AXIS_LEFT_X)
 	var y := -Input.get_joy_axis(dev, JOY_AXIS_LEFT_Y)  # Godot's stick y points down; the sim's up
@@ -251,21 +273,22 @@ func read_pad(n: int) -> Array:
 	sx = clampi(sx + int(pad(dev, JOY_BUTTON_DPAD_RIGHT)) - int(pad(dev, JOY_BUTTON_DPAD_LEFT)), -1, 1)
 	sy = clampi(sy + int(pad(dev, JOY_BUTTON_DPAD_UP)) - int(pad(dev, JOY_BUTTON_DPAD_DOWN)), -1, 1)
 	var triggers := Input.get_joy_axis(dev, JOY_AXIS_TRIGGER_LEFT) > 0.5 or Input.get_joy_axis(dev, JOY_AXIS_TRIGGER_RIGHT) > 0.5
-	var button := 0
-	if PAD.jump.any(func(b): return pad(dev, b)): button = 1
-	elif PAD.light.any(func(b): return pad(dev, b)): button = 2
-	elif PAD.heavy.any(func(b): return pad(dev, b)): button = 3
-	elif triggers or PAD.dodge.any(func(b): return pad(dev, b)): button = 4
-	return [sx, sy, button]
+	var now := BUTTONS.map(func(n): return PAD[n].any(func(b): return pad(dev, b)))
+	now[3] = now[3] or triggers
+	return [sx, sy, now]
 
 
 func pad(dev: int, b: JoyButton) -> bool:
 	return Input.is_joy_button_pressed(dev, b)
 
 
-# Keyboard + controller for the same player: directions add up, first button wins.
+# Keyboard + controller for the same player: directions add up, a button is
+# held if it's held on either.
 func merge(k: Array, p: Array) -> Array:
-	return [clampi(k[0] + p[0], -1, 1), clampi(k[1] + p[1], -1, 1), k[2] if k[2] != 0 else p[2]]
+	var now := []
+	for i in 4:
+		now.append(k[2][i] or p[2][i])
+	return [clampi(k[0] + p[0], -1, 1), clampi(k[1] + p[1], -1, 1), now]
 
 
 # Sim coordinates (y up) -> screen pixels (y down), through the camera.
@@ -345,6 +368,8 @@ func draw_fighter(i: int, f: Dictionary, font: Font) -> void:
 		color = color.lerp(Color(0.2, 0.2, 0.2), 0.5)  # clanked or parried: stuck, open to a punish
 	elif f.state == ST.SHIELDDROP and f.state_frame < 5:
 		color = color.lerp(Color(0.6, 1, 1), 0.6)  # the parry window
+	elif f.state == ST.LEDGE and f.state_frame > cfg.ledge_hang_max - 60 and (f.state_frame / 4) % 2 == 0:
+		color = color.lerp(Color.RED, 0.6)  # hanging too long: about to let go
 	if f.invuln > 0 and (f.invuln / 6) % 2 == 0:
 		color.a = 0.35  # blink while invulnerable after respawning
 	if f.intangible and f.invuln == 0:
