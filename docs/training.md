@@ -95,8 +95,10 @@ terms give a denser learning signal early on, then fade out:
   player being comboed loses exactly as much. The game itself keeps combos
   honest: stale moves weaken repeats and the victim can DI out.
 - **Annealing:** all of these are multiplied by a scale that goes linearly
-  from 1 to 0 over the first half of training (`--shaping-anneal 0.5`),
-  leaving only the KO reward and the timeout tie-breaker.
+  from 1 down to 0.2 over the first half of training (`--shaping-anneal 0.5`,
+  `--shaping-floor 0.2`), so KOs dominate later on. (Fading all the way to 0
+  made a run drift into cautious spacing: hits per minute halved and
+  timeouts rose from 8% to 37% once only KOs paid.)
   `charts/shaping_scale` shows it. The `charts/episodic_return` chart
   includes the damage term, so it drifts as the scale falls; judge progress
   by the win rates.

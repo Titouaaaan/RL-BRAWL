@@ -18,8 +18,8 @@
 #   5b. Reward shaping, annealed to zero: potential-based approach shaping
 #      (F = gamma*phi(s') - phi(s), phi = -distance; Ng et al. 1999, doesn't
 #      change the optimal policy) and a damage reward that starts at 0.02 per %.
-#      Both scale linearly from 1 to 0 over the first shaping_anneal of training,
-#      leaving only the +-1 KO reward.
+#      Both scale linearly from 1 down to shaping_floor (0.2) over the first
+#      shaping_anneal of training, so the KO reward dominates later on.
 #   6. Logging/eval: win rates vs fixed bots, button usage, checkpoints,
 #      replays for watching in Godot.
 #   8. --resume runs/<run> continues a run from its last resume.pt (saved at
@@ -103,6 +103,9 @@ class Args:
     """potential-based shaping: reward per 10 units of distance closed, at the start (annealed)"""
     shaping_anneal: float = 0.5
     """fraction of training over which both shaping terms fade to 0 (0 = no shaping at all)"""
+    shaping_floor: float = 0.2
+    """the shaping never fades below this fraction (0 = fade to nothing). Without a floor, a
+    run drifted into cautious spacing after the fade: hits/min halved, timeouts 8% -> 37%"""
     gate_win_rate: float = 0.55
     """selfplay: replace the frozen opponent once the learner wins this often against it..."""
     gate_min_games: int = 200
@@ -362,6 +365,7 @@ if __name__ == "__main__":
         # OURS: shaping scale, 1 -> 0 over the first shaping_anneal of training.
         progress = (iteration - 1.0) / args.num_iterations
         shaping = max(0.0, 1.0 - progress / args.shaping_anneal) if args.shaping_anneal > 0 else 0.0
+        shaping = max(shaping, args.shaping_floor) if args.shaping_anneal > 0 else 0.0
         envs.damage_reward = args.damage_reward * shaping
         ent_now = args.ent_coef_final + (args.ent_coef - args.ent_coef_final) * max(0.0, 1.0 - progress / args.ent_anneal)
 
