@@ -364,6 +364,9 @@ func draw_fighter(i: int, f: Dictionary, font: Font) -> void:
 		color = color.lerp(Color(0.6, 0.2, 0.8), 0.5)
 	elif f.state == ST.SHIELDBREAK:
 		color = color.lerp(Color(1, 0.9, 0.2), 0.5 + 0.3 * sin(f.state_frame * 0.4))  # dazed
+	elif f.state == ST.ATTACK and f.charge > 0:
+		# Charging a smash: glows brighter the longer it's held (up to 40% stronger).
+		color = color.lerp(Color(1, 0.95, 0.4), 0.3 + 0.5 * f.charge / cfg.charge_max * (0.75 + 0.25 * sin(f.charge * 0.8)))
 	elif f.state == ST.REBOUND:
 		color = color.lerp(Color(0.2, 0.2, 0.2), 0.5)  # clanked or parried: stuck, open to a punish
 	elif f.state == ST.SHIELDDROP and f.state_frame < 5:
@@ -409,7 +412,7 @@ func draw_hud(font: Font) -> void:
 	if replay.is_empty():
 		draw_string(font, Vector2(16, 24), "P1: WASD, Space jump, J light, K heavy, L dodge (or controller 1)", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
 		draw_string(font, Vector2(16, 44), "P2: arrows, Enter jump, . light, / heavy, , dodge (or controller 2)", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
-		draw_string(font, Vector2(16, 64), "Attacks: light/heavy + up/down/side/neutral; keep pressing light = jab combo; light while running = dash attack.  Dodge: shield (+ side = roll, + down = spot dodge); let go as a hit lands = parry; light while shielding = grab.", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
+		draw_string(font, Vector2(16, 64), "Attacks: light/heavy + up/down/side/neutral; keep pressing light = jab combo; hold heavy = charge a smash; light while running = dash attack.  Dodge: shield (+ side = roll, + down = spot dodge); let go as a hit lands = parry; light while shielding = grab (then light = pummel, a direction = throw).", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
 		draw_string(font, Vector2(16, 84), "Tap jump = short hop.  Down = crouch / fast-fall / drop through.  Air dodge + direction = directional.  Dodge as you land = tech.  Ledge: toward = climb, jump, attack, dodge = roll.  R: restart  Esc: quit", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
 	else:
 		var status := "PAUSED" if paused else "%sx" % SPEEDS[speed_i]

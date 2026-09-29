@@ -63,6 +63,13 @@ def _base(obs):
     return a, np.abs(d), toward, off_stage, edge_ahead < 1.5
 
 
+def _no_charge(obs, a):
+    """Let go of heavy once an attack is out: holding it would charge a smash."""
+    attacking = obs[:, ME + STATE + ST_ATTACK] > 0
+    a[attacking & (a[:, 2] == HEAVY), 2] = NONE
+    return a
+
+
 def jabber(obs):
     """Walks toward the opponent and jabs when close. If they stand on a
     platform above, jumps up to them and uses light (an aerial) there."""
@@ -98,7 +105,7 @@ def spacer(obs):
     a[cornered, 0] = toward[cornered]
     a[cornered, 2] = LIGHT
     a[too_far & ~at_edge, 0] = toward[too_far & ~at_edge]
-    return a
+    return _no_charge(obs, a)
 
 
 def fighter(obs):
@@ -231,7 +238,7 @@ def fighter(obs):
     do(ledge & (die >= 0.4) & (die < 0.6), 0, 0, JUMP)           # ledge jump
     do(ledge & (die >= 0.6) & (die < 0.8), 0, 0, DODGE)          # ledge roll
     do(ledge & (die >= 0.8), 0, 0, LIGHT)                        # ledge attack
-    return a.astype(np.int8)
+    return _no_charge(obs, a.astype(np.int8))
 
 
 BOTS = {"dummy": dummy, "random": random, "jabber": jabber, "spacer": spacer, "fighter": fighter}

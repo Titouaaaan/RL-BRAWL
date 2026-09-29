@@ -112,8 +112,16 @@ static bool is_smash(int m) {
     return m == MOVE_DOWN_HEAVY || m == MOVE_HEAVY || m == MOVE_UP_HEAVY;
 }
 
+// The power of the fighter's current move: stale-move weakening times the
+// smash charge bonus.
+static float move_power(const Fighter& f, const GameConfig& cfg) {
+    float charge = 1.0f + cfg.charge_bonus * float(f.charge) / float(std::max(cfg.charge_max, 1));
+    return stale_power(f, f.move, cfg) * charge;
+}
+
 static void start_attack(Fighter& f, MoveId m) {
     f.tumble = false;
+    f.charge = 0;
     f.move = m;
     f.move_hit = false;
     f.move_evaded = false;
@@ -257,9 +265,20 @@ static void land(Fighter& f, int surf, const Input& in, const GameConfig& cfg) {
 // ---------------------------------------------------------------------------
 
 static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg) {
-    const Input in = sanitize(raw_in);
-    const bool jump_pressed = (in.button == BTN_JUMP && f.prev_button != BTN_JUMP);
-    const bool attacking = (in.button == BTN_LIGHT || in.button == BTN_HEAVY);
+    Input in = sanitize(raw_in);
+    const uint8_t held_button = in.button;  // what the controller really holds (the buffer may replace `in`)
+    const bool fresh = in.button != BTN_NONE && in.button != f.prev_button;
+    bool jump_pressed = (in.button == BTN_JUMP && f.prev_button != BTN_JUMP);
+    bool attacking = (in.button == BTN_LIGHT || in.button == BTN_HEAVY);
+    if (fresh) {  // remember it for the input buffer
+        f.buf_button = in.button;
+        f.buf_sx = in.stick_x;
+        f.buf_sy = in.stick_y;
+        f.buf_age = 0;
+    } else if (f.buf_age < 255) {
+        f.buf_age += 1;
+    }
+    bool charging = false;
     if (in.button == BTN_DODGE && f.prev_button != BTN_DODGE) {
         f.dodge_prev_gap = f.dodge_ago;
         f.dodge_ago = 0;
@@ -294,7 +313,19 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
         }
         break;
     }
-    case ST_ATTACK:
+    case ST_ATTACK: {
+        // Smash charge: holding heavy freezes a smash attack charge_lead
+        // frames before its first hitbox, for up to charge_max frames.
+        const MoveDef& md = cfg.moves[f.move];
+        if (is_smash(f.move) && held_button == BTN_HEAVY && f.charge < cfg.charge_max && !md.hitboxes.empty()) {
+            int first = md.hitboxes[0].start;
+            for (const HitboxDef& hb : md.hitboxes) first = std::min(first, hb.start);
+            if (f.state_frame == std::max(1, first - cfg.charge_lead)) {
+                f.charge += 1;
+                charging = true;
+                break;
+            }
+        }
         // Jab combo: keep pressing (or holding) light to go jab 1 -> 2 -> 3.
         if (f.move == MOVE_JAB && f.state_frame >= 5 && in.button == BTN_LIGHT) {
             start_attack(f, MOVE_JAB2);
@@ -306,6 +337,7 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
             set_state(f, f.grounded ? ST_IDLE : ST_AIRBORNE);
         }
         break;
+    }
     case ST_LANDING:
         if (f.state_frame >= f.landing_lag) set_state(f, ST_IDLE);
         break;
@@ -369,8 +401,10 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
         }
         break;
     case ST_HOLDING:
-        // Throw in the direction pressed (after a few frames). If you hold on
-        // too long, the opponent breaks free (see step()).
+        // Throw in the direction pressed (after a few frames), or pummel with
+        // light (step() applies it). If you hold on too long, the opponent
+        // breaks free (see step()).
+        f.pummel = (f.state_frame >= 4 && fresh && in.button == BTN_LIGHT && in.stick_x == 0 && in.stick_y == 0);
         if (f.state_frame >= 4 && (in.stick_x != 0 || in.stick_y != 0)) {
             MoveId t = MOVE_THROW_FORWARD;
             if (in.stick_y > 0) t = MOVE_THROW_UP;
@@ -381,6 +415,20 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
         break;
     default:
         break;
+    }
+
+    // Input buffer: if the fighter is free to act now and nothing new was
+    // pressed this frame, a press from the last input_buffer frames happens
+    // now (with the stick direction it was pressed with).
+    if (actionable(f)) {
+        if (!fresh && f.buf_age <= cfg.input_buffer) {
+            in.button = f.buf_button;
+            in.stick_x = f.buf_sx;
+            in.stick_y = f.buf_sy;
+            jump_pressed = in.button == BTN_JUMP;
+            attacking = in.button == BTN_LIGHT || in.button == BTN_HEAVY;
+        }
+        f.buf_age = 255;  // used up (or used directly this frame)
     }
 
     // 2. Read the controller, if the fighter is free to act (or shielding,
@@ -597,8 +645,8 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
     }
 
     if (f.invuln > 0) f.invuln -= 1;
-    f.prev_button = in.button;
-    f.state_frame += 1;
+    f.prev_button = held_button;
+    if (!charging) f.state_frame += 1;
 }
 
 // ---------------------------------------------------------------------------
@@ -824,7 +872,7 @@ static float clank_damage(const Fighter& f, const GameConfig& cfg) {
     float d = 0;
     for (const HitboxDef& hb : cfg.moves[f.move].hitboxes)
         if (f.state_frame >= hb.start && f.state_frame <= hb.end) d = std::max(d, hb.damage);
-    return d * stale_power(f, f.move, cfg);
+    return d * move_power(f, cfg);
 }
 
 // Clanks: when two grounded attacks' active hitboxes touch, the weaker one
@@ -986,6 +1034,20 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
                 continue;
             }
         }
+        if (h.state == ST_HOLDING && h.pummel) {
+            // Pummel: a little damage and a short freeze; costs hold time,
+            // and the holder waits again before throwing.
+            float d = cfg.pummel_damage;
+            v.percent += d;
+            ev.hit[p] = true;
+            ev.damage[p] = d;
+            h.grab_timer -= cfg.pummel_hold_cost;
+            uint8_t lag = static_cast<uint8_t>(hitlag_frames(d, cfg));
+            h.hitlag = std::max(h.hitlag, lag);
+            v.hitlag = std::max(v.hitlag, lag);
+            h.state_frame = 0;
+            h.pummel = 0;
+        }
         v.x = h.x + h.facing * cfg.grab_hold_distance;
         v.y = h.y;
         v.grounded = h.grounded;
@@ -1012,7 +1074,7 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
         if (s.f[p].hitlag > 0) continue;
         hit[p] = find_hit(s.f[p], s.f[1 - p], cfg);
         hit[p].move = s.f[p].move;
-        hit[p].power = stale_power(s.f[p], s.f[p].move, cfg);
+        hit[p].power = move_power(s.f[p], cfg);
     }
     // Attacks beat grabs: a grabber who gets hit this frame doesn't get the
     // grab; two grabs cancel. Decide both before changing anything, so the
@@ -1154,7 +1216,7 @@ int active_hitboxes(const GameState& s, const GameConfig& cfg, ActiveHitbox out[
     for (int p = 0; p < 2; ++p) {
         const Fighter& f = s.f[p];
         if (f.state != ST_ATTACK || cfg.moves[f.move].is_throw) continue;
-        float power = stale_power(f, f.move, cfg);
+        float power = move_power(f, cfg);
         for (const HitboxDef& hb : cfg.moves[f.move].hitboxes) {
             if (f.state_frame < hb.start || f.state_frame > hb.end || n >= max) continue;
             out[n++] = ActiveHitbox{p, f.x + f.facing * hb.x, f.y + hb.y, hb.end - f.state_frame, f.move_hit, power, &hb};
@@ -1229,6 +1291,12 @@ uint64_t hash_state(const GameState& s) {
         mix(h, &f.combo, sizeof f.combo);
         mix(h, &f.combo_timer, sizeof f.combo_timer);
         mix(h, &f.since_defense, sizeof f.since_defense);
+        mix(h, &f.pummel, sizeof f.pummel);
+        mix(h, &f.charge, sizeof f.charge);
+        mix(h, &f.buf_button, sizeof f.buf_button);
+        mix(h, &f.buf_sx, sizeof f.buf_sx);
+        mix(h, &f.buf_sy, sizeof f.buf_sy);
+        mix(h, &f.buf_age, sizeof f.buf_age);
         mix(h, &f.move_evaded, sizeof f.move_evaded);
         mix(h, &f.prev_button, sizeof f.prev_button);
     }

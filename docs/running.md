@@ -39,6 +39,7 @@ To remap, edit the `PAD` table near the top of `godot/main.gd`.
 
 ### Moving
 - Speeds and jump heights are Mario's from Smash Ultimate, scaled so 1 unit = 5 Smash units; gravity and fall speed are 20% stronger than his for a less floaty feel. The stage is Battlefield made 10% wider (35 units, ledges at the ends, platforms at Battlefield's heights).
+- **Input buffer:** a button pressed up to 9 frames (0.15 s) before your fighter can act again (landing lag, the end of an attack) still comes out on the first free frame, as in Smash Ultimate.
 - **Several buttons at once:** the game takes one button per frame, and the one you pressed most recently wins. So you can keep holding jump for a full hop and press light mid-jump for an air attack.
 - Moving starts with a fast **dash** (12 frames), then a **run**. Speed changes smoothly rather than instantly. Turning around during the dash dashes the other way (a "dash dance").
 - **Jump:** hold jump for a full jump; **tap** it (let go within 3 frames), or hold **down + jump**, for a lower **short hop**. One double jump in the air.
@@ -57,6 +58,8 @@ To remap, edit the `PAD` table near the top of `godot/main.gd`.
   | ground, heavy | down-heavy: hits both sides | heavy (forward smash) | heavy | up-heavy (up smash): KOs upward |
   | air, light | down-air | air (neutral air) | air | up-air: juggles |
   | air, heavy | heavy down-air: **spike** (sends downward) | heavy air | heavy air | heavy up-air: launches high |
+
+  **Hold heavy** during a smash attack (heavy on the ground) to charge it: it pauses just before hitting, for up to 1 second, and hits up to 40% harder (the fighter glows). **Light while holding someone = pummel** (1.3%, uses up some of the hold).
 
   Plus: **light while running = dash attack** (fast, far, very punishable), **light while shielding = grab**, and the get-up attack and ledge attack.
 - **Knockback** follows Smash's formula: it grows with the victim's % *and* the hit's damage, and the heavy (forward smash) KOs Mario from the middle of the stage around 100%, up smash around 140%. Weak hits on a grounded opponent send them along the ground; stronger ones launch at up to ~38 degrees (the "Sakurai angle"). Knockback above 80 makes you **tumble** (spinning): you can act once the hitstun ends, but if you hit the ground still tumbling you must tech or be knocked down.

@@ -222,6 +222,13 @@ struct Fighter {
     // the victim's button presses (mashing) shorten it.
     int16_t grab_timer = 0;
     uint8_t mash = 0;            // struggle presses this frame (read by step())
+    uint8_t pummel = 0;          // holder pressed light this frame: pummel (read by step())
+    uint8_t charge = 0;          // frames a smash attack has been charged (held heavy)
+    // Input buffer: the last fresh press, and how many frames ago it was
+    // (255 = none). See input_buffer in GameConfig.
+    uint8_t buf_button = 0;
+    int8_t buf_sx = 0, buf_sy = 0;
+    uint8_t buf_age = 255;
     bool parry_ok = false;       // ST_SHIELDDROP: the shield was up long enough to parry
     // The last 9 moves that connected, newest first (MOVE_NONE = empty).
     // Repeating a move that's in here weakens it (stale-move negation).
@@ -278,6 +285,20 @@ struct GameConfig {
     int jumpsquat_frames = 3;       // universal in Ultimate
     int landing_lag = 2;    // after a normal landing (aerials use their own)
     int air_whiff_limit = 2;  // missed air attacks allowed per trip through the air
+    // Input buffer (Ultimate: 9 frames): a button pressed this many frames or
+    // less before the fighter can act again still comes out on the first free
+    // frame, so presses during landing lag or the end of a move aren't lost.
+    int input_buffer = 9;
+    // Smash attack charge (Ultimate): hold heavy and the smash pauses
+    // charge_lead frames before its first hitbox, for up to charge_max frames;
+    // a full charge hits charge_bonus (40%) harder.
+    int charge_max = 60;
+    int charge_lead = 3;
+    float charge_bonus = 0.4f;
+    // Pummel (light while holding someone): a little damage, and it uses up
+    // pummel_hold_cost frames of the hold, so pummels trade hold time for %.
+    float pummel_damage = 1.3f;   // Mario
+    int pummel_hold_cost = 12;
     // Dodges (Mario). "Intangible" (i-frames) = hitboxes pass through you.
     // Frames count from 1 like move frames: intangible on frames start..end.
     int spotdodge_frames = 25, spotdodge_iframe_start = 3, spotdodge_iframe_end = 17;
@@ -372,7 +393,7 @@ struct GameConfig {
     float respawn_y = 14.0f;
     int respawn_invuln = 120;
     uint8_t stocks = 3;
-    int time_limit_frames = 3 * 60 * 60;  // 3 minutes
+    int time_limit_frames = 7 * 60 * 60;  // 7 minutes (competitive Smash: 3 stocks, 7 min)
     // Filled in by load_moves(). Indexed by MoveId.
     MoveDef moves[NUM_MOVES];
 };

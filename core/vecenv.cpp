@@ -64,6 +64,7 @@ static void write_fighter(const Fighter& f, const GameConfig& cfg, float m, floa
     // How much of the counter window is left (1 = just defended, 0 = none):
     // the counter bonus depends on it, so the agent must be able to see it.
     *o++ = (f.since_defense <= cfg.counter_window) ? 1.0f - float(f.since_defense) / cfg.counter_window : 0.0f;
+    *o++ = float(f.charge) / std::max(cfg.charge_max, 1);  // smash charge (1 = full: 40% stronger)
     // Distances to the blast zones and stage edges. They're linear in x/y,
     // but handing them over directly makes "near the edge" easy to learn.
     *o++ = (cfg.blast_x - x) / cfg.blast_x;

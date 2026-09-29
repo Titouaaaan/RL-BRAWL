@@ -126,6 +126,7 @@ public:
         d["combo"] = f.combo;
         d["ledge_side"] = f.ledge_side;
         d["tumble"] = f.tumble;
+        d["charge"] = f.charge;
         return d;
     }
 
@@ -167,6 +168,7 @@ public:
         d["lying_h"] = cfg.lying_h;
         d["stage_depth"] = cfg.stage_depth;
         d["ledge_hang_max"] = cfg.ledge_hang_max;
+        d["charge_max"] = cfg.charge_max;
         Array surfaces;  // [x0, x1, y] per floor; the first is the main stage
         for (const Surface& s : cfg.surfaces) {
             Array one;

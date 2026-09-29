@@ -12,18 +12,18 @@
 #include "sim.h"
 
 // Observation layout (all float32, roughly scaled to [-1, 1]):
-//   [0, 59)    me:  fighter features (see write_fighter in vecenv.cpp)
-//   [59, 118)  opponent: same 59 features
-//   [118, 121) relative dx, dy, and time left
-//   [121, 169) 4 hitbox slots x 12 features (the opponent's hitboxes first)
+//   [0, 60)    me:  fighter features (see write_fighter in vecenv.cpp)
+//   [60, 120)  opponent: same 60 features
+//   [120, 123) relative dx, dy, and time left
+//   [123, 171) 4 hitbox slots x 12 features (the opponent's hitboxes first)
 // "Me" is always the observing player, and x is mirrored for player 1, so
 // both players see themselves start on the left. That's the egocentric
 // canonicalization from the design doc. Actions are mirrored the same way:
 // player 1's stick_x is negated before it reaches the game.
-const int OBS_FIGHTER = 35 + NUM_STATES;  // 59: 35 features + the state one-hot
+const int OBS_FIGHTER = 36 + NUM_STATES;  // 60: 36 features + the state one-hot
 const int OBS_HITBOXES = 4;
 const int OBS_HITBOX = 12;
-const int OBS_DIM = 2 * OBS_FIGHTER + 3 + OBS_HITBOXES * OBS_HITBOX;  // 169
+const int OBS_DIM = 2 * OBS_FIGHTER + 3 + OBS_HITBOXES * OBS_HITBOX;  // 171
 
 struct EnvParams {
     int frame_skip = 4;          // sim frames per decision; the action repeats for each

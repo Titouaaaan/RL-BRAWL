@@ -115,6 +115,6 @@ def test_counter_window_is_observed():
         act(env, p1=(0, 0, 4), p2=(0, 0, 2) if t % 2 == 0 else (0, 0, 0))
         if f(env, 0)["since_defense"] == 0:
             break
-    # The feature sits just before the 6 blast-zone / edge distances at the end of the fighter block.
-    idx = fightcore.OBS_FIGHTER - 7
+    # The feature sits before the smash charge and the 6 blast-zone / edge distances at the end of the fighter block.
+    idx = fightcore.OBS_FIGHTER - 8
     assert obs_before[idx] == 0.0 and env.obs[0, 0, idx] == 1.0

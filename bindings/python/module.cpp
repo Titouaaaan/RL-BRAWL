@@ -144,6 +144,7 @@ NB_MODULE(fightcore, m) {
                  d["landing_lag"] = (int)f.landing_lag;
                  d["combo"] = (int)f.combo;
                  d["since_defense"] = (int)f.since_defense;
+                 d["charge"] = (int)f.charge;
                  d["tumble"] = f.tumble;
                  d["ledge_side"] = (int)f.ledge_side;
                  d["ledge_grabs"] = (int)f.ledge_grabs;
