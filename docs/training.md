@@ -89,7 +89,17 @@ terms give a denser learning signal early on, then fade out:
   backing off costs. Because it's a difference of potentials, it provably
   doesn't change which policy is optimal (Ng, Harada & Russell, 1999), so
   it can't be farmed by standing next to the opponent forever.
-- **Combo bonus:** the damage reward of the k-th hit of a combo is
+- **Streak bonus (replaces the combo bonus below, which is now off):** the
+  damage reward of the k-th hit of a *hit streak* (hits landed since you last
+  got hit; dodges, blocks and pauses don't end it) is multiplied by
+  1.1^(k-1), capped at 1.5× (`--streak-growth`, `--streak-cap`), zero-sum and
+  annealed. It rewards hitting without getting hit, not just true combos. A
+  combo finder (`python tools/combos.py`, frame-perfect scripted follow-ups
+  against a victim who doesn't DI) showed the game has plenty of true combos
+  (up-tilt, up/down throw, down-tilt, down-air at 0-80%), but the agent favors
+  moves that don't lead anywhere, so true combos stayed at ~0.1/min and the
+  combo bonus never paid out. The agent observes its streak.
+- **Combo bonus (off by default now):** the damage reward of the k-th hit of a combo is
   multiplied by 1.15^(k-1), capped at 2× (`--combo-growth`, `--combo-cap`):
   hit 2 counts 1.15×, hit 5 about 1.75×, hit 6+ double. Only *true* combos
   count, like Smash's combo counter: a hit continues your combo only if the
@@ -140,6 +150,7 @@ terms give a denser learning signal early on, then fade out:
 | `selfplay/generation` | climbing steadily | flat for long: the learner can't beat its frozen copy |
 | `states/*` | time spread over many states (RUN, AIRBORNE, SHIELD, ...) | IDLE very high: passivity |
 | `mech/*_per_min` | hits, blocks, grabs, techs, short hops all > 0 | a mechanic at 0: unused (worth checking why) |
+| `mech/streak_hit_share`, `mech/max_streak` | rising: hitting without getting hit | near 100% with one move dominating `moves/*`: a safe poke is being farmed |
 | `mech/combo_hit_share`, `mech/max_combo` | some combos (share 10-40%) | near 100% with max_combo climbing: a loop is being farmed |
 | `mech/di_rate`, `mech/tech_rate`, `mech/short_hop_share` | rising: the agent learns defense and movement tech | |
 | `mech/counter_hit_share`, `mech/whiff_punish_share`, `mech/evade_conversion` | rising: defenses turn into punishes | `evades_per_min` high with conversion near 0: dodging for its own sake |

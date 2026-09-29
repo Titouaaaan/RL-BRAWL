@@ -60,17 +60,18 @@ NB_MODULE(fightcore, m) {
         .def("__init__",
              [](VecEnv* self, int num_envs, const std::string& moves_dir, int frame_skip, int reaction_delay,
                 float damage_reward, float timeout_reward, float combo_growth, float combo_cap,
-                float counter_reward) {
+                float counter_reward, float streak_growth, float streak_cap) {
                  GameConfig cfg;
                  std::string err = load_moves(cfg, moves_dir);
                  if (!err.empty()) throw std::invalid_argument(err);
                  new (self) VecEnv(num_envs, cfg,
                                    EnvParams{frame_skip, reaction_delay, damage_reward, timeout_reward, combo_growth, combo_cap,
-                                             counter_reward});
+                                             counter_reward, streak_growth, streak_cap});
              },
              nb::arg("num_envs"), nb::arg("moves_dir"), nb::arg("frame_skip") = 4, nb::arg("reaction_delay") = 0,
              nb::arg("damage_reward") = 0.01f, nb::arg("timeout_reward") = 0.0f, nb::arg("combo_growth") = 1.0f,
-             nb::arg("combo_cap") = 1.0f, nb::arg("counter_reward") = 0.0f)
+             nb::arg("combo_cap") = 1.0f, nb::arg("counter_reward") = 0.0f, nb::arg("streak_growth") = 1.0f,
+             nb::arg("streak_cap") = 1.0f)
 
         .def("step",
              [](VecEnv& e, ActionArray actions) {
@@ -145,6 +146,7 @@ NB_MODULE(fightcore, m) {
                  d["combo"] = (int)f.combo;
                  d["since_defense"] = (int)f.since_defense;
                  d["charge"] = (int)f.charge;
+                 d["streak"] = (int)f.streak;
                  d["tumble"] = f.tumble;
                  d["ledge_side"] = (int)f.ledge_side;
                  d["ledge_grabs"] = (int)f.ledge_grabs;

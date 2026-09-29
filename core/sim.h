@@ -244,6 +244,9 @@ struct Fighter {
     // hitbox, parried, or blocked with the shield); 65535 = no defense pending.
     // A hit within cfg.counter_window of it is a counterattack.
     uint16_t since_defense = 65535;
+    // Hit streak: hits landed since this fighter last took a hit (dodges,
+    // blocks and pauses don't end it; getting hit does).
+    uint8_t streak = 0;
     // Last frame's button. Holding jump must jump only once, so jumps react to
     // the frame the button goes from released to pressed.
     uint8_t prev_button = BTN_NONE;
@@ -407,6 +410,7 @@ struct StepEvents {
     int8_t move_started[2] = {MOVE_NONE, MOVE_NONE};  // move player p started this frame
     int8_t hit_move[2] = {MOVE_NONE, MOVE_NONE};      // move player p hit with this frame
     uint8_t combo[2] = {0, 0};       // if p hit: the length of p's combo, this hit included
+    uint8_t streak[2] = {0, 0};      // if p hit: p's hit streak, this hit included
     bool shield_block[2] = {false, false};  // p's shield blocked a hit
     bool shield_break[2] = {false, false};  // p's shield broke
     bool grab[2] = {false, false};          // p grabbed the opponent

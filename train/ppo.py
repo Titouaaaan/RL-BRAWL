@@ -91,10 +91,16 @@ class Args:
     """observe the game this many frames late (6 = 0.1 s, like a quick human reaction)"""
     timeout_reward: float = 0.3
     """at the 7-minute limit: + for the player ahead (stocks, then damage), - for the other"""
-    combo_growth: float = 1.15
-    """the k-th hit of a combo gets its damage reward times combo_growth^(k-1)..."""
-    combo_cap: float = 2.0
-    """...up to this multiplier (so hit 6+ counts double). 1.0 turns the combo bonus off"""
+    combo_growth: float = 1.0
+    """the k-th hit of a true combo gets its damage reward times combo_growth^(k-1)... (off: at
+    ~0.1 true combos/min it did nothing; the streak bonus replaces it)"""
+    combo_cap: float = 1.0
+    """...up to this multiplier. 1.0 turns the combo bonus off"""
+    streak_growth: float = 1.1
+    """the k-th hit of a hit streak (hits since you were last hit; dodges and pauses don't break
+    it) gets its damage reward times streak_growth^(k-1)..."""
+    streak_cap: float = 1.5
+    """...up to this multiplier (hit 6+ of a streak counts 1.5x). Zero-sum, annealed"""
     counter_reward: float = 0.1
     """bonus for a counterattack or whiff punish (half a 10% hit's damage reward at the start;
     annealed with it). 0 turns it off"""
@@ -280,7 +286,7 @@ if __name__ == "__main__":
     # OURS: env setup. envs.obs etc. are NumPy views that step() updates in place.
     envs = fightcore.VecEnv(args.num_envs, args.moves_dir, args.frame_skip, args.reaction_delay,
                             args.damage_reward, args.timeout_reward, args.combo_growth, args.combo_cap,
-                            args.counter_reward)
+                            args.counter_reward, args.streak_growth, args.streak_cap)
     obs_shape, n_actions = (fightcore.OBS_DIM,), len(ACTIONS)
 
     agent = Agent(fightcore.OBS_DIM, n_actions, args.hidden).to(device)
@@ -534,8 +540,8 @@ if __name__ == "__main__":
         envs.stats[:] = 0
         minutes = max(st["frames"], 1) / 3600.0
         for name, value in st.items():
-            if name == "max_combo":
-                writer.add_scalar("mech/max_combo", value, global_step)
+            if name in ("max_combo", "max_streak"):
+                writer.add_scalar(f"mech/{name}", value, global_step)
             elif name.startswith("frames_"):
                 writer.add_scalar(f"mech/share_{name[7:]}", value / max(st["frames"], 1), global_step)
             elif name != "frames":
@@ -547,6 +553,7 @@ if __name__ == "__main__":
         writer.add_scalar("mech/short_hop_share", ratio(st["short_hops"], st["short_hops"] + st["full_jumps"]), global_step)
         # Share of hits that were counters / whiff punishes, and how often an evade got punished back.
         writer.add_scalar("mech/counter_hit_share", ratio(st["counters"], st["hits"]), global_step)
+        writer.add_scalar("mech/streak_hit_share", ratio(st["streak_hits"], st["hits"]), global_step)
         writer.add_scalar("mech/whiff_punish_share", ratio(st["whiff_punishes"], st["hits"]), global_step)
         writer.add_scalar("mech/evade_conversion", ratio(st["counters"], st["evades"] + st["parries"] + st["blocks"]), global_step)
 
@@ -573,7 +580,8 @@ if __name__ == "__main__":
                   f"DI {ratio(st['di_used'], st['hits_taken']):.0%} of hits taken")
             print(f"  defense per min: evades {st['evades'] / minutes:.1f}  parries {st['parries'] / minutes:.1f}  "
                   f"counters {st['counters'] / minutes:.1f}  whiff punishes {st['whiff_punishes'] / minutes:.1f}  "
-                  f"punished {st['counters_taken'] / minutes:.1f}")
+                  f"punished {st['counters_taken'] / minutes:.1f}  streak hits {ratio(st['streak_hits'], st['hits']):.0%} "
+                  f"(max {st['max_streak']:.0f})")
         chosen = ACTIONS[b_actions.long().cpu().numpy()]
         buttons = np.bincount(chosen[:, 2], minlength=5) / args.batch_size
         for name, frac_used in zip(("none", "jump", "light", "heavy", "dodge"), buttons):

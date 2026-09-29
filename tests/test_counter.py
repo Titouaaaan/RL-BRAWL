@@ -2,6 +2,7 @@
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 import fightcore
 
@@ -115,6 +116,26 @@ def test_counter_window_is_observed():
         act(env, p1=(0, 0, 4), p2=(0, 0, 2) if t % 2 == 0 else (0, 0, 0))
         if f(env, 0)["since_defense"] == 0:
             break
-    # The feature sits before the smash charge and the 6 blast-zone / edge distances at the end of the fighter block.
-    idx = fightcore.OBS_FIGHTER - 8
+    # The feature sits before the smash charge, the streak and the 6 blast-zone / edge distances at the end of the fighter block.
+    idx = fightcore.OBS_FIGHTER - 9
     assert obs_before[idx] == 0.0 and env.obs[0, 0, idx] == 1.0
+
+
+def test_hit_streak_grows_the_damage_reward_until_you_get_hit():
+    env = fightcore.VecEnv(1, MOVES, frame_skip=1, damage_reward=0.01, streak_growth=2.0, streak_cap=4.0)
+    face_off(env)
+    rewards = []
+    for _ in range(2):  # two forward tilts with a pause between: not a true combo, but a streak
+        for t in range(30):
+            act(env, p1=(1, 0, 2) if t == 0 else (0, 0, 0))
+            if env.reward[0, 0] > 0:
+                rewards.append((env.reward[0, 0], f(env, 1)["percent"]))
+        for _ in range(60):
+            act(env)
+        face_off(env)
+    assert f(env, 0)["streak"] == 2 and f(env, 0)["combo"] == 0
+    (r1, p1), (r2, p2) = rewards
+    assert r1 == pytest.approx(0.01 * p1) and r2 == pytest.approx(0.01 * (p2 - p1) * 2)  # 2nd hit doubled
+    for t in range(30):  # now P2 hits P1: P1's streak is over
+        act(env, p2=(1, 0, 2) if t == 0 else (0, 0, 0))
+    assert f(env, 0)["streak"] == 0 and f(env, 1)["streak"] == 1

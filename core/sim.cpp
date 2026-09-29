@@ -1122,6 +1122,20 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
         }
     }
 
+    // Hit streaks: a landed hit extends yours, getting hit ends it (in a
+    // trade both end, since both got hit).
+    for (int p = 0; p < 2; ++p) {
+        Fighter& f = s.f[p];
+        bool lands = hit[p].kind == HIT_ATTACK || hit[p].kind == HIT_THROW;
+        bool got_hit = hit[1 - p].kind == HIT_ATTACK || hit[1 - p].kind == HIT_THROW;
+        if (got_hit) {
+            f.streak = 0;
+        } else if (lands) {
+            f.streak = static_cast<uint8_t>(std::min(f.streak + 1, 255));
+            ev.streak[p] = f.streak;
+        }
+    }
+
     // Counterattacks and punishes, for both players at once. A successful
     // defense opens a counter_window; a hit inside it is a counter (and uses
     // it up). Getting hit closes it.
@@ -1291,6 +1305,7 @@ uint64_t hash_state(const GameState& s) {
         mix(h, &f.combo, sizeof f.combo);
         mix(h, &f.combo_timer, sizeof f.combo_timer);
         mix(h, &f.since_defense, sizeof f.since_defense);
+        mix(h, &f.streak, sizeof f.streak);
         mix(h, &f.pummel, sizeof f.pummel);
         mix(h, &f.charge, sizeof f.charge);
         mix(h, &f.buf_button, sizeof f.buf_button);

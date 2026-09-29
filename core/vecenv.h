@@ -12,18 +12,18 @@
 #include "sim.h"
 
 // Observation layout (all float32, roughly scaled to [-1, 1]):
-//   [0, 60)    me:  fighter features (see write_fighter in vecenv.cpp)
-//   [60, 120)  opponent: same 60 features
-//   [120, 123) relative dx, dy, and time left
-//   [123, 171) 4 hitbox slots x 12 features (the opponent's hitboxes first)
+//   [0, 61)    me:  fighter features (see write_fighter in vecenv.cpp)
+//   [61, 122)  opponent: same 61 features
+//   [122, 125) relative dx, dy, and time left
+//   [125, 173) 4 hitbox slots x 12 features (the opponent's hitboxes first)
 // "Me" is always the observing player, and x is mirrored for player 1, so
 // both players see themselves start on the left. That's the egocentric
 // canonicalization from the design doc. Actions are mirrored the same way:
 // player 1's stick_x is negated before it reaches the game.
-const int OBS_FIGHTER = 36 + NUM_STATES;  // 60: 36 features + the state one-hot
+const int OBS_FIGHTER = 37 + NUM_STATES;  // 61: 37 features + the state one-hot
 const int OBS_HITBOXES = 4;
 const int OBS_HITBOX = 12;
-const int OBS_DIM = 2 * OBS_FIGHTER + 3 + OBS_HITBOXES * OBS_HITBOX;  // 171
+const int OBS_DIM = 2 * OBS_FIGHTER + 3 + OBS_HITBOXES * OBS_HITBOX;  // 173
 
 struct EnvParams {
     int frame_skip = 4;          // sim frames per decision; the action repeats for each
@@ -39,6 +39,11 @@ struct EnvParams {
     // dodge / parry / shield block) or a whiff punish earns this on top of the
     // damage reward (once, even if both). Zero-sum. 0 = off.
     float counter_reward = 0.0f;
+    // Streak bonus: the damage reward of the k-th hit of a hit streak (hits
+    // since you last got hit) is multiplied by min(streak_growth^(k-1),
+    // streak_cap). 1.0 = off. Zero-sum. Multiplies with the combo bonus.
+    float streak_growth = 1.0f;
+    float streak_cap = 1.0f;
 };
 
 // Statistics about player 0 (the learner in training), summed over all games
@@ -52,6 +57,8 @@ enum Stat {
     STAT_GRABS, STAT_GOT_GRABBED, STAT_TECHS, STAT_KNOCKDOWNS,
     STAT_FULL_JUMPS, STAT_SHORT_HOPS, STAT_DI_USED,
     STAT_PARRIES, STAT_GOT_PARRIED, STAT_CLANKS, STAT_LEDGE_GRABS, STAT_ESCAPES,
+    STAT_STREAK_HITS,     // player 0 hits that extended a streak (2nd hit or later without being hit)
+    STAT_MAX_STREAK,      // longest hit streak (a max, not a sum)
     STAT_EVADES,          // attacks player 0 dodged through (i-frames)
     STAT_COUNTERS,        // player 0 hits within counter_window of a successful defense
     STAT_WHIFF_PUNISHES,  // player 0 hits on an opponent recovering from a missed move

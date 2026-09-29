@@ -12,7 +12,7 @@ const char* const STAT_NAMES[NUM_STATS] = {
     "grabs", "got_grabbed", "techs", "knockdowns",
     "full_jumps", "short_hops", "di_used",
     "parries", "got_parried", "clanks", "ledge_grabs", "escapes",
-    "evades", "counters", "whiff_punishes", "counters_taken",
+    "streak_hits", "max_streak", "evades", "counters", "whiff_punishes", "counters_taken",
     "frames_airborne", "frames_on_platform", "frames_close",
 };
 
@@ -65,6 +65,7 @@ static void write_fighter(const Fighter& f, const GameConfig& cfg, float m, floa
     // the counter bonus depends on it, so the agent must be able to see it.
     *o++ = (f.since_defense <= cfg.counter_window) ? 1.0f - float(f.since_defense) / cfg.counter_window : 0.0f;
     *o++ = float(f.charge) / std::max(cfg.charge_max, 1);  // smash charge (1 = full: 40% stronger)
+    *o++ = std::min(f.streak, uint8_t(10)) / 10.0f;  // hit streak (the streak bonus grows with it)
     // Distances to the blast zones and stage edges. They're linear in x/y,
     // but handing them over directly makes "near the edge" easy to learn.
     *o++ = (cfg.blast_x - x) / cfg.blast_x;
@@ -197,6 +198,8 @@ void VecEnv::record_stats(const GameState& g, const StepEvents& ev) {
     st[STAT_CLANKS] += ev.clank[0];
     st[STAT_LEDGE_GRABS] += ev.ledge_grab[0];
     st[STAT_ESCAPES] += ev.escaped[0];
+    st[STAT_STREAK_HITS] += (ev.streak[0] >= 2);
+    st[STAT_MAX_STREAK] = std::max(st[STAT_MAX_STREAK], double(ev.streak[0]));
     st[STAT_EVADES] += ev.evade[0];
     st[STAT_COUNTERS] += ev.counter[0];
     st[STAT_WHIFF_PUNISHES] += ev.whiff_punish[0];
@@ -228,7 +231,8 @@ void VecEnv::step(const int8_t* actions) {
                 if (ev.hit[p]) {
                     // Damage reward, grown for hits deep in a combo; zero-sum.
                     float mult = std::min(std::pow(params.combo_growth, float(ev.combo[p]) - 1.0f), params.combo_cap);
-                    float bonus = params.damage_reward * ev.damage[p] * std::max(mult, 1.0f);
+                    float streak = std::min(std::pow(params.streak_growth, float(ev.streak[p]) - 1.0f), params.streak_cap);
+                    float bonus = params.damage_reward * ev.damage[p] * std::max(mult, 1.0f) * std::max(streak, 1.0f);
                     // Counterattack / whiff-punish bonus, zero-sum.
                     if (ev.counter[p] || ev.whiff_punish[p]) bonus += params.counter_reward;
                     r[p] += bonus;

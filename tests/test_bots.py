@@ -49,4 +49,4 @@ def test_obs_indices_match_the_env():
     assert o[bots.ME + bots.GROUNDED] == 1 and o[bots.ME + bots.STATE + 0] == 1  # grounded, IDLE
     assert abs(o[bots.ME + bots.EDGE_LEFT] * bots.STAGE_HALF - (bots.STAGE_HALF - fightcore.SPAWN_X)) < 1e-4
     # The named features after the state one-hot (see write_fighter in core/vecenv.cpp).
-    assert bots.COUNTER == bots.F - 8 and bots.TUMBLE == bots.F - 11
+    assert bots.COUNTER == bots.F - 9 and bots.TUMBLE == bots.F - 12
