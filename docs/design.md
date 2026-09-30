@@ -165,7 +165,7 @@ BOOTLEG-SSM/
   train/            # ppo.py, bots.py, replay.py, record.py, serve.py (live bot)
   tools/            # bench.py, combos.py, sprites.py
   tests/            # pytest through the bindings
-  docs/             # running.md, training.md, design.md
+  docs/             # README (index), playing, setup, assets, engine, godot, python, training, design
   runs/, replays/   # training output and recorded games (not in git); runs/monitor_notes.md = lab notebook
 ```
 

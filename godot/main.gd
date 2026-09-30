@@ -618,7 +618,7 @@ func draw_hud(font: Font) -> void:
 		if replay_result == "verified":
 			draw_string(font, Vector2(16, 84), "Replay verified: final state hash matches the recording", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.5, 1, 0.5))
 		elif replay_result == "DESYNC":
-			draw_string(font, Vector2(16, 84), "DESYNC: final state differs from the recording (see docs/running.md)", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1, 0.3, 0.3))
+			draw_string(font, Vector2(16, 84), "DESYNC: final state differs from the recording (see docs/setup.md)", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1, 0.3, 0.3))
 
 	if load_error != "":
 		draw_string(font, Vector2(16, 80), "Move file error: " + load_error, HORIZONTAL_ALIGNMENT_LEFT, size.x - 32, 18, Color(1, 0.3, 0.3))

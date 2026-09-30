@@ -199,7 +199,7 @@ play.bat replay
 
 `python train/replay.py` records a random-vs-random game, handy for testing
 the viewer. Add `--p1 ID --p2 ID` to `play.bat replay` to pick the
-characters (`docs/running.md`).
+characters ([assets.md](assets.md)).
 
 To **play against** a trained agent yourself: `play.bat --vs` (the newest run)
 or `play.bat --vs runs\<run>\agent_00600.pt`. It runs `train/serve.py`

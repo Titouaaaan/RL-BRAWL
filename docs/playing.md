@@ -1,18 +1,23 @@
-# Running the game
+# Playing
 
-## TL;DR
+## Quick start
 
 Double-click **`play.bat`** in the repo root (or run `.\play.bat` in a terminal).
+It rebuilds the C++ (only what changed, usually a few seconds) and opens the
+game. The very first run takes about 30 seconds.
 
-It rebuilds the C++ (only what changed, usually a few seconds) and opens the game. The very first run takes about 30 seconds.
+| Command | What it does |
+|---|---|
+| `.\play.bat` | Play, two humans (keyboard and/or controllers) |
+| `.\play.bat --vs` | Fight the newest trained agent: you are P1 (see [Fighting a bot](#fighting-a-bot)) |
+| `.\play.bat --vs fighter` | Fight a scripted bot: `dummy`, `random`, `jabber`, `spacer`, `fighter` |
+| `.\play.bat replay` | Watch the newest recorded game (see [Watching replays](#watching-replays)) |
+| `.\play.bat replay path\to\game.json` | Watch a specific recording |
+| `.\play.bat edit` | Open the project in the Godot editor |
+| add `--p1 ID --p2 ID` | Choose the characters (ids in [assets.md](assets.md)) |
 
-`.\play.bat edit` opens the project in the Godot editor instead.
-
-`.\play.bat replay` plays back the newest recorded game (from training, see `docs/training.md`): Space pauses, the right arrow steps one frame while paused, up/down change speed, R restarts.
-
-`.\play.bat --vs` lets you fight the newest trained agent (you are P1; see [Fighting a bot](#fighting-a-bot)).
-
-Add `--p1 ID --p2 ID` to any of these to choose the characters (see [Characters](#characters)). The options can come in any order, e.g. `.\play.bat replay --p1 6 --p2 2` or `.\play.bat --vs fighter --p2 5`.
+The options can come in any order, e.g. `.\play.bat replay --p1 6 --p2 2` or
+`.\play.bat --vs fighter --p2 5`.
 
 ## Controls
 
@@ -89,7 +94,7 @@ To remap, edit the `PAD` table near the top of `godot/main.gd`.
 - Each player has **3 stocks**. Leave the faint blast-zone area and you lose a stock. You respawn above the stage, blinking and invulnerable for 2 seconds.
 - A game ends when someone loses their last stock, or after **7 minutes** (the timer at the top, as in competitive Smash). At the time limit the player with more stocks wins, then the one with less damage.
 
-**Reading the screen:** fighters are drawn as their character's sprite (see [Characters](#characters)), with the character's name above the damage. Hitboxes are circles with a red rim (a grab's rim is yellow), faded once the move has already hit. The sprite is tinted to show what's happening:
+**Reading the screen:** fighters are drawn as their character's sprite (see [assets.md](assets.md)), with the character's name above the damage. Hitboxes are circles with a red rim (a grab's rim is yellow), faded once the move has already hit. The sprite is tinted to show what's happening:
 
 | Look | Meaning |
 |---|---|
@@ -126,125 +131,26 @@ trained without one); you keep yours. Closing the game closes the bot. If it
 can't connect, the top line says why (for example the game and the Python
 module were built from different code: rebuild both).
 
-## Characters
+## Watching replays
 
-Each fighter can be drawn as any character (it's only the look: every
-character plays exactly the same). Pick them with `--p1 ID --p2 ID`, for
-playing or watching replays, in any order:
+`.\play.bat replay` plays the newest recording under `replays/`;
+`.\play.bat replay path\to\file.json` a specific one. To record a fresh game of
+the newest agent first: `python train/record.py latest --opponent self` (or
+`fighter`, `spacer`, `jabber`, `random`, `dummy`).
 
-```
-play.bat --p1 3 --p2 5
-play.bat replay --p1 4 --p2 1
-play.bat replay path\to\game.json --p2 5
-```
-
-Without them, P1 is character 1 and P2 is character 2.
-
-| ID | Character |
+| Key | Action |
 |---|---|
-| 1 | DinoSailor (blue) |
-| 2 | DinoSailorP2 (red) |
-| 3 | Car |
-| 4 | Justin |
-| 5 | OliverPip |
-| 6 | Titou (animated idle) |
+| Space | pause |
+| Right arrow (paused) | next frame (hold to scrub) |
+| Up / Down | faster / slower (1/4x to 8x) |
+| R | restart the replay |
+| Esc | quit |
 
-**Adding a character:** put the image (any size, PNG) in `assets/sprites/`,
-then run `python tools/sprites.py`. It trims the empty space, removes a plain
-white page background, scales the character to fit a 64x64 canvas (feet at the
-bottom), saves it as `assets/characters/<id>.png` and prints the new id. Ids
-never change: new images get the next number. Your originals are not modified.
-Draw characters facing **right** (or set `"faces": "left"` for that character
-in `assets/characters/characters.json`).
+At the end Godot checks that its re-simulation reached exactly the recorded
+final state: "Replay verified", or "DESYNC" (see [setup.md](setup.md#when-something-goes-wrong)).
+A replay stores the inputs, not the game code, so recordings made with an
+older version of the game desync; the previous version's replays play in the
+frozen copy `D:\BOOTLEG-SSM-v1` (run its `play.bat replay <full path>`).
 
-**Animations:** name a horizontal strip of square frames `<Character>_<animation>.png`
-(for example `Titou_idle.png`: 4 frames of 64x64 side by side, 256x64) and run
-`python tools/sprites.py`. Every frame gets the same crop and position, so
-nothing jitters (frames already drawn at 64x64 are kept exactly as drawn).
-The game picks the animation from what the fighter is doing:
-
-| Animation | Shown when |
-|---|---|
-| `idle` | standing (and during landing lag) |
-| `run` | dashing / running |
-| `jump`, `fall` | in the air, rising / falling (either one is used for both if only one exists) |
-| `hurt` | in hitstun |
-| `shield` | shielding |
-| `crouch` | crouching |
-| a move name (`jab`, `forward_tilt`, `heavy`, `up_air`, ...) | doing that attack; stretched over the whole move, so the last drawing ends with it |
-| `attack` | any attack without its own animation |
-
-Looping animations show each drawing for 8 game frames (7.5 drawings per
-second). Anything without an animation uses the static sprite.
-
-## Tuning moves
-
-Each move is a file in `data/moves/`, named as in the table above (`jab.json`, `up_tilt.json`, `heavy_down_air.json`, ...), plus `grab.json` and the four `throw_*.json`. Edit one, save, and press **R** in the game: no rebuild needed. If the file has a mistake, the error shows in red at the top of the game window.
-
-| Field | Meaning |
-|---|---|
-| `total_frames` | How long the move lasts, in frames (60 = 1 second). |
-| `landing_lag` | Aerial only: frames stuck if you land during the move. |
-| `autocancel_before`, `autocancel_after` | Optional, aerials: landing before frame `before` or after frame `after` is a normal landing instead (auto-cancel). |
-| `throw` | Optional, `true` for throws: the hitbox isn't a circle, it's applied to the held opponent on frame `start`. |
-| `hitboxes` | Up to 4 circles. The first one listed wins if several touch. |
-| `start`, `end` | The move frames when this hitbox is active (the first frame is 1). Frames before the first hitbox = *startup*, after the last = *recovery*. |
-| `x`, `y` | Circle centre relative to the attacker's feet; `x` points the way they face. The body (hurtbox) is 2 wide, 3 tall. |
-| `radius` | Circle size. |
-| `damage` | % added to the victim. |
-| `base_kb`, `kb_growth` | Smash's BKB and KBG. Knockback = `((p/10 + p*d/20) * 200/(weight+100) * 1.4 + 18) * kb_growth/100 + base_kb` (p = victim % after the hit, d = damage). Launch speed = knockback * 0.006; hitstun = 0.4 frames per knockback, minus 1. |
-| `angle` | Launch direction in degrees: 0 = straight forward, 90 = straight up, negative = downward (a spike), above 90 = backward. 361 = the Sakurai angle (along the ground for weak hits on the ground, ~38 degrees otherwise). |
-| `intangible_until` | Optional: the attacker can't be hit before this move frame (get-up and ledge attacks). |
-| `grab` | Optional per hitbox, `true` for the grab: it catches instead of hitting, and goes through shields. |
-
-Everything else (dash and run speed, gravity, jump heights, dodge and roll frames, shield size and drain, hitlag, DI strength, stale-move steps, platforms, blast zones and so on) lives in `GameConfig` in `core/sim.h`. Those do need a rebuild, which `play.bat` does for you.
-
-## What happens when you run it
-
-1. **CMake + MSVC compile the C++** (`core/sim.cpp`, `core/moves.cpp`, `core/obs.cpp` and `bindings/godot/fightgame.cpp`) into `godot/bin/fightgame.windows.template_debug.x86_64.dll`. That DLL is the whole game logic.
-2. **Godot loads the DLL.** `godot/fightgame.gdextension` tells it where the DLL is. `godot/main.gd` loads the characters from `assets/characters/` and reads the options `play.bat` passed on (`--replay=`, `--vs=`, `--p1=`, `--p2=`).
-3. **`godot/main.gd` runs 60 times per second.** Each time it reads the keyboard and controllers (and, with `--vs`, asks the bot for its move), calls `step()` in C++, and draws the sprites.
-
-The Python training code calls exactly the same `step()`, so what you see is exactly what the bot trains on.
-
-`play.bat`'s options, in any order: `edit` (open the Godot editor), `replay [file.json|latest]`, `--vs [latest|checkpoint.pt|scripted bot]`, `--p1 ID`, `--p2 ID`.
-
-## One-time setup on a new machine
-
-This machine already has everything installed. On another PC you would need:
-
-1. **Visual Studio 2026 (Community)** with the *Desktop development with C++* workload, which provides the MSVC compiler.
-2. **Python 3.13** from python.org, then run:
-   `python -m pip install "cmake>=4.2" "scikit-build-core>=0.10" "nanobind>=2.4" pytest numpy torch tensorboard tyro pillow`
-   (the first three build the game module; torch, tensorboard and tyro are for training and the live bot; pillow for `tools/sprites.py`), then build the module once: `python -m pip install --no-build-isolation .`
-3. **Godot 4.7** (standard build, not .NET). Unzip it anywhere under `Downloads`, or set the `GODOT` environment variable to the path of its `.exe`.
-4. `git clone` the repo. `play.bat` downloads the `godot-cpp` submodule itself if it's missing.
-
-## Other commands (Python side)
-
-| What | Command |
-|---|---|
-| Rebuild the Python module after a C++ change | `python -m pip install --no-build-isolation .` |
-| Run the tests | `python -m pytest -q` |
-| Speed benchmark | `python tools/bench.py` |
-| Train an agent | `python train/ppo.py --opponent dummy` (see `docs/training.md`) |
-| Record a game of the newest agent (then `play.bat replay`) | `python train/record.py latest --opponent self` (or `fighter`, `spacer`, ...) |
-| Process new or changed character images | `python tools/sprites.py` (see [Characters](#characters)) |
-| Which true combos the game allows (frame-perfect search) | `python tools/combos.py` |
-| Run the bot server by hand (normally `play.bat --vs` does it) | `python train/serve.py latest --port 5055`, then `godot --path godot -- --vs=5055` |
-| Memory-bug check (AddressSanitizer) | `python -m cmake -S . -B build/debug` then `python -m cmake --build build/debug --config Debug` then `build\debug\Debug\smoke.exe` |
-
-Always use `python -m cmake`, not plain `cmake`: the Strawberry Perl install on this PC puts an old CMake 3.29 on the PATH, and it doesn't know Visual Studio 2026.
-
-## When something goes wrong
-
-| Message | Meaning | Fix |
-|---|---|---|
-| `LNK1104: cannot open file '...fightgame....dll'` | The linker can't overwrite the DLL because Godot is running and has the file open. Windows locks DLLs while they're loaded. `play.bat` works around this by renaming the old DLL first, so you only see this when building by hand. | Close the game or the Godot editor, or build through `play.bat`. |
-| `Could not find Godot` | play.bat didn't find `Godot_v4*_win64.exe` under Downloads. | Set `GODOT` to the full path of Godot's .exe. |
-| Godot says `FightGame` is not declared / "Identifier not found" | Godot doesn't know about the extension. Either the DLL didn't build, or the project was never imported. | Delete the `godot/.godot` folder and run `play.bat` again; it re-imports. |
-| `could not create CMAKE_GENERATOR "Visual Studio 18 2026"` | The old Strawberry CMake was used. | Use `python -m cmake ...`. |
-| `DESYNC` at the end of a replay | Godot's re-simulation didn't end in the recorded state: the Python module and the Godot DLL disagree. Usually one of them is stale. Or the replay was recorded with an older version of the game: a replay stores the inputs, not the game code. | Rebuild both (`pip install --no-build-isolation .` and `play.bat`), record again. `tests/test_replay_godot.py` checks this automatically. Replays from the previous game version (`selfplay__smash__...`, before the Sep 30 changes) play in the frozen copy `D:\BOOTLEG-SSM-v1`: run its `play.bat replay <full path to the .json>`. |
-| `P2: could not reach the bot` / `lost the connection to the bot` | The game couldn't talk to `train/serve.py` (it crashed, or took over 30 s to load). | Look at the minimized "bot" window for its error; common causes: no trained run yet (`latest` needs a `runs/*/agent_latest.pt`), or a checkpoint from an older game version. |
-| `the bot expects N inputs, this game gives M` | The Python module and the Godot DLL were built from different code (the observation size differs). | Rebuild both: `python -m pip install --no-build-isolation .` and `play.bat`. |
-| The build is weird after pulling big changes | Stale build folder. | Delete `build/godot` (it's safe; it's all generated) and rerun. |
+To change how the game plays (move damage, frames, knockback), see
+[engine.md](engine.md#move-files).

@@ -102,6 +102,6 @@ exit /b 0
 
 :error
 echo.
-echo [play] FAILED - see the messages above. docs/running.md has fixes for common errors.
+echo [play] FAILED - see the messages above. docs\setup.md has fixes for common errors.
 pause
 exit /b 1
