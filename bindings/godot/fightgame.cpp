@@ -189,6 +189,9 @@ public:
         d["stage_depth"] = cfg.stage_depth;
         d["ledge_hang_max"] = cfg.ledge_hang_max;
         d["charge_max"] = cfg.charge_max;
+        Array move_frames;  // total_frames of each move, in MOVE_NAMES order (attack animations stretch over it)
+        for (int m = 0; m < NUM_MOVES; ++m) move_frames.push_back(cfg.moves[m].total_frames);
+        d["move_frames"] = move_frames;
         Array surfaces;  // [x0, x1, y] per floor; the first is the main stage
         for (const Surface& s : cfg.surfaces) {
             Array one;

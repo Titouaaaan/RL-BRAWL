@@ -5,7 +5,8 @@
     "file": "1.png",
     "faces": "right",
     "body_w": 47,
-    "body_h": 61
+    "body_h": 61,
+    "anims": {}
   },
   "2": {
     "name": "DinoSailorP2",
@@ -13,7 +14,8 @@
     "file": "2.png",
     "faces": "right",
     "body_w": 47,
-    "body_h": 61
+    "body_h": 61,
+    "anims": {}
   },
   "3": {
     "name": "Car",
@@ -21,7 +23,8 @@
     "file": "3.png",
     "faces": "right",
     "body_w": 64,
-    "body_h": 30
+    "body_h": 30,
+    "anims": {}
   },
   "4": {
     "name": "Justin",
@@ -29,14 +32,30 @@
     "file": "4.png",
     "faces": "right",
     "body_w": 41,
-    "body_h": 64
+    "body_h": 64,
+    "anims": {}
   },
   "5": {
     "name": "OliverPip",
     "source": "OliverPip.png",
     "file": "5.png",
     "faces": "right",
-    "body_w": 48,
-    "body_h": 64
+    "body_w": 37,
+    "body_h": 64,
+    "anims": {}
+  },
+  "6": {
+    "name": "Titou",
+    "source": "Titou.png",
+    "file": "6.png",
+    "faces": "right",
+    "body_w": 29,
+    "body_h": 63,
+    "anims": {
+      "idle": {
+        "file": "6_idle.png",
+        "frames": 4
+      }
+    }
   }
 }

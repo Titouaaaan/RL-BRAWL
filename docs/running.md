@@ -125,6 +125,7 @@ Without them, P1 is character 1 and P2 is character 2.
 | 3 | Car |
 | 4 | Justin |
 | 5 | OliverPip |
+| 6 | Titou (animated idle) |
 
 **Adding a character:** put the image (any size, PNG) in `assets/sprites/`,
 then run `python tools/sprites.py`. It trims the empty space, removes a plain
@@ -133,6 +134,26 @@ bottom), saves it as `assets/characters/<id>.png` and prints the new id. Ids
 never change: new images get the next number. Your originals are not modified.
 Draw characters facing **right** (or set `"faces": "left"` for that character
 in `assets/characters/characters.json`).
+
+**Animations:** name a horizontal strip of square frames `<Character>_<animation>.png`
+(for example `Titou_idle.png`: 4 frames of 64x64 side by side, 256x64) and run
+`python tools/sprites.py`. Every frame gets the same crop and position, so
+nothing jitters (frames already drawn at 64x64 are kept exactly as drawn).
+The game picks the animation from what the fighter is doing:
+
+| Animation | Shown when |
+|---|---|
+| `idle` | standing (and during landing lag) |
+| `run` | dashing / running |
+| `jump`, `fall` | in the air, rising / falling (either one is used for both if only one exists) |
+| `hurt` | in hitstun |
+| `shield` | shielding |
+| `crouch` | crouching |
+| a move name (`jab`, `forward_tilt`, `heavy`, `up_air`, ...) | doing that attack; stretched over the whole move, so the last drawing ends with it |
+| `attack` | any attack without its own animation |
+
+Looping animations show each drawing for 8 game frames (7.5 drawings per
+second). Anything without an animation uses the static sprite.
 
 ## Tuning moves
 

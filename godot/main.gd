@@ -11,7 +11,11 @@ const COLORS := [Color(0.35, 0.6, 1.0), Color(1.0, 0.45, 0.35)]
 # Pick them with --p1=ID --p2=ID (play.bat passes them on).
 const SPRITE_PX := 64.0
 const SPRITE_REF_PX := 61.0
-var chars := [{}, {}]  # per player: {tex, flip, body_w, name}; tex is null if missing
+var chars := [{}, {}]  # per player: {tex, flip, body_w, name, anims}; tex is null if missing
+# Animations: horizontal strips of 64x64 frames (assets/characters/<id>_<name>.png).
+# Looping ones show each drawing for ANIM_TICKS game frames (60 per second);
+# attacks are stretched over the whole move instead.
+const ANIM_TICKS := 8
 
 # Live bot (play.bat --vs ...): player 2 is played by a trained agent served by
 # train/serve.py over a local TCP connection. The bot plays under the same
@@ -130,12 +134,55 @@ func load_characters(args: PackedStringArray) -> void:
 	for p in 2:
 		var c: Dictionary = manifest.get(ids[p], {})
 		var img := Image.load_from_file(dir.path_join(c.get("file", "missing.png"))) if not c.is_empty() else null
+		var anims := {}  # animation name -> {tex, frames}
+		for anim_name in c.get("anims", {}):
+			var a: Dictionary = c.anims[anim_name]
+			var strip := Image.load_from_file(dir.path_join(a.file))
+			if strip != null:
+				anims[anim_name] = {tex = ImageTexture.create_from_image(strip), frames = int(a.frames)}
 		chars[p] = {
 			tex = ImageTexture.create_from_image(img) if img != null else null,
 			flip = -1 if c.get("faces", "right") == "left" else 1,  # drawings are flipped to face right
 			body_w = float(c.get("body_w", 47)),
 			name = c.get("name", "(no character %s)" % ids[p]),
+			anims = anims,
 		}
+
+
+# Which animation a fighter shows, most specific first. The first one the
+# character has is used; with none, the static sprite is drawn.
+func anim_for(f: Dictionary) -> Array:
+	var st: int = f.state
+	if st == ST.ATTACK:
+		return [move_names[f.move] if f.move >= 0 else "", "attack"]
+	if st == ST.IDLE or st == ST.LANDING:
+		return ["idle"]
+	if st == ST.RUN:
+		return ["run"]
+	if st == ST.JUMPSQUAT or st == ST.AIRBORNE or st == ST.HELPLESS:
+		return ["jump", "fall"] if f.vy > 0 else ["fall", "jump"]
+	if st == ST.HITSTUN:
+		return ["hurt"]
+	if st == ST.SHIELD or st == ST.SHIELDSTUN:
+		return ["shield"]
+	if st == ST.CROUCH:
+		return ["crouch"]
+	return []
+
+
+# The texture and the part of it to draw for fighter i right now.
+func sprite_frame(i: int, f: Dictionary) -> Array:
+	var ch: Dictionary = chars[i]
+	for anim_name in anim_for(f):
+		if ch.anims.has(anim_name):
+			var a: Dictionary = ch.anims[anim_name]
+			var k: int
+			if f.state == ST.ATTACK and f.move >= 0:  # stretched over the move: the last drawing at its end
+				k = mini(a.frames - 1, int(f.state_frame * a.frames / max(1, cfg.move_frames[f.move])))
+			else:  # looping
+				k = int(f.state_frame / ANIM_TICKS) % a.frames
+			return [a.tex, Rect2(k * SPRITE_PX, 0, SPRITE_PX, SPRITE_PX)]
+	return [ch.tex, Rect2(0, 0, SPRITE_PX, SPRITE_PX)]
 
 
 func load_replay(path: String) -> void:
@@ -512,8 +559,9 @@ func draw_fighter(i: int, f: Dictionary, font: Font) -> void:
 		angle = f.state_frame * 0.35
 	var center := to_screen(f.x + shake, center_y)
 	if ch.tex != null:
+		var frame := sprite_frame(i, f)  # [texture, the 64x64 region of it to draw]
 		draw_set_transform(center, angle, Vector2(f.facing * ch.flip, squash))  # -1 mirrors it to face left
-		draw_texture_rect(ch.tex, Rect2(-Vector2(size, size) * px / 2, Vector2(size, size) * px), false, tint)
+		draw_texture_rect_region(frame[0], Rect2(-Vector2(size, size) * px / 2, Vector2(size, size) * px), frame[1], tint)
 		draw_set_transform(Vector2.ZERO)
 	else:  # sprite missing: the old colored box
 		var box := Color(COLORS[i], tint.a)
