@@ -35,6 +35,7 @@ protected:
         ClassDB::bind_method(D_METHOD("get_move_names"), &FightGame::get_move_names);
         ClassDB::bind_method(D_METHOD("get_state_names"), &FightGame::get_state_names);
         ClassDB::bind_method(D_METHOD("get_hash"), &FightGame::get_hash);
+        ClassDB::bind_method(D_METHOD("set_input_buffer", "frames"), &FightGame::set_input_buffer);
         ClassDB::bind_method(D_METHOD("reset"), &FightGame::reset);
         ClassDB::bind_method(
             D_METHOD("step", "p1_stick_x", "p1_stick_y", "p1_button", "p2_stick_x", "p2_stick_y", "p2_button"),
@@ -67,6 +68,10 @@ public:
         ::reset(state, cfg);
         return String::utf8(err.c_str());
     }
+
+    // Replays recorded by the Python env were played without the input buffer
+    // (agents don't use it), so a replay sets the value it was recorded with.
+    void set_input_buffer(int64_t frames) { cfg.input_buffer = static_cast<int>(frames); }
 
     // The state hash as 16 hex digits. (A string, because GDScript integers
     // are signed and JSON numbers can't hold 64 bits exactly.)

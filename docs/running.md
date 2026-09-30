@@ -39,7 +39,7 @@ To remap, edit the `PAD` table near the top of `godot/main.gd`.
 
 ### Moving
 - Speeds and jump heights are Mario's from Smash Ultimate, scaled so 1 unit = 5 Smash units; gravity and fall speed are 20% stronger than his for a less floaty feel. The stage is Battlefield made 10% wider (35 units, ledges at the ends, platforms at Battlefield's heights).
-- **Input buffer:** a button pressed up to 9 frames (0.15 s) before your fighter can act again (landing lag, the end of an attack) still comes out on the first free frame, as in Smash Ultimate.
+- **Input buffer:** a button pressed up to 9 frames (0.15 s) before your fighter can act again (landing lag, the end of an attack) still comes out on the first free frame, as in Smash Ultimate. (Only for human play: agents train without it, see `docs/training.md`.)
 - **Several buttons at once:** the game takes one button per frame, and the one you pressed most recently wins. So you can keep holding jump for a full hop and press light mid-jump for an air attack.
 - Moving starts with a fast **dash** (12 frames), then a **run**. Speed changes smoothly rather than instantly. Turning around during the dash dashes the other way (a "dash dance").
 - **Jump:** hold jump for a full jump; **tap** it (let go within 3 frames), or hold **down + jump**, for a lower **short hop**. One double jump in the air.

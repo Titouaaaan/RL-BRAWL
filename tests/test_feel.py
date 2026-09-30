@@ -2,12 +2,13 @@
 import pytest
 
 import fightcore
-from test_combat import S, act, face_off, f, hold, move_id, new_env, to_center
+from test_combat import MOVES, S, act, face_off, f, hold, move_id, new_env, to_center
 
 
 def test_a_press_just_before_you_can_act_is_buffered():
-    for early, buffered in ((5, True), (15, False)):
-        env = new_env()
+    # With the human setting (9 frames); agents' envs have no buffer (last case).
+    for early, buffered, frames in ((5, True, 9), (15, False, 9), (5, False, 0)):
+        env = fightcore.VecEnv(1, str(MOVES), frame_skip=1, input_buffer=frames)
         to_center(env)
         act(env, p1=(0, 1, 2))  # up-tilt: 29 frames
         total = 29

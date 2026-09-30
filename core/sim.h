@@ -291,6 +291,9 @@ struct GameConfig {
     // Input buffer (Ultimate: 9 frames): a button pressed this many frames or
     // less before the fighter can act again still comes out on the first free
     // frame, so presses during landing lag or the end of a move aren't lost.
+    // For humans (Godot). The Python VecEnv sets it to 0: agents act every 4
+    // frames and see the game 6 frames late, and presses firing frames after
+    // they were made (unseen in the observation) halved their learning speed.
     int input_buffer = 9;
     // Smash attack charge (Ultimate): hold heavy and the smash pauses
     // charge_lead frames before its first hitbox, for up to charge_max frames;
@@ -396,7 +399,7 @@ struct GameConfig {
     float respawn_y = 14.0f;
     int respawn_invuln = 120;
     uint8_t stocks = 3;
-    int time_limit_frames = 3 * 60 * 60;  // 3 minutes (7 is being tested against it: runs/monitor_notes.md)
+    int time_limit_frames = 7 * 60 * 60;  // 7 minutes (competitive Smash: 3 stocks, 7 min)
     // Filled in by load_moves(). Indexed by MoveId.
     MoveDef moves[NUM_MOVES];
 };

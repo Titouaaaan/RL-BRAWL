@@ -60,8 +60,12 @@ NB_MODULE(fightcore, m) {
         .def("__init__",
              [](VecEnv* self, int num_envs, const std::string& moves_dir, int frame_skip, int reaction_delay,
                 float damage_reward, float timeout_reward, float combo_growth, float combo_cap,
-                float counter_reward, float streak_growth, float streak_cap) {
+                float counter_reward, float streak_growth, float streak_cap, int input_buffer) {
                  GameConfig cfg;
+                 // Agents train without the input buffer (see GameConfig::input_buffer):
+                 // a press they made frames ago firing later, unseen in their
+                 // observation, halved how fast they learned.
+                 cfg.input_buffer = input_buffer;
                  std::string err = load_moves(cfg, moves_dir);
                  if (!err.empty()) throw std::invalid_argument(err);
                  new (self) VecEnv(num_envs, cfg,
@@ -71,7 +75,7 @@ NB_MODULE(fightcore, m) {
              nb::arg("num_envs"), nb::arg("moves_dir"), nb::arg("frame_skip") = 4, nb::arg("reaction_delay") = 0,
              nb::arg("damage_reward") = 0.01f, nb::arg("timeout_reward") = 0.0f, nb::arg("combo_growth") = 1.0f,
              nb::arg("combo_cap") = 1.0f, nb::arg("counter_reward") = 0.0f, nb::arg("streak_growth") = 1.0f,
-             nb::arg("streak_cap") = 1.0f)
+             nb::arg("streak_cap") = 1.0f, nb::arg("input_buffer") = 0)
 
         .def("step",
              [](VecEnv& e, ActionArray actions) {
@@ -107,6 +111,7 @@ NB_MODULE(fightcore, m) {
         // Settable, so training can anneal it.
         .def_prop_rw("damage_reward", [](const VecEnv& e) { return e.params.damage_reward; },
                      [](VecEnv& e, float v) { e.params.damage_reward = v; })
+        .def_prop_ro("input_buffer", [](const VecEnv& e) { return e.cfg.input_buffer; })
         .def_prop_rw("counter_reward", [](const VecEnv& e) { return e.params.counter_reward; },
                      [](VecEnv& e, float v) { e.params.counter_reward = v; })
 

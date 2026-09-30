@@ -103,6 +103,8 @@ func restart_replay() -> void:
 			return
 		texts.append(replay.moves[n])
 	load_error = game.load_moves_from_text(texts)
+	# The input buffer the recording was made with (agents play without it).
+	game.set_input_buffer(int(replay.get("input_buffer", 9)))
 	cfg = game.get_config()
 	replay_frame = 0
 	replay_result = ""

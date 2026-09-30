@@ -18,10 +18,11 @@ import fightcore
 MOVE_NAMES = fightcore.MOVE_NAMES  # the files core/moves.cpp loads, from C++
 
 
-def play_and_record(moves_dir, policy0, policy1, frame_skip=4, reaction_delay=0, meta=None):
+def play_and_record(moves_dir, policy0, policy1, frame_skip=4, reaction_delay=0, meta=None, input_buffer=0):
     """Plays one full game in a 1-env VecEnv (same rules as training) and
     returns it as a replay dict."""
-    env = fightcore.VecEnv(1, str(moves_dir), frame_skip=frame_skip, reaction_delay=reaction_delay)
+    env = fightcore.VecEnv(1, str(moves_dir), frame_skip=frame_skip, reaction_delay=reaction_delay,
+                           input_buffer=input_buffer)
     inputs = []  # one [p1_sx, p1_sy, p1_b, p2_sx, p2_sy, p2_b] per sim frame, real (unmirrored) inputs
     while True:
         a = np.stack([policy0(env.obs[:, 0]), policy1(env.obs[:, 1])], axis=1).astype(np.int8)  # (1, 2, 3)
@@ -38,6 +39,7 @@ def play_and_record(moves_dir, policy0, policy1, frame_skip=4, reaction_delay=0,
         "created": time.strftime("%Y-%m-%d %H:%M:%S"),
         "meta": meta or {},
         "winner": int(env.winner[0]),
+        "input_buffer": input_buffer,  # Godot replays with the same setting
         "final_hash": f"{int(env.final_hash[0]):016x}",
         "moves": {name: (Path(moves_dir) / f"{name}.json").read_text() for name in MOVE_NAMES},
         "inputs": inputs,
@@ -47,7 +49,7 @@ def play_and_record(moves_dir, policy0, policy1, frame_skip=4, reaction_delay=0,
 def save(replay, path):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    # separators=(",", ":") drops spaces: a 3-minute game is ~10k input rows.
+    # separators=(",", ":") drops spaces: a 7-minute game is ~25k input rows.
     path.write_text(json.dumps(replay, separators=(",", ":")))
     return path
 

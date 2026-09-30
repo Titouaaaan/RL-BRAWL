@@ -80,7 +80,7 @@ def test_ko_reward_termination_winner_and_autoreset():
 
 def test_time_limit_is_truncation_and_draw():
     env = fightcore.VecEnv(1, MOVES)
-    for _ in range(3 * 60 * 60 // 4):  # 3 minutes at frame_skip 4
+    for _ in range(7 * 60 * 60 // 4):  # 7 minutes at frame_skip 4
         env.step(acts(1))
     assert env.truncated[0] and not env.terminated[0]
     assert env.winner[0] == -1  # nobody did anything: draw
