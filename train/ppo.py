@@ -12,7 +12,7 @@
 #   3. Opponent: player 1 is a frozen bot or network. Only the learner's
 #      experience is stored and trained on.
 #   4. Time limit: a real ending, like CleanRL does (the time left is in the
-#      observation, so the 7-minute limit is part of the game, not a cutoff),
+#      observation, so the 3-minute limit is part of the game, not a cutoff),
 #      with a small tie-breaker reward for whoever is ahead at the limit.
 #   5. Hyperparameters: gamma 0.995 (design doc), 256-unit MLP, 256 envs.
 #   5b. Reward shaping, annealed to zero: potential-based approach shaping
@@ -90,7 +90,7 @@ class Args:
     reaction_delay: int = 6
     """observe the game this many frames late (6 = 0.1 s, like a quick human reaction)"""
     timeout_reward: float = 0.3
-    """at the 7-minute limit: + for the player ahead (stocks, then damage), - for the other"""
+    """at the 3-minute limit: + for the player ahead (stocks, then damage), - for the other"""
     combo_growth: float = 1.0
     """the k-th hit of a true combo gets its damage reward times combo_growth^(k-1)... (off: at
     ~0.1 true combos/min it did nothing; the streak bonus replaces it)"""

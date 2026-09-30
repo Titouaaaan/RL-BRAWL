@@ -41,7 +41,7 @@ header lists them; `git log -p train/ppo.py` shows the exact diff).
    the game advances 4 frames (frame skip). Only player 0's observations,
    actions, log-probs, values and rewards are stored. That's 32,768 steps.
 2. **Advantages.** GAE (γ = 0.995, λ = 0.95) over the rollout.
-   The 7-minute limit is a real ending (the time left is part of the
+   The 3-minute limit is a real ending (the time left is part of the
    observation), and whoever is ahead then gets a small tie-breaker reward
    (±0.3, `--timeout-reward`), so waiting out the clock is worse than
    landing hits.

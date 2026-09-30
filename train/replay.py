@@ -47,7 +47,7 @@ def play_and_record(moves_dir, policy0, policy1, frame_skip=4, reaction_delay=0,
 def save(replay, path):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    # separators=(",", ":") drops spaces: a 7-minute game is ~25k input rows.
+    # separators=(",", ":") drops spaces: a 3-minute game is ~10k input rows.
     path.write_text(json.dumps(replay, separators=(",", ":")))
     return path
 

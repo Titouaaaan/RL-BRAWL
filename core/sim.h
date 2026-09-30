@@ -396,7 +396,7 @@ struct GameConfig {
     float respawn_y = 14.0f;
     int respawn_invuln = 120;
     uint8_t stocks = 3;
-    int time_limit_frames = 7 * 60 * 60;  // 7 minutes (competitive Smash: 3 stocks, 7 min)
+    int time_limit_frames = 3 * 60 * 60;  // 3 minutes (7 is being tested against it: runs/monitor_notes.md)
     // Filled in by load_moves(). Indexed by MoveId.
     MoveDef moves[NUM_MOVES];
 };
