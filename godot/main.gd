@@ -4,6 +4,15 @@ extends Node2D
 
 const COLORS := [Color(0.35, 0.6, 1.0), Color(1.0, 0.45, 0.35)]
 
+# Character sprites (assets/sprites, outside the Godot project, loaded at
+# startup). 64x64, facing right; the character is 61 px tall with its feet on
+# the bottom row and 47 px wide, centered.
+const SPRITE_FILES := ["DinoSailor.png", "DinoSailorP2.png"]
+const SPRITE_PX := 64.0
+const SPRITE_BODY_PX := 61.0
+const SPRITE_BODY_W := 47.0
+var sprites := [null, null]  # ImageTexture per player, or null if a file is missing
+
 # Keys are *physical* positions (US layout names), so on AZERTY "WASD" is ZQSD.
 # Player 1: WASD stick, Space jump, J light, K heavy, L dodge.
 # Player 2: arrow keys stick, Enter jump, and the three keys left of right
@@ -59,6 +68,13 @@ var speed_acc := 0.0  # fractional frames owed, for speeds below 1x
 
 
 func _ready() -> void:
+	# Pixel art: sample the nearest pixel instead of blurring when scaled.
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	var sprite_dir := ProjectSettings.globalize_path("res://").path_join("../assets/sprites").simplify_path()
+	for p in 2:
+		var img := Image.load_from_file(sprite_dir.path_join(SPRITE_FILES[p]))
+		if img != null:
+			sprites[p] = ImageTexture.create_from_image(img)
 	for i in state_names.size():
 		ST[state_names[i]] = i
 	var args := OS.get_cmdline_user_args()  # whatever came after "--" on the command line
@@ -341,49 +357,60 @@ func _draw() -> void:
 func draw_fighter(i: int, f: Dictionary, font: Font) -> void:
 	var w: float = cfg.hurtbox_w
 	var h: float = cfg.hurtbox_h
-	if f.state == ST.KNOCKDOWN:
-		w = h * 1.1  # lying on the floor
-		h = cfg.lying_h
-	elif f.state == ST.CROUCH:
-		h = cfg.crouch_h  # a smaller target: some high attacks miss
-	var hw := w / 2
-	# Tumbling (launched by a strong hit): the body spins until you act or land.
-	if f.tumble:
-		var center := to_screen(f.x, f.y + h / 2)
-		draw_set_transform(center, f.state_frame * 0.35, Vector2.ONE)
-		draw_rect(Rect2(-Vector2(w, h) * px / 2, Vector2(w, h) * px), COLORS[i].lerp(Color.WHITE, 0.6))
-		draw_set_transform(Vector2.ZERO)
-		return
 	var shake := 0.0
 	if f.hitlag > 0 and f.state == ST.HITSTUN:
 		shake = 0.18 * (1 if f.hitlag % 2 == 0 else -1)  # the victim shakes during the hit freeze
-	var top_left := to_screen(f.x - hw + shake, f.y + h)
-	var rect := Rect2(top_left, Vector2(w, h) * px)
-	var color: Color = COLORS[i]
+	# Tint: white = the sprite's own colors. Values above 1 brighten it.
+	var tint := Color.WHITE
 	if f.state == ST.HITSTUN:
-		color = color.lerp(Color.WHITE, 0.6)  # flash pale while stunned
+		tint = Color(1.8, 1.8, 1.8)  # flash bright while stunned
 	elif f.state == ST.GRABBED:
-		color = color.lerp(Color(0.6, 0.2, 0.8), 0.5)
+		tint = Color(0.8, 0.5, 1.0)
 	elif f.state == ST.SHIELDBREAK:
-		color = color.lerp(Color(1, 0.9, 0.2), 0.5 + 0.3 * sin(f.state_frame * 0.4))  # dazed
+		tint = Color.WHITE.lerp(Color(1.4, 1.3, 0.3), 0.5 + 0.3 * sin(f.state_frame * 0.4))  # dazed
 	elif f.state == ST.ATTACK and f.charge > 0:
 		# Charging a smash: glows brighter the longer it's held (up to 40% stronger).
-		color = color.lerp(Color(1, 0.95, 0.4), 0.3 + 0.5 * f.charge / cfg.charge_max * (0.75 + 0.25 * sin(f.charge * 0.8)))
+		tint = Color.WHITE.lerp(Color(1.6, 1.5, 0.6), 0.3 + 0.7 * f.charge / cfg.charge_max * (0.75 + 0.25 * sin(f.charge * 0.8)))
 	elif f.state == ST.REBOUND:
-		color = color.lerp(Color(0.2, 0.2, 0.2), 0.5)  # clanked or parried: stuck, open to a punish
+		tint = Color(0.45, 0.45, 0.45)  # clanked or parried: stuck, open to a punish
 	elif f.state == ST.SHIELDDROP and f.state_frame < 5:
-		color = color.lerp(Color(0.6, 1, 1), 0.6)  # the parry window
+		tint = Color(0.7, 1.4, 1.4)  # the parry window
 	elif f.state == ST.LEDGE and f.state_frame > cfg.ledge_hang_max - 60 and (f.state_frame / 4) % 2 == 0:
-		color = color.lerp(Color.RED, 0.6)  # hanging too long: about to let go
+		tint = Color(1.5, 0.4, 0.4)  # hanging too long: about to let go
 	if f.invuln > 0 and (f.invuln / 6) % 2 == 0:
-		color.a = 0.35  # blink while invulnerable after respawning
+		tint.a = 0.35  # blink while invulnerable after respawning
 	if f.intangible and f.invuln == 0:
-		color.a = 0.3  # see-through while dodging: hits pass through
-	draw_rect(rect, color)
+		tint.a = 0.3  # see-through while dodging: hits pass through
+
+	# The sprite is drawn around its center, so it can be flipped, squashed
+	# and rotated in place: flipped to face left, squashed when crouching,
+	# lying on its side when knocked down, spinning while tumbling.
+	var size: float = SPRITE_PX * h / SPRITE_BODY_PX  # sprite size in sim units: the character is exactly hurtbox_h tall
+	var center_y: float = f.y + h / 2
+	var angle := 0.0
+	var squash := 1.0
+	if f.state == ST.KNOCKDOWN:
+		angle = -f.facing * PI / 2
+		center_y = f.y + SPRITE_BODY_W / SPRITE_BODY_PX * h / 2  # lying on its side on the floor
+		w = h * 1.1
+		h = cfg.lying_h
+	elif f.state == ST.CROUCH:
+		squash = cfg.crouch_h / h
+		h = cfg.crouch_h
+		center_y = f.y + h / 2
+	elif f.tumble:
+		angle = f.state_frame * 0.35
+	var center := to_screen(f.x + shake, center_y)
+	if sprites[i] != null:
+		draw_set_transform(center, angle, Vector2(f.facing, squash))  # the sprite faces right; -1 flips it
+		draw_texture_rect(sprites[i], Rect2(-Vector2(size, size) * px / 2, Vector2(size, size) * px), false, tint)
+		draw_set_transform(Vector2.ZERO)
+	else:  # sprite missing: the old colored box
+		var box := Color(COLORS[i], tint.a)
+		draw_rect(Rect2(to_screen(f.x - w / 2 + shake, f.y + h), Vector2(w, h) * px), box)
 	if f.intangible:
-		draw_rect(rect, Color.WHITE, false, 2.0)  # white outline = intangible (i-frames)
-	# White "eye" on the side the fighter is facing.
-	draw_circle(to_screen(f.x + f.facing * hw * 0.6 + shake, f.y + h * 0.8), px * 0.25, Color.WHITE)
+		# White outline of the hurtbox = intangible (i-frames).
+		draw_rect(Rect2(to_screen(f.x - w / 2 + shake, f.y + h), Vector2(w, h) * px), Color.WHITE, false, 2.0)
 	# Shield: a bubble that shrinks as the shield wears down.
 	if f.state == ST.SHIELD or f.state == ST.SHIELDSTUN:
 		var r: float = (0.7 + 1.5 * f.shield_hp / cfg.shield_max) * px
@@ -391,7 +418,7 @@ func draw_fighter(i: int, f: Dictionary, font: Font) -> void:
 		draw_circle(c, r, Color(COLORS[i], 0.3))
 		draw_arc(c, r, 0, TAU, 40, Color(1, 1, 1, 0.8 if f.state == ST.SHIELDSTUN else 0.4), 2.0)
 	# Small player number above the head.
-	draw_string(font, to_screen(f.x - 0.5, f.y + h + 0.5), "P%d" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, COLORS[i])
+	draw_string(font, to_screen(f.x - 0.5, f.y + cfg.hurtbox_h + 0.6), "P%d" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, COLORS[i])
 
 
 func draw_hud(font: Font) -> void:
