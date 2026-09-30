@@ -68,7 +68,13 @@ def main():
     server.bind(("127.0.0.1", args.port))
     server.listen(1)
     print(f"[serve] {name} waiting for Godot on port {args.port}", flush=True)
-    conn, _ = server.accept()
+    server.settimeout(120)  # if the game never shows up (it crashed?), don't hold the port forever
+    try:
+        conn, _ = server.accept()
+    except socket.timeout:
+        print("[serve] no game connected within 2 minutes, quitting", flush=True)
+        return
+    conn.settimeout(None)
     conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)  # send small replies right away
 
     hello = recv_exact(conn, 4)

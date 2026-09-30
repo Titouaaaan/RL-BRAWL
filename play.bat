@@ -67,9 +67,14 @@ goto :args
 
 :vs
 rem --vs takes an optional bot name: the next argument, unless it is another option.
+rem One simple step per line: cmd.exe mis-parses substrings of empty variables.
 set "VS=latest"
+if "%~2"=="" goto :vs_done
 set "NEXT=%~2"
-if not "%NEXT%"=="" if not "%NEXT:~0,2%"=="--" (set "VS=%~2" & shift)
+if "%NEXT:~0,2%"=="--" goto :vs_done
+set "VS=%~2"
+shift
+:vs_done
 shift
 goto :args
 
