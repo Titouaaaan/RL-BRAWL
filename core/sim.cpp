@@ -264,7 +264,7 @@ static void land(Fighter& f, int surf, const Input& in, const GameConfig& cfg) {
 // One fighter, one frame: the state machine, then physics.
 // ---------------------------------------------------------------------------
 
-static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg) {
+static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg, int input_buffer) {
     Input in = sanitize(raw_in);
     const uint8_t held_button = in.button;  // what the controller really holds (the buffer may replace `in`)
     const bool fresh = in.button != BTN_NONE && in.button != f.prev_button;
@@ -421,7 +421,7 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg)
     // pressed this frame, a press from the last input_buffer frames happens
     // now (with the stick direction it was pressed with).
     if (actionable(f)) {
-        if (!fresh && f.buf_age <= cfg.input_buffer) {
+        if (!fresh && f.buf_age <= input_buffer) {
             in.button = f.buf_button;
             in.stick_x = f.buf_sx;
             in.stick_y = f.buf_sy;
@@ -1004,7 +1004,7 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
             f.prev_button = i.button;
             continue;
         }
-        step_fighter(f, in[p], cfg);
+        step_fighter(f, in[p], cfg, cfg.input_buffer[p]);
         if (f.state == ST_ATTACK && f.state_frame == 1) ev.move_started[p] = f.move;
     }
 

@@ -4,6 +4,7 @@ rem   play.bat        -> play the game
 rem   play.bat edit   -> open the project in the Godot editor instead
 rem   play.bat replay [file.json] -> watch a recorded game (default: the newest one)
 rem   add --p1 ID --p2 ID to any of these to pick the characters (ids: assets\characters\characters.json)
+rem   play.bat --vs [bot] -> fight a bot as P1: 'latest' (default), a checkpoint .pt, or fighter/spacer/jabber/...
 rem Double-clicking this file in Explorer also works.
 setlocal
 cd /d "%~dp0"
@@ -51,6 +52,7 @@ rem    The character ids are listed in assets\characters\characters.json.
 set "MODE=play"
 set "RFILE="
 set "CHARS="
+set "VS="
 :args
 if "%~1"=="" goto :run
 if /i "%~1"=="edit" (set "MODE=edit" & shift & goto :args)
@@ -58,7 +60,16 @@ if /i "%~1"=="replay" (set "MODE=replay" & shift & goto :args)
 if /i "%~1"=="--p1" (set "CHARS=%CHARS% --p1=%~2" & shift & shift & goto :args)
 if /i "%~1"=="--p2" (set "CHARS=%CHARS% --p2=%~2" & shift & shift & goto :args)
 if /i "%~1"=="latest" (set "RFILE=latest" & shift & goto :args)
+if /i "%~1"=="--vs" goto :vs
 set "RFILE=%~f1"
+shift
+goto :args
+
+:vs
+rem --vs takes an optional bot name: the next argument, unless it is another option.
+set "VS=latest"
+set "NEXT=%~2"
+if not "%NEXT%"=="" if not "%NEXT:~0,2%"=="--" (set "VS=%~2" & shift)
 shift
 goto :args
 
@@ -71,6 +82,13 @@ if "%MODE%"=="replay" if "%RFILE%"=="" set "RFILE=latest"
 if "%MODE%"=="replay" (
     echo [play] Replay %RFILE%. Space pauses, Up/Down change speed.
     "%GODOT%" --path godot -- "--replay=%RFILE%" %CHARS%
+) else if defined VS (
+    rem The bot runs in Python, train\serve.py, in its own minimized window,
+    rem and closes by itself when the game does. No brackets in these comments:
+    rem a closing bracket would end this block early.
+    echo [play] Starting the bot "%VS%" and the game. You are P1. Esc quits.
+    start "bot: %VS%" /min python train\serve.py "%VS%" --port 5055
+    "%GODOT%" --path godot -- --vs=5055 %CHARS%
 ) else (
     echo [play] Starting the game. Esc quits.
     "%GODOT%" --path godot -- %CHARS%

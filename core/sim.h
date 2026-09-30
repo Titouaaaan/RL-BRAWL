@@ -294,7 +294,7 @@ struct GameConfig {
     // For humans (Godot). The Python VecEnv sets it to 0: agents act every 4
     // frames and see the game 6 frames late, and presses firing frames after
     // they were made (unseen in the observation) halved their learning speed.
-    int input_buffer = 9;
+    int input_buffer[2] = {9, 9};  // per player: a human on 9, a bot on 0
     // Smash attack charge (Ultimate): hold heavy and the smash pauses
     // charge_lead frames before its first hitbox, for up to charge_max frames;
     // a full charge hits charge_bonus (40%) harder.

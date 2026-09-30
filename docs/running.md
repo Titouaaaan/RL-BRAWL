@@ -86,6 +86,24 @@ To remap, edit the `PAD` table near the top of `godot/main.gd`.
 
 **Reading the screen:** hitboxes are circles with a red rim (a grab's rim is yellow), faded once the move has already hit. A fighter flashes pale while in hitstun and shakes during hitlag, turns purple while held, and pulses yellow while dazed. A shield is a bubble that shrinks as it wears down. The text next to the stocks is the state machine's state, e.g. `ATTACK heavy 12` = frame 12 of the heavy, `HITSTUN 3 (17 left)`.
 
+## Fighting a bot
+
+```
+play.bat --vs                  # the newest trained agent
+play.bat --vs fighter          # a scripted bot: dummy, random, jabber, spacer, fighter
+play.bat --vs runs\<run>gent_00600.pt --p1 1 --p2 5
+```
+
+You are P1 (keyboard or controller 1); the bot is P2. `play.bat` opens the
+bot in a small minimized window (`train/serve.py`, running the network in
+PyTorch) and the game connects to it on this machine; the game waits until the
+bot has loaded (a few seconds) and the top line shows how long each decision
+takes (about 1 ms). The bot plays exactly as in training: it sees the game 0.1 s
+late and picks an action every 4 frames, and it has no input buffer (it was
+trained without one); you keep yours. Closing the game closes the bot. If it
+can't connect, the top line says why (for example the game and the Python
+module were built from different code: rebuild both).
+
 ## Characters
 
 Each fighter can be drawn as any character (it's only the look: every

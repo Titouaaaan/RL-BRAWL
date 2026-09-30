@@ -15,6 +15,7 @@
 
 #include <cstdio>  // std::snprintf
 
+#include "../../core/obs.h"  // write_obs: what a live bot sees
 #include "../../core/sim.h"
 
 using namespace godot;
@@ -35,7 +36,9 @@ protected:
         ClassDB::bind_method(D_METHOD("get_move_names"), &FightGame::get_move_names);
         ClassDB::bind_method(D_METHOD("get_state_names"), &FightGame::get_state_names);
         ClassDB::bind_method(D_METHOD("get_hash"), &FightGame::get_hash);
-        ClassDB::bind_method(D_METHOD("set_input_buffer", "frames"), &FightGame::set_input_buffer);
+        ClassDB::bind_method(D_METHOD("set_input_buffer", "player", "frames"), &FightGame::set_input_buffer);
+        ClassDB::bind_method(D_METHOD("get_obs", "player"), &FightGame::get_obs);
+        ClassDB::bind_method(D_METHOD("get_obs_dim"), &FightGame::get_obs_dim);
         ClassDB::bind_method(D_METHOD("reset"), &FightGame::reset);
         ClassDB::bind_method(
             D_METHOD("step", "p1_stick_x", "p1_stick_y", "p1_button", "p2_stick_x", "p2_stick_y", "p2_button"),
@@ -69,9 +72,21 @@ public:
         return String::utf8(err.c_str());
     }
 
-    // Replays recorded by the Python env were played without the input buffer
-    // (agents don't use it), so a replay sets the value it was recorded with.
-    void set_input_buffer(int64_t frames) { cfg.input_buffer = static_cast<int>(frames); }
+    // The input buffer per player: humans use it, bots were trained without it
+    // (a replay sets the value it was recorded with).
+    void set_input_buffer(int64_t player, int64_t frames) {
+        if (player == 0 || player == 1) cfg.input_buffer[player] = static_cast<int>(frames);
+    }
+
+    // What a trained agent playing `player` sees right now: the same
+    // observation as in training (egocentric: mirrored for player 1).
+    PackedFloat32Array get_obs(int64_t player) const {
+        PackedFloat32Array out;
+        out.resize(OBS_DIM);
+        write_obs(state, cfg, player == 1 ? 1 : 0, out.ptrw());
+        return out;
+    }
+    int64_t get_obs_dim() const { return OBS_DIM; }
 
     // The state hash as 16 hex digits. (A string, because GDScript integers
     // are signed and JSON numbers can't hold 64 bits exactly.)

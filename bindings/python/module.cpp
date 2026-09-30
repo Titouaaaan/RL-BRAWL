@@ -65,7 +65,7 @@ NB_MODULE(fightcore, m) {
                  // Agents train without the input buffer (see GameConfig::input_buffer):
                  // a press they made frames ago firing later, unseen in their
                  // observation, halved how fast they learned.
-                 cfg.input_buffer = input_buffer;
+                 cfg.input_buffer[0] = cfg.input_buffer[1] = input_buffer;
                  std::string err = load_moves(cfg, moves_dir);
                  if (!err.empty()) throw std::invalid_argument(err);
                  new (self) VecEnv(num_envs, cfg,
@@ -111,7 +111,7 @@ NB_MODULE(fightcore, m) {
         // Settable, so training can anneal it.
         .def_prop_rw("damage_reward", [](const VecEnv& e) { return e.params.damage_reward; },
                      [](VecEnv& e, float v) { e.params.damage_reward = v; })
-        .def_prop_ro("input_buffer", [](const VecEnv& e) { return e.cfg.input_buffer; })
+        .def_prop_ro("input_buffer", [](const VecEnv& e) { return e.cfg.input_buffer[0]; })
         .def_prop_rw("counter_reward", [](const VecEnv& e) { return e.params.counter_reward; },
                      [](VecEnv& e, float v) { e.params.counter_reward = v; })
 
