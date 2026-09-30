@@ -86,6 +86,36 @@ To remap, edit the `PAD` table near the top of `godot/main.gd`.
 
 **Reading the screen:** hitboxes are circles with a red rim (a grab's rim is yellow), faded once the move has already hit. A fighter flashes pale while in hitstun and shakes during hitlag, turns purple while held, and pulses yellow while dazed. A shield is a bubble that shrinks as it wears down. The text next to the stocks is the state machine's state, e.g. `ATTACK heavy 12` = frame 12 of the heavy, `HITSTUN 3 (17 left)`.
 
+## Characters
+
+Each fighter can be drawn as any character (it's only the look: every
+character plays exactly the same). Pick them with `--p1 ID --p2 ID`, for
+playing or watching replays, in any order:
+
+```
+play.bat --p1 3 --p2 5
+play.bat replay --p1 4 --p2 1
+play.bat replay path	o\game.json --p2 5
+```
+
+Without them, P1 is character 1 and P2 is character 2.
+
+| ID | Character |
+|---|---|
+| 1 | DinoSailor (blue) |
+| 2 | DinoSailorP2 (red) |
+| 3 | Car |
+| 4 | Justin |
+| 5 | OliverPip |
+
+**Adding a character:** put the image (any size, PNG) in `assets/sprites/`,
+then run `python tools/sprites.py`. It trims the empty space, removes a plain
+white page background, scales the character to fit a 64x64 canvas (feet at the
+bottom), saves it as `assets/characters/<id>.png` and prints the new id. Ids
+never change: new images get the next number. Your originals are not modified.
+Draw characters facing **right** (or set `"faces": "left"` for that character
+in `assets/characters/characters.json`).
+
 ## Tuning moves
 
 Each move is a file in `data/moves/`, named as in the table above (`jab.json`, `up_tilt.json`, `heavy_down_air.json`, ...), plus `grab.json` and the four `throw_*.json`. Edit one, save, and press **R** in the game: no rebuild needed. If the file has a mistake, the error shows in red at the top of the game window.

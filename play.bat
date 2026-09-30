@@ -3,6 +3,7 @@ rem play.bat: builds the C++ game code (only what changed) and starts the game.
 rem   play.bat        -> play the game
 rem   play.bat edit   -> open the project in the Godot editor instead
 rem   play.bat replay [file.json] -> watch a recorded game (default: the newest one)
+rem   add --p1 ID --p2 ID to any of these to pick the characters (ids: assets\characters\characters.json)
 rem Double-clicking this file in Explorer also works.
 setlocal
 cd /d "%~dp0"
@@ -45,18 +46,34 @@ if not exist godot\.godot\extension_list.cfg (
     "%GODOT%" --headless --path godot --import >nul 2>&1
 )
 
-if /i "%~1"=="edit" (
+rem 5. Read the options (any order): edit, replay [file.json], --p1 ID, --p2 ID.
+rem    The character ids are listed in assets\characters\characters.json.
+set "MODE=play"
+set "RFILE="
+set "CHARS="
+:args
+if "%~1"=="" goto :run
+if /i "%~1"=="edit" (set "MODE=edit" & shift & goto :args)
+if /i "%~1"=="replay" (set "MODE=replay" & shift & goto :args)
+if /i "%~1"=="--p1" (set "CHARS=%CHARS% --p1=%~2" & shift & shift & goto :args)
+if /i "%~1"=="--p2" (set "CHARS=%CHARS% --p2=%~2" & shift & shift & goto :args)
+if /i "%~1"=="latest" (set "RFILE=latest" & shift & goto :args)
+set "RFILE=%~f1"
+shift
+goto :args
+
+:run
+if "%MODE%"=="edit" (
     start "" "%GODOT%" --path godot -e
-) else if /i "%~1"=="replay" (
-    if "%~2"=="" (
-        echo [play] Playing the newest replay. Space pauses, Up/Down change speed.
-        "%GODOT%" --path godot -- --replay=latest
-    ) else (
-        "%GODOT%" --path godot -- "--replay=%~f2"
-    )
+    exit /b 0
+)
+if "%MODE%"=="replay" if "%RFILE%"=="" set "RFILE=latest"
+if "%MODE%"=="replay" (
+    echo [play] Replay %RFILE%. Space pauses, Up/Down change speed.
+    "%GODOT%" --path godot -- "--replay=%RFILE%" %CHARS%
 ) else (
     echo [play] Starting the game. Esc quits.
-    "%GODOT%" --path godot
+    "%GODOT%" --path godot -- %CHARS%
 )
 exit /b 0
 

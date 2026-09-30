@@ -4,14 +4,14 @@ extends Node2D
 
 const COLORS := [Color(0.35, 0.6, 1.0), Color(1.0, 0.45, 0.35)]
 
-# Character sprites (assets/sprites, outside the Godot project, loaded at
-# startup). 64x64, facing right; the character is 61 px tall with its feet on
-# the bottom row and 47 px wide, centered.
-const SPRITE_FILES := ["DinoSailor.png", "DinoSailorP2.png"]
+# Characters: assets/characters/<id>.png, listed in characters.json (made by
+# tools/sprites.py from the images in assets/sprites). Every character is a
+# 64x64 canvas, feet on the bottom row; the canvas is drawn at the same size
+# for everyone, with 61 px = the fighter's height (the DinoSailor's height).
+# Pick them with --p1=ID --p2=ID (play.bat passes them on).
 const SPRITE_PX := 64.0
-const SPRITE_BODY_PX := 61.0
-const SPRITE_BODY_W := 47.0
-var sprites := [null, null]  # ImageTexture per player, or null if a file is missing
+const SPRITE_REF_PX := 61.0
+var chars := [{}, {}]  # per player: {tex, flip, body_w, name}; tex is null if missing
 
 # Keys are *physical* positions (US layout names), so on AZERTY "WASD" is ZQSD.
 # Player 1: WASD stick, Space jump, J light, K heavy, L dodge.
@@ -70,11 +70,7 @@ var speed_acc := 0.0  # fractional frames owed, for speeds below 1x
 func _ready() -> void:
 	# Pixel art: sample the nearest pixel instead of blurring when scaled.
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	var sprite_dir := ProjectSettings.globalize_path("res://").path_join("../assets/sprites").simplify_path()
-	for p in 2:
-		var img := Image.load_from_file(sprite_dir.path_join(SPRITE_FILES[p]))
-		if img != null:
-			sprites[p] = ImageTexture.create_from_image(img)
+	load_characters(OS.get_cmdline_user_args())
 	for i in state_names.size():
 		ST[state_names[i]] = i
 	var args := OS.get_cmdline_user_args()  # whatever came after "--" on the command line
@@ -95,6 +91,29 @@ func _ready() -> void:
 		var result := replay_result if replay_result != "" else "FAILED " + load_error
 		print("REPLAY %s: %s" % [result, replay_name])
 		get_tree().quit(0 if replay_result == "verified" else 1)
+
+
+# Loads the two players' characters: --p1=ID / --p2=ID, default 1 and 2.
+func load_characters(args: PackedStringArray) -> void:
+	var dir := ProjectSettings.globalize_path("res://").path_join("../assets/characters").simplify_path()
+	var manifest = JSON.parse_string(FileAccess.get_file_as_string(dir.path_join("characters.json")))
+	if typeof(manifest) != TYPE_DICTIONARY:
+		manifest = {}
+	var ids := ["1", "2"]
+	for a in args:
+		if a.begins_with("--p1="):
+			ids[0] = a.trim_prefix("--p1=")
+		elif a.begins_with("--p2="):
+			ids[1] = a.trim_prefix("--p2=")
+	for p in 2:
+		var c: Dictionary = manifest.get(ids[p], {})
+		var img := Image.load_from_file(dir.path_join(c.get("file", "missing.png"))) if not c.is_empty() else null
+		chars[p] = {
+			tex = ImageTexture.create_from_image(img) if img != null else null,
+			flip = -1 if c.get("faces", "right") == "left" else 1,  # drawings are flipped to face right
+			body_w = float(c.get("body_w", 47)),
+			name = c.get("name", "(no character %s)" % ids[p]),
+		}
 
 
 func load_replay(path: String) -> void:
@@ -385,13 +404,14 @@ func draw_fighter(i: int, f: Dictionary, font: Font) -> void:
 	# The sprite is drawn around its center, so it can be flipped, squashed
 	# and rotated in place: flipped to face left, squashed when crouching,
 	# lying on its side when knocked down, spinning while tumbling.
-	var size: float = SPRITE_PX * h / SPRITE_BODY_PX  # sprite size in sim units: the character is exactly hurtbox_h tall
+	var ch: Dictionary = chars[i]
+	var size: float = SPRITE_PX * h / SPRITE_REF_PX  # the 64 px canvas, in sim units (same for every character)
 	var center_y: float = f.y + h / 2
 	var angle := 0.0
 	var squash := 1.0
 	if f.state == ST.KNOCKDOWN:
 		angle = -f.facing * PI / 2
-		center_y = f.y + SPRITE_BODY_W / SPRITE_BODY_PX * h / 2  # lying on its side on the floor
+		center_y = f.y + ch.body_w / SPRITE_REF_PX * h / 2  # lying on its side on the floor
 		w = h * 1.1
 		h = cfg.lying_h
 	elif f.state == ST.CROUCH:
@@ -401,9 +421,9 @@ func draw_fighter(i: int, f: Dictionary, font: Font) -> void:
 	elif f.tumble:
 		angle = f.state_frame * 0.35
 	var center := to_screen(f.x + shake, center_y)
-	if sprites[i] != null:
-		draw_set_transform(center, angle, Vector2(f.facing, squash))  # the sprite faces right; -1 flips it
-		draw_texture_rect(sprites[i], Rect2(-Vector2(size, size) * px / 2, Vector2(size, size) * px), false, tint)
+	if ch.tex != null:
+		draw_set_transform(center, angle, Vector2(f.facing * ch.flip, squash))  # -1 mirrors it to face left
+		draw_texture_rect(ch.tex, Rect2(-Vector2(size, size) * px / 2, Vector2(size, size) * px), false, tint)
 		draw_set_transform(Vector2.ZERO)
 	else:  # sprite missing: the old colored box
 		var box := Color(COLORS[i], tint.a)
@@ -429,11 +449,12 @@ func draw_hud(font: Font) -> void:
 		# Shield meter: a thin bar under the damage.
 		draw_rect(Rect2(x, size.y - 6, 80.0 * f.shield_hp / cfg.shield_max, 3), Color(COLORS[i], 0.7))
 		draw_string(font, Vector2(x, size.y - 40), "P%d  %d%%" % [i + 1, int(f.percent)], HORIZONTAL_ALIGNMENT_LEFT, -1, 30, COLORS[i])
+		draw_string(font, Vector2(x, size.y - 66), chars[i].name, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, COLORS[i])
 		for s in f.stocks:
 			draw_circle(Vector2(x + 12 + s * 22, size.y - 18), 7, COLORS[i])
 		draw_string(font, Vector2(x + 90, size.y - 14), state_label(f), HORIZONTAL_ALIGNMENT_LEFT, -1, 14)
 		if f.combo >= 2:  # combo counter, like Smash's training mode
-			draw_string(font, Vector2(x, size.y - 78), "%d HIT COMBO" % f.combo, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, COLORS[i])
+			draw_string(font, Vector2(x, size.y - 92), "%d HIT COMBO" % f.combo, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, COLORS[i])
 
 	var seconds_left: int = max(0, cfg.time_limit_frames - game.get_frame()) / 60
 	draw_string(font, Vector2(size.x / 2 - 30, 30), "%d:%02d" % [seconds_left / 60, seconds_left % 60], HORIZONTAL_ALIGNMENT_LEFT, -1, 24)
