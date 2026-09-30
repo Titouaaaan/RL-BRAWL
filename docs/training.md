@@ -76,6 +76,19 @@ least 200 games against it (or after 100 iterations at most). With the live
 weights on both sides, the two players mirrored each other and settled into
 standoffs. `selfplay/win_rate_vs_frozen` and `selfplay/generation` track it.
 
+**League** (`--league runs/<older run>`): the saved checkpoints of an earlier
+run (one every 250 iterations, plus its final agent) join as opponents in
+`--league-frac` of the games (0.2). Early checkpoints play aggressively and
+sloppily, late ones solidly, so the fights are more varied than self-play
+alone. Opponents are picked by how close the matchup is: each checkpoint keeps
+the learner's recent win rate p against it, and is drawn with weight p(1-p)
+(highest at 50%; AlphaStar's *prioritized fictitious self-play*), so a new
+learner first meets the early checkpoints and moves up as it improves. The
+league opponent changes every `--league-switch` iterations (12, about one
+game). Charts: `league/win_rate_<checkpoint>`, and `eval/win_vs_league_best`
+(32 games against the older run's final agent at every evaluation: the real
+yardstick once the scripted bots are all beaten).
+
 **Actions** are 45 discrete choices: stick x (3) × stick y (3) × button
 (none, jump, light, heavy, dodge). **Observations** are 173 numbers from the
 player's own point of view; player 1's world is mirrored so that both

@@ -32,6 +32,11 @@
 #      bonus grows the damage reward for hits deep in a combo (zero-sum,
 #      capped, annealed with the damage reward); and extensive logging of
 #      moves, states, actions and mechanics (the mech/ charts) to spot it.
+#  11. League (--league runs/<older run>): that run's saved checkpoints play
+#      league_frac of the games, each picked by how close the matchup is
+#      (weight p*(1-p), p = the learner's recent win rate against it; AlphaStar's
+#      prioritized fictitious self-play), and the old run's final agent is an
+#      extra evaluation opponent (eval/win_vs_league_best).
 #  10. Counterattack bonus (zero-sum, annealed with the damage reward): a hit
 #      right after a successful dodge / parry / shield block, or on an opponent
 #      recovering from a missed move, earns counter_reward. Defending alone
@@ -127,6 +132,12 @@ class Args:
     """selfplay: replace it anyway after this many iterations, so a stuck learner moves on"""
     pool_frac: float = 0.2
     """selfplay: fraction of envs that face an older (retired) opponent instead of the current one"""
+    league: str = ""
+    """selfplay: a finished run folder whose saved checkpoints (agent_*.pt) join as opponents"""
+    league_frac: float = 0.2
+    """selfplay with --league: fraction of envs that face a league checkpoint"""
+    league_switch: int = 12
+    """iterations between league opponent changes (about one game), so results can be credited to one checkpoint"""
     eval_every: int = 25
     """every N iterations: win rate vs the fixed bots, and agent_latest.pt"""
     keep_every: int = 250
@@ -306,17 +317,44 @@ if __name__ == "__main__":
     generation, gen_start_iter, gate_games, gate_wins = 0, 1, 0, 0
     pool = []  # retired opponents' weights (CPU state_dicts)
     pool_agent = copy.deepcopy(agent)  # holds whichever retired opponent is being played
-    # Self-play layout of the envs: [frozen opponent | retired pool | scripted bots].
+    # Self-play layout of the envs: [frozen opponent | retired pool | league | scripted bots].
     selfplay = args.opponent == "selfplay"
     n_pool = int(args.num_envs * args.pool_frac) if selfplay else 0
+    n_league = int(args.num_envs * args.league_frac) if selfplay and args.league else 0
     n_bots = int(args.num_envs * args.bot_frac) if selfplay else 0
-    n_frozen = args.num_envs - n_pool - n_bots  # envs [0, n_frozen) face the frozen opponent
+    n_frozen = args.num_envs - n_pool - n_league - n_bots  # envs [0, n_frozen) face the frozen opponent
+    league_lo = n_frozen + n_pool  # envs [league_lo, league_lo + n_league) face the league
     selfplay_bots = [bots.fighter, bots.jabber, bots.spacer, bots.dummy, bots.random]
+
+    # OURS: the league: an older run's checkpoints, each with the learner's
+    # recent win rate against it (p, a moving average over its games).
+    league = []  # [{"name", "weights", "p"}]
+    if n_league:
+        files = sorted(Path(args.league).glob("agent_[0-9]*.pt")) + [Path(args.league) / "agent_latest.pt"]
+        for f in files:
+            league.append({"name": f.stem.replace("agent_", ""), "p": 0.5,
+                           "weights": torch.load(f, map_location="cpu")})
+        print(f"league: {len(league)} checkpoints from {args.league}")
+    league_agent = copy.deepcopy(agent)  # holds whichever league checkpoint is being played
+    league_best = copy.deepcopy(agent)  # the league run's final agent, an extra evaluation opponent
+    if league:
+        league_best.load_state_dict(league[-1]["weights"])
+    league_cur = 0
+
+    def pick_league():
+        # Closest matchups first: weight p*(1-p) peaks at a 50% win rate; the
+        # 0.02 floor keeps every checkpoint occasionally tried (its p can move).
+        w = np.array([c["p"] * (1 - c["p"]) + 0.02 for c in league])
+        return int(np.random.choice(len(league), p=w / w.sum()))
 
     def group_of(i):  # which kind of opponent env i faces, for logging
         if not selfplay:
             return args.opponent
-        return "frozen" if i < n_frozen else "pool" if i < n_frozen + n_pool else "bots"
+        if i < n_frozen:
+            return "frozen"
+        if i < league_lo:
+            return "pool"
+        return "league" if i < league_lo + n_league else "bots"
 
     def opponent_actions(o):
         if args.opponent in opp_bots:
@@ -326,8 +364,10 @@ if __name__ == "__main__":
         parts = [net_policy(frozen, device)(o[:n_frozen])]
         if n_pool > 0:
             parts.append(net_policy(pool_agent if pool else frozen, device)(o[n_frozen : n_frozen + n_pool]))
+        if n_league > 0:
+            parts.append(net_policy(league_agent, device)(o[league_lo : league_lo + n_league]))
         if n_bots > 0:
-            idx = np.array_split(np.arange(n_frozen + n_pool, args.num_envs), len(selfplay_bots))
+            idx = np.array_split(np.arange(league_lo + n_league, args.num_envs), len(selfplay_bots))
             parts += [bot(o[ix]) for bot, ix in zip(selfplay_bots, idx)]
         return np.concatenate(parts)
 
@@ -360,6 +400,8 @@ if __name__ == "__main__":
         frozen.load_state_dict(resume["frozen"])
         pool = resume["pool"]
         generation, gen_start_iter, gate_games, gate_wins = resume["gate"]
+        for c, p in zip(league, resume.get("league_p", [])):
+            c["p"] = p
         start_iteration = resume["iteration"] + 1
         global_step = resume["global_step"]
         print(f"resumed {run_name} at iteration {start_iteration}")
@@ -386,6 +428,9 @@ if __name__ == "__main__":
 
         if pool:  # OURS: a fresh pool opponent for this rollout
             pool_agent.load_state_dict(random.choice(pool))
+        if league and (iteration - start_iteration) % args.league_switch == 0:  # OURS: next league opponent
+            league_cur = pick_league()
+            league_agent.load_state_dict(league[league_cur]["weights"])
 
         for step in range(0, args.num_steps):
             global_step += args.num_envs
@@ -421,6 +466,9 @@ if __name__ == "__main__":
                 if i < n_frozen:  # the gate only counts games against the frozen opponent
                     gate_games += 1
                     gate_wins += int(envs.winner[i] == 0)
+                elif league_lo <= i < league_lo + n_league:  # credit the league checkpoint being played
+                    result = 1.0 if envs.winner[i] == 0 else 0.5 if envs.winner[i] == -1 else 0.0
+                    league[league_cur]["p"] += 0.05 * (result - league[league_cur]["p"])
                 ep_return[i], ep_len[i] = 0, 0
 
         # bootstrap value if not done
@@ -600,6 +648,8 @@ if __name__ == "__main__":
             writer.add_scalar("selfplay/win_rate_vs_frozen", gate_rate, global_step)
             writer.add_scalar("selfplay/generation", generation, global_step)
             writer.add_scalar("selfplay/pool_size", len(pool), global_step)
+            for c in league:  # the learner's recent win rate against each league checkpoint
+                writer.add_scalar(f"league/win_rate_{c['name']}", c["p"], global_step)
             beaten = gate_games >= args.gate_min_games and gate_rate >= args.gate_win_rate
             if beaten or iteration - gen_start_iter >= args.gate_max_iters:
                 pool.append({k: v.detach().cpu().clone() for k, v in frozen.state_dict().items()})
@@ -617,12 +667,18 @@ if __name__ == "__main__":
                 w, l, d = evaluate(me, bots.BOTS[name], args, args.eval_games)
                 writer.add_scalar(f"eval/win_vs_{name}", w, global_step)
                 print(f"  eval vs {name:7s} win {w:.2f} loss {l:.2f} draw {d:.2f}")
+            if league:  # head-to-head against the older run's final agent: the real yardstick
+                w, l, d = evaluate(me, net_policy(league_best, device), args, args.eval_games)
+                writer.add_scalar("eval/win_vs_league_best", w, global_step)
+                print(f"  eval vs league best ({league[-1]['name']}) win {w:.2f} loss {l:.2f} draw {d:.2f}")
+                print("  league win rates: " + "  ".join(f"{c['name']} {c['p']:.2f}" for c in league))
             torch.save(agent.state_dict(), run_dir / "agent_latest.pt")
             torch.save({  # everything --resume needs
                 "args": {k: v for k, v in vars(args).items() if k != "resume"},
                 "agent": agent.state_dict(), "optimizer": optimizer.state_dict(),
                 "frozen": frozen.state_dict(), "pool": pool,
                 "gate": (generation, gen_start_iter, gate_games, gate_wins),
+                "league_p": [c["p"] for c in league],
                 "iteration": iteration, "global_step": global_step,
             }, run_dir / "resume.pt")
             if iteration % args.keep_every == 0:
