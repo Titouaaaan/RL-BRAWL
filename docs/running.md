@@ -10,6 +10,10 @@ It rebuilds the C++ (only what changed, usually a few seconds) and opens the gam
 
 `.\play.bat replay` plays back the newest recorded game (from training, see `docs/training.md`): Space pauses, the right arrow steps one frame while paused, up/down change speed, R restarts.
 
+`.\play.bat --vs` lets you fight the newest trained agent (you are P1; see [Fighting a bot](#fighting-a-bot)).
+
+Add `--p1 ID --p2 ID` to any of these to choose the characters (see [Characters](#characters)). The options can come in any order, e.g. `.\play.bat replay --p1 6 --p2 2` or `.\play.bat --vs fighter --p2 5`.
+
 ## Controls
 
 Keys are matched by **position** on the keyboard, so on AZERTY, "WASD" is really ZQSD.
@@ -82,16 +86,34 @@ To remap, edit the `PAD` table near the top of `godot/main.gd`.
 - While intangible, a fighter is drawn see-through with a white outline.
 
 ### Rules
-- Leave the faint blast-zone area and you lose a stock. You respawn above the stage, blinking and invulnerable for 2 seconds.
+- Each player has **3 stocks**. Leave the faint blast-zone area and you lose a stock. You respawn above the stage, blinking and invulnerable for 2 seconds.
+- A game ends when someone loses their last stock, or after **7 minutes** (the timer at the top, as in competitive Smash). At the time limit the player with more stocks wins, then the one with less damage.
 
-**Reading the screen:** hitboxes are circles with a red rim (a grab's rim is yellow), faded once the move has already hit. A fighter flashes pale while in hitstun and shakes during hitlag, turns purple while held, and pulses yellow while dazed. A shield is a bubble that shrinks as it wears down. The text next to the stocks is the state machine's state, e.g. `ATTACK heavy 12` = frame 12 of the heavy, `HITSTUN 3 (17 left)`.
+**Reading the screen:** fighters are drawn as their character's sprite (see [Characters](#characters)), with the character's name above the damage. Hitboxes are circles with a red rim (a grab's rim is yellow), faded once the move has already hit. The sprite is tinted to show what's happening:
+
+| Look | Meaning |
+|---|---|
+| bright flash, shaking | in hitstun / the hit freeze (hitlag) |
+| spinning | tumbling after a strong hit: tech or be knocked down |
+| lying on its side | knocked down |
+| squashed | crouching |
+| see-through with a white outline | intangible (dodging, get-up, ledge) |
+| blinking | invulnerable after respawning |
+| golden glow, growing | charging a smash attack |
+| dark | rebounding after a clank or a parried attack: open to a punish |
+| cyan | the parry window (just let go of the shield) |
+| purple | being held in a grab |
+| pulsing yellow | dazed after a shield break |
+| red blink while hanging | about to let go of the ledge |
+
+A shield is a bubble that shrinks as it wears down. "N HIT COMBO" appears above a player during a true combo. The text next to the stocks is the state machine's state, e.g. `ATTACK heavy 12` = frame 12 of the heavy, `HITSTUN 3 (17 left)`.
 
 ## Fighting a bot
 
 ```
 play.bat --vs                  # the newest trained agent
 play.bat --vs fighter          # a scripted bot: dummy, random, jabber, spacer, fighter
-play.bat --vs runs\<run>gent_00600.pt --p1 1 --p2 5
+play.bat --vs runs\<run>\agent_00600.pt --p1 1 --p2 5
 ```
 
 You are P1 (keyboard or controller 1); the bot is P2. `play.bat` opens the
@@ -113,7 +135,7 @@ playing or watching replays, in any order:
 ```
 play.bat --p1 3 --p2 5
 play.bat replay --p1 4 --p2 1
-play.bat replay path	o\game.json --p2 5
+play.bat replay path\to\game.json --p2 5
 ```
 
 Without them, P1 is character 1 and P2 is character 2.
@@ -179,11 +201,13 @@ Everything else (dash and run speed, gravity, jump heights, dodge and roll frame
 
 ## What happens when you run it
 
-1. **CMake + MSVC compile the C++** (`core/sim.cpp`, `core/moves.cpp` and `bindings/godot/fightgame.cpp`) into `godot/bin/fightgame.windows.template_debug.x86_64.dll`. That DLL is the whole game logic.
-2. **Godot loads the DLL.** `godot/fightgame.gdextension` tells it where the DLL is.
-3. **`godot/main.gd` runs 60 times per second.** Each time it reads the keyboard, calls `step()` in C++, and draws the boxes.
+1. **CMake + MSVC compile the C++** (`core/sim.cpp`, `core/moves.cpp`, `core/obs.cpp` and `bindings/godot/fightgame.cpp`) into `godot/bin/fightgame.windows.template_debug.x86_64.dll`. That DLL is the whole game logic.
+2. **Godot loads the DLL.** `godot/fightgame.gdextension` tells it where the DLL is. `godot/main.gd` loads the characters from `assets/characters/` and reads the options `play.bat` passed on (`--replay=`, `--vs=`, `--p1=`, `--p2=`).
+3. **`godot/main.gd` runs 60 times per second.** Each time it reads the keyboard and controllers (and, with `--vs`, asks the bot for its move), calls `step()` in C++, and draws the sprites.
 
 The Python training code calls exactly the same `step()`, so what you see is exactly what the bot trains on.
+
+`play.bat`'s options, in any order: `edit` (open the Godot editor), `replay [file.json|latest]`, `--vs [latest|checkpoint.pt|scripted bot]`, `--p1 ID`, `--p2 ID`.
 
 ## One-time setup on a new machine
 
@@ -191,7 +215,8 @@ This machine already has everything installed. On another PC you would need:
 
 1. **Visual Studio 2026 (Community)** with the *Desktop development with C++* workload, which provides the MSVC compiler.
 2. **Python 3.13** from python.org, then run:
-   `python -m pip install "cmake>=4.2" "scikit-build-core>=0.10" "nanobind>=2.4" pytest numpy`
+   `python -m pip install "cmake>=4.2" "scikit-build-core>=0.10" "nanobind>=2.4" pytest numpy torch tensorboard tyro pillow`
+   (the first three build the game module; torch, tensorboard and tyro are for training and the live bot; pillow for `tools/sprites.py`), then build the module once: `python -m pip install --no-build-isolation .`
 3. **Godot 4.7** (standard build, not .NET). Unzip it anywhere under `Downloads`, or set the `GODOT` environment variable to the path of its `.exe`.
 4. `git clone` the repo. `play.bat` downloads the `godot-cpp` submodule itself if it's missing.
 
@@ -203,6 +228,10 @@ This machine already has everything installed. On another PC you would need:
 | Run the tests | `python -m pytest -q` |
 | Speed benchmark | `python tools/bench.py` |
 | Train an agent | `python train/ppo.py --opponent dummy` (see `docs/training.md`) |
+| Record a game of the newest agent (then `play.bat replay`) | `python train/record.py latest --opponent self` (or `fighter`, `spacer`, ...) |
+| Process new or changed character images | `python tools/sprites.py` (see [Characters](#characters)) |
+| Which true combos the game allows (frame-perfect search) | `python tools/combos.py` |
+| Run the bot server by hand (normally `play.bat --vs` does it) | `python train/serve.py latest --port 5055`, then `godot --path godot -- --vs=5055` |
 | Memory-bug check (AddressSanitizer) | `python -m cmake -S . -B build/debug` then `python -m cmake --build build/debug --config Debug` then `build\debug\Debug\smoke.exe` |
 
 Always use `python -m cmake`, not plain `cmake`: the Strawberry Perl install on this PC puts an old CMake 3.29 on the PATH, and it doesn't know Visual Studio 2026.
@@ -215,5 +244,7 @@ Always use `python -m cmake`, not plain `cmake`: the Strawberry Perl install on 
 | `Could not find Godot` | play.bat didn't find `Godot_v4*_win64.exe` under Downloads. | Set `GODOT` to the full path of Godot's .exe. |
 | Godot says `FightGame` is not declared / "Identifier not found" | Godot doesn't know about the extension. Either the DLL didn't build, or the project was never imported. | Delete the `godot/.godot` folder and run `play.bat` again; it re-imports. |
 | `could not create CMAKE_GENERATOR "Visual Studio 18 2026"` | The old Strawberry CMake was used. | Use `python -m cmake ...`. |
-| `DESYNC` at the end of a replay | Godot's re-simulation didn't end in the recorded state: the Python module and the Godot DLL disagree. Usually one of them is stale. | Rebuild both (`pip install --no-build-isolation .` and `play.bat`), record again. `tests/test_replay_godot.py` checks this automatically. |
+| `DESYNC` at the end of a replay | Godot's re-simulation didn't end in the recorded state: the Python module and the Godot DLL disagree. Usually one of them is stale. Or the replay was recorded with an older version of the game: a replay stores the inputs, not the game code. | Rebuild both (`pip install --no-build-isolation .` and `play.bat`), record again. `tests/test_replay_godot.py` checks this automatically. Replays from the previous game version (`selfplay__smash__...`, before the Sep 30 changes) play in the frozen copy `D:\BOOTLEG-SSM-v1`: run its `play.bat replay <full path to the .json>`. |
+| `P2: could not reach the bot` / `lost the connection to the bot` | The game couldn't talk to `train/serve.py` (it crashed, or took over 30 s to load). | Look at the minimized "bot" window for its error; common causes: no trained run yet (`latest` needs a `runs/*/agent_latest.pt`), or a checkpoint from an older game version. |
+| `the bot expects N inputs, this game gives M` | The Python module and the Godot DLL were built from different code (the observation size differs). | Rebuild both: `python -m pip install --no-build-isolation .` and `play.bat`. |
 | The build is weird after pulling big changes | Stale build folder. | Delete `build/godot` (it's safe; it's all generated) and rerun. |

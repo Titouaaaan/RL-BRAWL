@@ -24,7 +24,7 @@ more training.
 |---|---|---|---|
 | 1 | `--opponent dummy` | wins ~100% vs dummy, games get short | env, reward, observation bugs |
 | 2 | `--opponent random` | wins > 95% vs random | basic combat |
-| 3 | `--opponent scripted` | beats all four bots (the mix trains against all of them) | real skill, reward hacking, over-fitting to one opponent |
+| 3 | `--opponent scripted` | beats all five bots (the mix trains against all of them) | real skill, reward hacking, over-fitting to one opponent |
 | 4 | `--opponent selfplay` | win rate vs the bots keeps rising; replays look like real play | the goal |
 
 Self-play reward hovers around zero by design (you're playing yourself), so
@@ -67,7 +67,7 @@ and splits ~50/50 with spacer: `eval/win_vs_fighter` is the strongest fixed yard
 only produced an agent that waited for the opponent to come to it, and
 stood idle against a dummy.) `selfplay`: 70% of games against the current
 opponent, 20% against a random retired opponent (so the agent doesn't forget
-how to beat older versions of itself), and 10% against the four scripted
+how to beat older versions of itself), and 10% against the five scripted
 bots (`--bot-frac`), so it never forgets how to beat simple play (a previous
 run ended up drawing 97% of games against a standing dummy). The 70% opponent is a **frozen** copy of the agent
 ("gated" self-play): it stays fixed while the learner trains against it,
@@ -77,9 +77,21 @@ weights on both sides, the two players mirrored each other and settled into
 standoffs. `selfplay/win_rate_vs_frozen` and `selfplay/generation` track it.
 
 **Actions** are 45 discrete choices: stick x (3) × stick y (3) × button
-(none, jump, light, heavy, dodge). **Observations** are 145 numbers from the
+(none, jump, light, heavy, dodge). **Observations** are 173 numbers from the
 player's own point of view; player 1's world is mirrored so that both
-players see themselves starting on the left (layout in `core/vecenv.h`).
+players see themselves starting on the left (layout in `core/obs.h`, code in
+`core/obs.cpp`, which the live Godot bot uses too). Besides positions, speeds,
+states and hitboxes they include everything the rewards depend on: the combo
+and hit-streak counts, the counter window and the smash charge.
+
+**No input buffer for agents:** the game's 9-frame input buffer (a press made
+just before you can act still comes out) is for humans only; the training
+env uses `input_buffer=0`. With it, agents learned about half as fast (hits/min
+4.7 vs 10.7 and 83% vs 0.5% timeouts at 21M decisions): an agent decides every
+4 frames and sees the game 6 frames late, so presses from earlier decisions
+fired at moments it hadn't chosen, invisible in its observation. Found by
+ablation (time limit, reward, seed, smash charge and buffer tested one at a
+time; details in `runs/monitor_notes.md`).
 **Rewards:** +1 for a KO, −1 for being KO'd. On top of that, two shaping
 terms give a denser learning signal early on, then fade out:
 
@@ -186,4 +198,20 @@ play.bat replay
 ```
 
 `python train/replay.py` records a random-vs-random game, handy for testing
-the viewer.
+the viewer. Add `--p1 ID --p2 ID` to `play.bat replay` to pick the
+characters (`docs/running.md`).
+
+To **play against** a trained agent yourself: `play.bat --vs` (the newest run)
+or `play.bat --vs runs\<run>\agent_00600.pt`. It runs `train/serve.py`
+(the network in PyTorch, over a local connection, about 1 ms per decision) with
+the same reaction delay and frame skip as in training.
+
+Replays store inputs, not the game code, so a replay recorded before a game
+change desyncs on the new game. The previous version's replays play in the
+frozen copy `D:\BOOTLEG-SSM-v1` (a git worktree at commit 98cdc91).
+
+## History
+
+`runs/monitor_notes.md` is the lab notebook: every overnight run, what was
+watched, each intervention with its evidence, and the morning reports. The
+decisions it led to are summarized in `docs/design.md`.
