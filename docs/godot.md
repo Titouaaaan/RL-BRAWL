@@ -47,7 +47,10 @@ C++ core to advance, and draws. It contains no game logic.
   action space); the **most recently pressed** one wins, so holding jump for a
   full hop and pressing light mid-jump gives an air attack.
 - Keys are physical positions (WASD is ZQSD on AZERTY); the `KEYS` and `PAD`
-  tables at the top remap them.
+  tables at the top remap them. Controllers use Smash Ultimate's default
+  layout (see [playing.md](playing.md#controls)); the right stick is read as
+  heavy + direction, and `human_input()` turns the grab button into a 2-frame
+  shortcut (shield, then light).
 
 ### Drawing
 

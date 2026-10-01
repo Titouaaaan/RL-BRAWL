@@ -41,17 +41,26 @@ const KEYS := [
 ]
 
 # Controllers: the first one connected plays P1, the second P2; the keyboard
-# works at the same time. Button names are Godot's (Xbox-style positions);
-# on a PS4 pad: A = Cross, B = Circle, X = Square, Y = Triangle.
-#   Left stick or d-pad: move      Cross / Triangle: jump
-#   Square: light      Circle: heavy      L1 / R1 / L2 / R2: dodge
+# works at the same time. Smash Ultimate's default layout, by button position
+# (Godot names buttons by position: A = bottom, B = right, X = left, Y = top;
+# on a PS4 pad: A = Cross, B = Circle, X = Square, Y = Triangle):
+#   Left stick (or d-pad): move          Right stick: heavy in that direction (Smash's C-stick)
+#   Circle (Smash A): light attack       Cross (Smash B, specials): heavy, until specials exist
+#   Triangle / Square (Smash X / Y): jump
+#   L2 / R2 (Smash ZL / ZR): shield / dodge     L1 / R1 (Smash L / R): grab
 #   Options: restart (like R)
 const PAD := {
-	jump = [JOY_BUTTON_A, JOY_BUTTON_Y],
-	light = [JOY_BUTTON_X],
-	heavy = [JOY_BUTTON_B],
-	dodge = [JOY_BUTTON_LEFT_SHOULDER, JOY_BUTTON_RIGHT_SHOULDER],
+	jump = [JOY_BUTTON_X, JOY_BUTTON_Y],
+	light = [JOY_BUTTON_B],
+	heavy = [JOY_BUTTON_A],
+	dodge = [],  # the triggers (L2 / R2): read as axes in read_pad
 }
+const PAD_GRAB := [JOY_BUTTON_LEFT_SHOULDER, JOY_BUTTON_RIGHT_SHOULDER]
+# The grab button is a 2-frame shortcut: our grab is "light while shielding",
+# so it sends shield (stick neutral, so it isn't a roll) then light. In the air
+# that's an air dodge, like Smash's grab button for most characters.
+var grab_seq := [0, 0]  # frames of the shortcut still to send, per player
+var grab_prev := [false, false]
 const DEADZONE := 0.5  # how far the stick must be pushed to count as a direction
 const BUTTONS := ["jump", "light", "heavy", "dodge"]  # position + 1 = the Button enum in core/sim.h
 # The sim takes one button per frame, so when several are held we must pick
@@ -286,14 +295,14 @@ func _physics_process(_delta: float) -> void:
 	# Runs exactly 60 times per second: one call = one sim frame at 1x speed.
 	prev_fighters = [game.get_fighter(0), game.get_fighter(1)]
 	if replay.is_empty():
-		var a := merge(read_input(KEYS[0]), read_pad(0))
+		var a := human_input(0, merge(read_input(KEYS[0]), read_pad(0)))
 		if bot_port > 0:
 			if bot_update():  # the game waits until the bot is connected
 				var b := bot_decide()
-				game.step(a[0], a[1], pick_button(0, a[2]), b[0], b[1], b[2])
+				game.step(a[0], a[1], a[2], b[0], b[1], b[2])
 		else:
-			var b := merge(read_input(KEYS[1]), read_pad(1))
-			game.step(a[0], a[1], pick_button(0, a[2]), b[0], b[1], pick_button(1, b[2]))
+			var b := human_input(1, merge(read_input(KEYS[1]), read_pad(1)))
+			game.step(a[0], a[1], a[2], b[0], b[1], b[2])
 	elif not paused:
 		speed_acc += SPEEDS[speed_i]
 		while speed_acc >= 1.0:
@@ -437,7 +446,7 @@ func held(key: Key) -> bool:
 func read_pad(n: int) -> Array:
 	var pads := Input.get_connected_joypads()
 	if n >= pads.size():
-		return [0, 0, [false, false, false, false]]
+		return [0, 0, [false, false, false, false], false]
 	var dev: int = pads[n]
 	var x := Input.get_joy_axis(dev, JOY_AXIS_LEFT_X)
 	var y := -Input.get_joy_axis(dev, JOY_AXIS_LEFT_Y)  # Godot's stick y points down; the sim's up
@@ -449,7 +458,15 @@ func read_pad(n: int) -> Array:
 	var triggers := Input.get_joy_axis(dev, JOY_AXIS_TRIGGER_LEFT) > 0.5 or Input.get_joy_axis(dev, JOY_AXIS_TRIGGER_RIGHT) > 0.5
 	var now := BUTTONS.map(func(n): return PAD[n].any(func(b): return pad(dev, b)))
 	now[3] = now[3] or triggers
-	return [sx, sy, now]
+	# Right stick (C-stick): heavy in the stick's direction (smash attacks on
+	# the ground, heavy aerials in the air); it overrides the left stick.
+	var cx := Input.get_joy_axis(dev, JOY_AXIS_RIGHT_X)
+	var cy := -Input.get_joy_axis(dev, JOY_AXIS_RIGHT_Y)
+	if absf(cx) > DEADZONE or absf(cy) > DEADZONE:
+		sx = int(cx > DEADZONE) - int(cx < -DEADZONE)
+		sy = int(cy > DEADZONE) - int(cy < -DEADZONE)
+		now[2] = true
+	return [sx, sy, now, PAD_GRAB.any(func(b): return pad(dev, b))]
 
 
 func pad(dev: int, b: JoyButton) -> bool:
@@ -462,7 +479,23 @@ func merge(k: Array, p: Array) -> Array:
 	var now := []
 	for i in 4:
 		now.append(k[2][i] or p[2][i])
-	return [clampi(k[0] + p[0], -1, 1), clampi(k[1] + p[1], -1, 1), now]
+	return [clampi(k[0] + p[0], -1, 1), clampi(k[1] + p[1], -1, 1), now, p[3]]
+
+
+# Player p's final input for this frame: the button picked from those held,
+# or the grab shortcut (shield, then light) while it runs.
+func human_input(p: int, a: Array) -> Array:
+	if a[3] and not grab_prev[p]:
+		grab_seq[p] = 2  # grab pressed: start the shortcut
+	grab_prev[p] = a[3]
+	var button := pick_button(p, a[2])
+	if grab_seq[p] == 2:
+		grab_seq[p] = 1
+		return [0, 0, 4]  # shield (stick neutral: not a roll or spot dodge)
+	if grab_seq[p] == 1:
+		grab_seq[p] = 0
+		return [a[0], a[1], 2]  # light while shielding = grab
+	return [a[0], a[1], button]
 
 
 # Sim coordinates (y up) -> screen pixels (y down), through the camera.

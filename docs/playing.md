@@ -33,14 +33,23 @@ Keys are matched by **position** on the keyboard, so on AZERTY, "WASD" is really
 
 **Controllers** work alongside the keyboard: the first controller connected plays P1, the second P2. A PS4 controller works over USB or Bluetooth with no setup. If Godot doesn't see it, close Steam: its "Steam Input" feature can grab controllers.
 
-| PS4 controller | Action |
-|---|---|
-| Left stick or d-pad | Move (the stick has to be pushed past halfway) |
-| Cross or Triangle | Jump |
-| Square | Light attack |
-| Circle | Heavy attack |
-| L1 / R1 / L2 / R2 | Dodge |
-| Options | Reload moves + restart (like R) |
+The layout is **Smash Ultimate's default**, by button position (a Switch Pro
+controller's A / B / X / Y are a PS4 pad's Circle / Cross / Triangle / Square):
+
+| PS4 controller | Smash Ultimate | Action here |
+|---|---|---|
+| Left stick (or d-pad) | Control stick | Move (push past halfway) |
+| Circle | A: attack | Light attack |
+| Cross | B: special | Heavy attack (we have no specials yet) |
+| Triangle / Square | X / Y: jump | Jump |
+| Right stick | C-stick: smash attacks | Heavy in that direction (smash attacks on the ground, heavy aerials in the air); holding it charges a smash |
+| L2 / R2 | ZL / ZR: shield | Shield / dodge |
+| L1 / R1 | L / R: grab | Grab (a 2-frame shortcut: shield, then light; an air dodge in the air) |
+| Options | + : pause | Reload moves + restart (like R) |
+
+Not copied from Smash: *tap jump* (up on the stick jumps), because our stick
+has no gentle "tilt" vs hard "flick" distinction and up + light must stay an
+up-tilt; the d-pad moves instead of taunting.
 
 To remap, edit the `PAD` table near the top of `godot/main.gd`.
 
