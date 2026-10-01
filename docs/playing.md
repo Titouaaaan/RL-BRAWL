@@ -18,7 +18,7 @@ Cross, Circle = back).
 | Bot vs Bot | Pick a level for each bot, then watch them fight live |
 | Character Select | Pick P1's and P2's characters; saved for next time |
 | Controls | Keyboard and controller bindings |
-| Replays | Every recording under `replays/`, newest first: select one to watch it |
+| Replays | Every recording under `replays/`, newest first, with who won: select one to watch it |
 
 In a game, **Esc** goes back to the menu.
 
@@ -174,6 +174,9 @@ can't connect, the top line says why (for example the game and the Python
 module were built from different code: rebuild both).
 
 ## Watching replays
+
+To (re)generate a set of fights: `python train/record_vs.py` records the
+latest agent against every checkpoint and scripted bot (`replays/latest_vs_all/`).
 
 `.\play.bat replay` plays the newest recording under `replays/`;
 `.\play.bat replay path\to\file.json` a specific one. To record a fresh game of

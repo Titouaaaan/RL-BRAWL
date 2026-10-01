@@ -34,7 +34,7 @@ me = net_policy(agent, "cpu")
 opp = me if args.opponent == "self" else bots.BOTS[args.opponent]
 
 ckpt = Path(args.checkpoint)
-rep = replay.play_and_record(ROOT / "data" / "moves", me, opp,
+rep = replay.play_and_record(ROOT / "data" / "moves", me, opp, reaction_delay=6,  # as in training
                              meta={"checkpoint": f"{ckpt.parent.name}/{ckpt.name}", "p1": "agent", "p2": args.opponent})
 out = replay.save(rep, ROOT / "replays" / "recorded" / f"{ckpt.parent.name}_{ckpt.stem}_vs_{args.opponent}.json")
 print(f"saved {out}  ({len(rep['inputs']) // 60} s, winner: {['draw', 'agent', args.opponent][rep['winner'] + 1]})")

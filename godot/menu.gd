@@ -227,7 +227,7 @@ func show_replays() -> void:
 	list.add_theme_font_size_override("font_size", 15)
 	for f in files:
 		var when := Time.get_datetime_string_from_unix_time(f.time, true)
-		list.add_item("%s    %s" % [when, f.label])
+		list.add_item("%s    %s    %s" % [when, f.label, replay_result(f.path)])
 		list.set_item_metadata(list.item_count - 1, f.path)
 	list.item_activated.connect(func(i):
 		Session.start_game(PackedStringArray(["--replay=" + str(list.get_item_metadata(i))])))
@@ -256,6 +256,28 @@ func char_name(id: String) -> String:
 func character_texture(file: String) -> Texture2D:
 	var img := Image.load_from_file(Session.repo_root().path_join("assets/characters").path_join(file))
 	return ImageTexture.create_from_image(img) if img != null else null
+
+
+# Who won a recorded game, read from the start of the file (the result comes
+# before the long list of inputs, so there's no need to load the whole file).
+func replay_result(path: String) -> String:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return ""
+	var head := file.get_buffer(mini(4096, file.get_length())).get_string_from_ascii()
+	var winner := RegEx.create_from_string("\"winner\":([-0-9]+)").search(head)
+	if winner == null:
+		return ""
+	var names := []
+	for key in ["p1", "p2"]:
+		var m := RegEx.create_from_string("\"%s\":\"([^\"]*)\"" % key).search(head)
+		names.append(m.get_string(1) if m != null else key.to_upper())
+	match int(winner.get_string(1)):
+		0:
+			return "->  P1 %s won" % names[0]
+		1:
+			return "->  P2 %s won" % names[1]
+	return "->  draw"
 
 
 # Every .json under replays/, newest first: [{path, label, time}].

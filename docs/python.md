@@ -56,6 +56,7 @@ returns a dict of the fighter's state; `set_percent(game, player, pct)`;
 | `bots.py` | Scripted opponents as functions `obs -> actions` (vectorized NumPy): `dummy`, `random`, `jabber`, `spacer`, `fighter`. Observation indices are named at the top. |
 | `replay.py` | `play_and_record()` plays one game and returns a replay dict (inputs, move files, input buffer, final hash); `save()`. |
 | `record.py` | Records a checkpoint's game: `python train/record.py latest --opponent self`. |
+| `record_vs.py` | Records the latest agent (or `--agent X.pt`) against every compatible checkpoint in `runs/` and the five scripted bots, headless (about 2-3 minutes for 100 games), into `replays/latest_vs_all/<agent>_vs_<opponent>.json` (e.g. `league-480M_vs_main-150M.json`: run name + training decisions). Checkpoints from older game versions are skipped. |
 | `serve.py` | The live bot server for Godot (below). |
 | `ppo.py` | Training: see [training.md](training.md). |
 
