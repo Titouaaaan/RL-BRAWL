@@ -55,7 +55,8 @@ Changing them needs a rebuild; move data doesn't.
 3. **Ledge grabs**, then **grab holds** (the held fighter follows the holder,
    mashing, pummels, escapes).
 4. **Push apart:** grounded fighters can't overlap.
-5. **Clanks:** two ground attacks whose hitboxes touch cancel.
+5. **Clanks:** two ground attacks whose hitboxes touch cancel; the rebounding
+   fighters slide `clank_push` (0.75) apart, stopping at the stage edge.
 6. **Hits:** both players' hits are *found* before any is *applied*, so a trade
    (both hit on the same frame) is symmetric. Attacks beat grabs, grabs beat
    shields, shields beat attacks; a dodging fighter's i-frames (intangible

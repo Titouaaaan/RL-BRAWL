@@ -158,3 +158,39 @@ def test_hanging_too_long_lets_go():
     assert f(env, 0)["state"] == S["LEDGE"]
     hold(env, 2)  # 3 seconds (ledge_hang_max) and you drop
     assert f(env, 0)["state"] == S["AIRBORNE"]
+
+
+def test_clank_slides_fighters_apart_and_cannot_loop():
+    env = new_env()
+    face_off(env)
+    gap = f(env, 1)["x"] - f(env, 0)["x"]
+    act(env, p1=(0, 0, 2), p2=(0, 0, 2))  # both jab at point-blank: clank
+    hold(env, 3)
+    assert f(env, 0)["state"] == S["REBOUND"] and f(env, 1)["state"] == S["REBOUND"]
+    hold(env, 40)
+    assert f(env, 1)["x"] - f(env, 0)["x"] > gap + 1.4  # each slid about 0.75 away
+    # Both keep jabbing whenever they can: before, this clanked forever. Clanks
+    # are hitbox against hitbox, and two jab hitboxes meet up to 4.4 apart, so a
+    # couple more clanks can happen, but each one slides them further apart
+    # (2.0 -> 3.5 -> 5.0), so the loop ends by itself within 3 clanks.
+    env = new_env()
+    face_off(env)
+    rebounds = 0
+    for _ in range(300):
+        before = [f(env, p)["state"] for p in (0, 1)]
+        act(env, p1=(0, 0, 2), p2=(0, 0, 2))
+        rebounds += sum(f(env, p)["state"] == S["REBOUND"] and before[p] != S["REBOUND"] for p in (0, 1))
+    assert rebounds <= 6  # at most 3 clanks, then out of range for good
+    assert f(env, 1)["x"] - f(env, 0)["x"] > 4.4
+
+
+def test_clank_slide_stops_at_the_edge():
+    env = new_env()
+    hold(env, 300, p2=(1, 0, 0))  # P2 shoves P1 until P1 is pinned at the left edge
+    assert f(env, 0)["x"] < -fightcore.STAGE_HALF_WIDTH + 0.1
+    hold(env, 30)
+    act(env, p1=(0, 0, 2), p2=(0, 0, 2))  # clank: P1's slide points off the stage
+    hold(env, 3)
+    assert f(env, 0)["state"] == S["REBOUND"]
+    hold(env, 60)
+    assert f(env, 0)["grounded"] and f(env, 0)["x"] >= -fightcore.STAGE_HALF_WIDTH  # stopped at the edge

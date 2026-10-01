@@ -602,7 +602,7 @@ static void step_fighter(Fighter& f, const Input& raw_in, const GameConfig& cfg,
         if (f.grounded) {
             const Surface& s = cfg.surfaces[f.surface];
             bool on = (f.x >= s.x0 && f.x <= s.x1);
-            if (f.state == ST_ROLL && !on) {  // rolls stop at the edge instead of rolling off
+            if ((f.state == ST_ROLL || f.state == ST_REBOUND) && !on) {  // rolls and clank slides stop at the edge
                 f.x = std::clamp(f.x, s.x0, s.x1);
                 on = true;
             }
@@ -909,6 +909,13 @@ static void resolve_clank(GameState& s, const GameConfig& cfg, StepEvents& ev) {
         f.state_frame = 0;
         f.landing_lag = static_cast<int16_t>(frames);
         f.hitlag = std::max(f.hitlag, lag);
+        // Slide away from the opponent (after the hit freeze), at the speed
+        // that ground friction a brings to a stop after clank_push units. Per
+        // frame the speed drops by a and then moves the fighter, so the
+        // distance is v^2/(2a) - v/2; solving for v gives the formula below.
+        const float a = cfg.ground_friction;
+        float away = (f.x != s.f[1 - p].x) ? (f.x > s.f[1 - p].x ? 1.0f : -1.0f) : -float(f.facing);
+        f.vx = away * 0.5f * (a + std::sqrt(a * a + 8.0f * a * cfg.clank_push));
         ev.clank[p] = true;
     }
 }

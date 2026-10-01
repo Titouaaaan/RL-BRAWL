@@ -376,6 +376,12 @@ struct GameConfig {
     // rebound; otherwise the weaker one does. Rebound = floor((d + 4) * 15/8).
     float clank_range = 9.0f;
     int rebound_max = 58;
+    // Fighters that rebound slide this far apart (ground friction stops them).
+    // Without it two identical jabs at point-blank clank, both recover on the
+    // same frame, jab again and clank forever (self-play mirror matches did,
+    // for up to 20 s). With it each clank widens the gap (2.0 -> 3.5 -> 5.0),
+    // out of jab range for good after at most 3 clanks.
+    float clank_push = 0.75f;
     // Stale-move negation: a move found at position i (0 = newest) of the
     // last-9 queue loses stale_steps[i] of its power, summed over every time it
     // appears. A move not in the queue at all gets fresh_bonus.
