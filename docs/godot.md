@@ -31,7 +31,7 @@ C++ core to advance, and draws. It contains no game logic.
 4. **`godot/session.gd`** is an *autoload* (a global object Godot creates once
    and keeps across scene changes, registered in `project.godot`): the bot
    levels (`DIFFICULTIES`), the saved character choices
-   (`user://settings.cfg`, i.e. `%APPDATA%\Godotpp_userdata\Bootleg SSM`),
+   (`user://settings.cfg`, i.e. `%APPDATA%\Godot\app_userdata\Bootleg SSM`),
    and the options the menu passes to the game.
 5. **`godot/main.gd`** (on the scene `godot/main.tscn`) runs the game.
 
