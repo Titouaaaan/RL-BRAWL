@@ -1,6 +1,6 @@
 @echo off
 rem play.bat: builds the C++ game code (only what changed) and starts the game.
-rem   play.bat        -> play the game
+rem   play.bat        -> the menu (play, bots, characters, controls, replays)
 rem   play.bat edit   -> open the project in the Godot editor instead
 rem   play.bat replay [file.json] -> watch a recorded game (default: the newest one)
 rem   add --p1 ID --p2 ID to any of these to pick the characters (ids: assets\characters\characters.json)
@@ -88,12 +88,9 @@ if "%MODE%"=="replay" (
     echo [play] Replay %RFILE%. Space pauses, Up/Down change speed.
     "%GODOT%" --path godot -- "--replay=%RFILE%" %CHARS%
 ) else if defined VS (
-    rem The bot runs in Python, train\serve.py, in its own minimized window,
-    rem and closes by itself when the game does. No brackets in these comments:
-    rem a closing bracket would end this block early.
-    echo [play] Starting the bot "%VS%" and the game. You are P1. Esc quits.
-    start "bot: %VS%" /min python train\serve.py "%VS%" --port 5055
-    "%GODOT%" --path godot -- --vs=5055 %CHARS%
+    rem The game starts the bot itself: train\serve.py, see godot\main.gd start_bot.
+    echo [play] Starting the game against the bot "%VS%". You are P1. Esc quits.
+    "%GODOT%" --path godot -- "--bot2=%VS%" %CHARS%
 ) else (
     echo [play] Starting the game. Esc quits.
     "%GODOT%" --path godot -- %CHARS%

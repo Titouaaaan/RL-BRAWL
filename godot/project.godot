@@ -5,8 +5,13 @@ config_version=5
 
 [application]
 config/name="Bootleg SSM"
-run/main_scene="res://main.tscn"
+run/main_scene="res://menu.tscn"
 config/features=PackedStringArray("4.7")
+
+[autoload]
+
+; Session: settings shared by the menu and the game (see session.gd).
+Session="*res://session.gd"
 
 [display]
 window/size/viewport_width=1280

@@ -17,19 +17,23 @@ var chars := [{}, {}]  # per player: {tex, flip, body_w, name, anims}; tex is nu
 # attacks are stretched over the whole move instead.
 const ANIM_TICKS := 8
 
-# Live bot (play.bat --vs ...): player 2 is played by a trained agent served by
-# train/serve.py over a local TCP connection. The bot plays under the same
-# conditions as in training: it sees the game BOT_DELAY frames late and picks
-# an action every BOT_SKIP frames, which is held in between.
+# Live bots (--bot1=... / --bot2=..., from the menu or play.bat --vs): a player
+# can be a trained agent. The game starts train/serve.py for it (one Python
+# process per bot, ports BOT_PORT and BOT_PORT + 1) and talks to it over a
+# local TCP connection. A bot plays under the same conditions as in training:
+# it sees the game BOT_DELAY frames late and picks an action every BOT_SKIP
+# frames, which is held in between. Everything below is per player.
 const BOT_DELAY := 6  # reaction delay, frames (train/ppo.py --reaction-delay)
 const BOT_SKIP := 4   # frame skip (train/ppo.py --frame-skip)
-var bot_port := 0      # 0 = no bot: player 2 is a human
-var bot_tcp := StreamPeerTCP.new()
-var bot_state := ""    # "", "connecting", "handshake", "ready", or an error message
-var bot_wait := 0.0    # seconds spent connecting
-var bot_hist: Array[PackedFloat32Array] = []  # the bot's last BOT_DELAY + 1 observations, oldest first
-var bot_action := [0, 0, 0]  # real (un-mirrored) stick x, stick y, button: held between decisions
-var bot_ms := 0.0      # last decision's round trip to Python, for the HUD
+const BOT_PORT := 5055
+var bot_spec := ["", ""]   # what each bot is ("latest", a .pt path, a scripted bot); "" = a human
+var bot_pid := [-1, -1]    # the serve.py process, to stop it when leaving
+var bot_tcp := [StreamPeerTCP.new(), StreamPeerTCP.new()]
+var bot_state := ["", ""]  # "", "connecting", "handshake", "ready", or an error message
+var bot_wait := [0.0, 0.0]  # seconds spent connecting
+var bot_hist := [[], []]   # each bot's last BOT_DELAY + 1 observations, oldest first
+var bot_action := [[0, 0, 0], [0, 0, 0]]  # real (un-mirrored) stick x, stick y, button: held between decisions
+var bot_ms := [0.0, 0.0]   # last decision's round trip to Python, for the HUD
 
 # Keys are *physical* positions (US layout names), so on AZERTY "WASD" is ZQSD.
 # Player 1: WASD stick, Space jump, J light, K heavy, L dodge.
@@ -97,10 +101,11 @@ var speed_acc := 0.0  # fractional frames owed, for speeds below 1x
 func _ready() -> void:
 	# Pixel art: sample the nearest pixel instead of blurring when scaled.
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	load_characters(OS.get_cmdline_user_args())
+	# Options: from the menu (Session.args) or whatever came after "--" on the command line.
+	var args: PackedStringArray = Session.args if Session.from_menu else OS.get_cmdline_user_args()
+	load_characters(args)
 	for i in state_names.size():
 		ST[state_names[i]] = i
-	var args := OS.get_cmdline_user_args()  # whatever came after "--" on the command line
 	var path := ""
 	for a in args:
 		if a.begins_with("--replay="):
@@ -108,13 +113,13 @@ func _ready() -> void:
 	if path == "":
 		reload()
 		for a in args:
-			if a.begins_with("--vs="):
-				bot_port = int(a.trim_prefix("--vs="))
-		if bot_port > 0:
-			game.set_input_buffer(0, 9)  # you: the human input buffer
-			game.set_input_buffer(1, 0)  # the bot was trained without one
-			bot_state = "connecting"
-			bot_tcp.connect_to_host("127.0.0.1", bot_port)
+			if a.begins_with("--bot1="):
+				bot_spec[0] = a.trim_prefix("--bot1=")
+			elif a.begins_with("--bot2="):
+				bot_spec[1] = a.trim_prefix("--bot2=")
+		for p in 2:
+			if bot_spec[p] != "":
+				start_bot(p)
 		return
 	if path == "latest":
 		path = find_latest_replay()
@@ -134,7 +139,7 @@ func load_characters(args: PackedStringArray) -> void:
 	var manifest = JSON.parse_string(FileAccess.get_file_as_string(dir.path_join("characters.json")))
 	if typeof(manifest) != TYPE_DICTIONARY:
 		manifest = {}
-	var ids := ["1", "2"]
+	var ids := [Session.p1_char, Session.p2_char]  # the saved choice (Character Select), or 1 and 2
 	for a in args:
 		if a.begins_with("--p1="):
 			ids[0] = a.trim_prefix("--p1=")
@@ -261,7 +266,8 @@ func reload() -> void:
 	var dir := ProjectSettings.globalize_path("res://").path_join("../data/moves").simplify_path()
 	load_error = game.load_moves(dir)
 	cfg = game.get_config()
-	bot_hist.clear()  # a restart: the bot's memory of past frames starts over
+	for p in 2:
+		bot_hist[p].clear()  # a restart: the bots' memory of past frames starts over
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -275,7 +281,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	var key: Key = event.physical_keycode
 	if key == KEY_ESCAPE:
-		get_tree().quit()
+		if Session.from_menu:
+			stop_bots()
+			Session.back_to_menu()
+		else:
+			get_tree().quit()
 	elif replay.is_empty():
 		if key == KEY_R and not event.echo:
 			reload()
@@ -295,13 +305,13 @@ func _physics_process(_delta: float) -> void:
 	# Runs exactly 60 times per second: one call = one sim frame at 1x speed.
 	prev_fighters = [game.get_fighter(0), game.get_fighter(1)]
 	if replay.is_empty():
-		var a := human_input(0, merge(read_input(KEYS[0]), read_pad(0)))
-		if bot_port > 0:
-			if bot_update():  # the game waits until the bot is connected
-				var b := bot_decide()
-				game.step(a[0], a[1], a[2], b[0], b[1], b[2])
-		else:
-			var b := human_input(1, merge(read_input(KEYS[1]), read_pad(1)))
+		var all_ready := true
+		for p in 2:  # the game waits until every bot is connected
+			if bot_spec[p] != "" and not bot_update(p):
+				all_ready = false
+		if all_ready:
+			var a: Array = bot_decide(0) if bot_spec[0] != "" else human_input(0, merge(read_input(KEYS[0]), read_pad(0)))
+			var b: Array = bot_decide(1) if bot_spec[1] != "" else human_input(1, merge(read_input(KEYS[1]), read_pad(1)))
 			game.step(a[0], a[1], a[2], b[0], b[1], b[2])
 	elif not paused:
 		speed_acc += SPEEDS[speed_i]
@@ -311,65 +321,93 @@ func _physics_process(_delta: float) -> void:
 	cur_fighters = [game.get_fighter(0), game.get_fighter(1)]
 
 
-# Keeps the connection to train/serve.py going. Returns true once the bot is
-# ready to play.
-func bot_update() -> bool:
-	if bot_state == "ready":
+# Starts train/serve.py for player p's bot and begins connecting to it.
+func start_bot(p: int) -> void:
+	var spec: String = bot_spec[p]
+	if spec.ends_with(".pt") and not spec.is_absolute_path():
+		spec = Session.repo_root().path_join(spec)
+	var serve := Session.repo_root().path_join("train/serve.py")
+	bot_pid[p] = OS.create_process("python", [serve, spec, "--port", str(BOT_PORT + p)])
+	game.set_input_buffer(p, 0)  # bots were trained without the input buffer (humans keep 9)
+	bot_state[p] = "connecting" if bot_pid[p] > 0 else "could not start python (is it on the PATH?)"
+	bot_tcp[p].connect_to_host("127.0.0.1", BOT_PORT + p)
+
+
+# Disconnects and stops the bot servers (each also quits by itself when the game disconnects).
+func stop_bots() -> void:
+	for p in 2:
+		bot_tcp[p].disconnect_from_host()
+		if bot_pid[p] > 0 and OS.is_process_running(bot_pid[p]):
+			OS.kill(bot_pid[p])
+		bot_pid[p] = -1
+
+
+func _exit_tree() -> void:
+	stop_bots()
+
+
+# Keeps the connection to player p's bot going. Returns true once it's ready.
+func bot_update(p: int) -> bool:
+	if bot_state[p] == "ready":
 		return true
-	if bot_state != "connecting" and bot_state != "handshake":
+	if bot_state[p] != "connecting" and bot_state[p] != "handshake":
 		return false  # an error: shown on screen
-	bot_wait += 1.0 / 60.0
-	bot_tcp.poll()
-	var status := bot_tcp.get_status()
+	bot_wait[p] += 1.0 / 60.0
+	var tcp: StreamPeerTCP = bot_tcp[p]
+	tcp.poll()
+	var status := tcp.get_status()
 	if status == StreamPeerTCP.STATUS_ERROR or status == StreamPeerTCP.STATUS_NONE:
 		# The server is probably still loading PyTorch: try again.
-		if bot_wait > 30.0:
-			bot_state = "could not reach the bot on port %d (see the serve window)" % bot_port
+		if bot_wait[p] > 30.0:
+			bot_state[p] = "could not reach the bot (try: python train/serve.py %s)" % bot_spec[p]
 			return false
-		bot_tcp = StreamPeerTCP.new()
-		bot_tcp.connect_to_host("127.0.0.1", bot_port)
+		bot_tcp[p] = StreamPeerTCP.new()
+		bot_tcp[p].connect_to_host("127.0.0.1", BOT_PORT + p)
 		return false
 	if status != StreamPeerTCP.STATUS_CONNECTED:
 		return false
-	if bot_state == "connecting":  # say hello: our observation size
-		bot_tcp.set_no_delay(true)
-		bot_tcp.put_32(game.get_obs_dim())
-		bot_state = "handshake"
+	if bot_state[p] == "connecting":  # say hello: our observation size
+		tcp.set_no_delay(true)
+		tcp.put_32(game.get_obs_dim())
+		bot_state[p] = "handshake"
 		return false
-	if bot_tcp.get_available_bytes() < 4:
+	if tcp.get_available_bytes() < 4:
 		return false
-	var theirs := bot_tcp.get_32()
+	var theirs := tcp.get_32()
 	if theirs != game.get_obs_dim():
-		bot_state = "the bot expects %d inputs, this game gives %d: rebuild both from the same code" % [theirs, game.get_obs_dim()]
+		bot_state[p] = "the bot expects %d inputs, this game gives %d: rebuild both from the same code" % [theirs, game.get_obs_dim()]
 		return false
-	bot_state = "ready"
+	bot_state[p] = "ready"
 	return true
 
 
-# The bot's input for this frame: a new decision every BOT_SKIP frames, from
-# what it saw BOT_DELAY frames ago; the same action is held in between.
-func bot_decide() -> Array:
-	bot_hist.append(game.get_obs(1))  # player 2's view of the game right now
-	while bot_hist.size() > BOT_DELAY + 1:
-		bot_hist.pop_front()
+# Player p's bot input for this frame: a new decision every BOT_SKIP frames,
+# from what it saw BOT_DELAY frames ago; the same action is held in between.
+func bot_decide(p: int) -> Array:
+	var hist: Array = bot_hist[p]
+	hist.append(game.get_obs(p))  # player p's view of the game right now
+	while hist.size() > BOT_DELAY + 1:
+		hist.pop_front()
 	if game.get_frame() % BOT_SKIP != 0:
-		return bot_action
+		return bot_action[p]
+	var tcp: StreamPeerTCP = bot_tcp[p]
 	var t := Time.get_ticks_usec()
-	bot_tcp.put_data(bot_hist[0].to_byte_array())  # the oldest = BOT_DELAY frames ago (the start, early on)
-	while bot_tcp.get_available_bytes() < 3:  # wait for the answer (well under a millisecond)
-		bot_tcp.poll()
-		if bot_tcp.get_status() != StreamPeerTCP.STATUS_CONNECTED or Time.get_ticks_usec() - t > 500000:
-			bot_state = "lost the connection to the bot"
+	var seen: PackedFloat32Array = hist[0]  # the oldest = BOT_DELAY frames ago (the start, early on)
+	tcp.put_data(seen.to_byte_array())
+	while tcp.get_available_bytes() < 3:  # wait for the answer (well under a millisecond)
+		tcp.poll()
+		if tcp.get_status() != StreamPeerTCP.STATUS_CONNECTED or Time.get_ticks_usec() - t > 500000:
+			bot_state[p] = "lost the connection to the bot"
 			return [0, 0, 0]
-	var got: Array = bot_tcp.get_data(3)  # [error, bytes]
+	var got: Array = tcp.get_data(3)  # [error, bytes]
 	var raw: PackedByteArray = got[1]
 	var act := []
 	for k in 3:
 		act.append(raw[k] - 256 if raw[k] > 127 else raw[k])  # bytes are unsigned; the stick is -1..1
 	# Actions are egocentric like observations: player 2's "right" is the real left.
-	bot_action = [-act[0], act[1], act[2]]
-	bot_ms = (Time.get_ticks_usec() - t) / 1000.0
-	return bot_action
+	bot_action[p] = [act[0] if p == 0 else -act[0], act[1], act[2]]
+	bot_ms[p] = (Time.get_ticks_usec() - t) / 1000.0
+	return bot_action[p]
 
 
 # Runs once per screen refresh (can be more often than 60 Hz).
@@ -631,17 +669,19 @@ func draw_hud(font: Font) -> void:
 	draw_string(font, Vector2(size.x / 2 - 30, 30), "%d:%02d" % [seconds_left / 60, seconds_left % 60], HORIZONTAL_ALIGNMENT_LEFT, -1, 24)
 	var dim := Color(1, 1, 1, 0.6)
 	if replay.is_empty():
-		draw_string(font, Vector2(16, 24), "P1: WASD, Space jump, J light, K heavy, L dodge (or controller 1)", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
-		if bot_port > 0:
-			var status := "ready, %.2f ms per decision" % bot_ms if bot_state == "ready" else bot_state
-			if bot_state == "connecting" or bot_state == "handshake":
-				status = "waiting for the bot to load... (%d s)" % int(bot_wait)
-			draw_string(font, Vector2(16, 44), "P2: bot (" + status + ")", HORIZONTAL_ALIGNMENT_LEFT, -1, 14,
-				dim if bot_state in ["ready", "connecting", "handshake"] else Color(1, 0.3, 0.3))
-		else:
-			draw_string(font, Vector2(16, 44), "P2: arrows, Enter jump, . light, / heavy, , dodge (or controller 2)", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
+		var human_keys := ["P1: WASD, Space jump, J light, K heavy, L dodge (or controller 1)",
+			"P2: arrows, Enter jump, . light, / heavy, , dodge (or controller 2)"]
+		for p in 2:
+			if bot_spec[p] == "":
+				draw_string(font, Vector2(16, 24 + 20 * p), human_keys[p], HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
+				continue
+			var status: String = "ready, %.2f ms per decision" % bot_ms[p] if bot_state[p] == "ready" else bot_state[p]
+			if bot_state[p] == "connecting" or bot_state[p] == "handshake":
+				status = "waiting for the bot to load... (%d s)" % int(bot_wait[p])
+			draw_string(font, Vector2(16, 24 + 20 * p), "P%d: %s (%s)" % [p + 1, bot_name(bot_spec[p]), status],
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim if bot_state[p] in ["ready", "connecting", "handshake"] else Color(1, 0.3, 0.3))
 		draw_string(font, Vector2(16, 64), "Attacks: light/heavy + up/down/side/neutral; keep pressing light = jab combo; hold heavy = charge a smash; light while running = dash attack.  Dodge: shield (+ side = roll, + down = spot dodge); let go as a hit lands = parry; light while shielding = grab (then light = pummel, a direction = throw).", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
-		draw_string(font, Vector2(16, 84), "Tap jump = short hop.  Down = crouch / fast-fall / drop through.  Air dodge + direction = directional.  Dodge as you land = tech.  Ledge: toward = climb, jump, attack, dodge = roll.  R: restart  Esc: quit", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
+		draw_string(font, Vector2(16, 84), "Tap jump = short hop.  Down = crouch / fast-fall / drop through.  Air dodge + direction = directional.  Dodge as you land = tech.  Ledge: toward = climb, jump, attack, dodge = roll.  R: restart  Esc: %s" % ("menu" if Session.from_menu else "quit"), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
 	else:
 		var status := "PAUSED" if paused else "%sx" % SPEEDS[speed_i]
 		var line := "REPLAY  frame %d / %d   %s" % [replay_frame, replay.inputs.size(), status]
@@ -656,7 +696,7 @@ func draw_hud(font: Font) -> void:
 	if load_error != "":
 		draw_string(font, Vector2(16, 80), "Move file error: " + load_error, HORIZONTAL_ALIGNMENT_LEFT, size.x - 32, 18, Color(1, 0.3, 0.3))
 	if game.is_over():
-		draw_string(font, Vector2(0, size.y / 2 - 100), winner_text() + "   (R to restart)", HORIZONTAL_ALIGNMENT_CENTER, size.x, 40)
+		draw_string(font, Vector2(0, size.y / 2 - 100), winner_text() + "   (R to restart, Esc for %s)" % ("the menu" if Session.from_menu else "quit"), HORIZONTAL_ALIGNMENT_CENTER, size.x, 40)
 
 
 # Debug text: the state machine's state, e.g. "ATTACK heavy 12" = frame 12 of the heavy.
@@ -672,6 +712,14 @@ func state_label(f: Dictionary) -> String:
 	if f.air_attack_locked:
 		label += "  [no air attacks]"
 	return label
+
+
+# A bot's display name: the difficulty it belongs to, or the file / bot name.
+func bot_name(spec: String) -> String:
+	for d in Session.DIFFICULTIES:
+		if d.bot == spec:
+			return d.name if d.name.ends_with("bot") else d.name + " bot"
+	return "bot " + (spec.get_file().get_basename() if spec.ends_with(".pt") else spec)
 
 
 func winner_text() -> String:

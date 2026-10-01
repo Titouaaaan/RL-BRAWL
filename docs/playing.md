@@ -4,7 +4,40 @@
 
 Double-click **`play.bat`** in the repo root (or run `.\play.bat` in a terminal).
 It rebuilds the C++ (only what changed, usually a few seconds) and opens the
-game. The very first run takes about 30 seconds.
+**menu**. The very first run takes about 30 seconds.
+
+## The menu
+
+Mouse, keyboard (arrows + Enter, Esc = back) or controller (d-pad / stick,
+Cross, Circle = back).
+
+| Item | What it does |
+|---|---|
+| Player vs Bot | Pick the bot's level, then fight it (you are P1) |
+| Player vs Player | Two humans (keyboard and/or controllers) |
+| Bot vs Bot | Pick a level for each bot, then watch them fight live |
+| Character Select | Pick P1's and P2's characters; saved for next time |
+| Controls | Keyboard and controller bindings |
+| Replays | Every recording under `replays/`, newest first: select one to watch it |
+
+In a game, **Esc** goes back to the menu.
+
+Bot levels (all from the best training run so far, spaced along its Elo
+ladder; the list is `DIFFICULTIES` in `godot/session.gd`):
+
+| Level | Checkpoint | Trained for |
+|---|---|---|
+| Very easy | `agent_00250` | 8M decisions |
+| Easy | `agent_01500` | 50M |
+| Normal | `agent_03000` | 100M |
+| Hard | `agent_06250` | 200M |
+| Very hard | `agent_10750` | 350M |
+| Latest bot | the newest run's final agent | whatever it reached |
+
+A bot needs a few seconds to load (the top line shows it); the game waits
+for it.
+
+The command-line options below skip the menu and go straight to a game.
 
 | Command | What it does |
 |---|---|

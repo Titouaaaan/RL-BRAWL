@@ -22,7 +22,18 @@ C++ core to advance, and draws. It contains no game logic.
    | `get_obs(player)`, `get_obs_dim()` | what an agent sees (for the live bot) |
 
 2. **`godot/fightgame.gdextension`** tells Godot where the DLL is.
-3. **`godot/main.gd`** (on the scene `godot/main.tscn`) does everything else.
+3. **`godot/menu.tscn` + `menu.gd`** is the first scene: the menu. Each screen
+   is built in code by one `show_*()` function. Starting a game calls
+   `Session.start_game(options)` and switches to `main.tscn`. If Godot was
+   started with options (play.bat replay, --vs, --p1...), the menu skips
+   itself. The `MENU_SCREEN` environment variable opens a given screen
+   directly (for screenshots).
+4. **`godot/session.gd`** is an *autoload* (a global object Godot creates once
+   and keeps across scene changes, registered in `project.godot`): the bot
+   levels (`DIFFICULTIES`), the saved character choices
+   (`user://settings.cfg`, i.e. `%APPDATA%\Godotpp_userdata\Bootleg SSM`),
+   and the options the menu passes to the game.
+5. **`godot/main.gd`** (on the scene `godot/main.tscn`) runs the game.
 
 ## `main.gd` in order
 
@@ -76,12 +87,18 @@ state hash. Godot loads the recorded moves, re-simulates, and compares hashes:
 
 ### The live bot client
 
-With `--vs=PORT`, player 2 is a trained agent served by `train/serve.py` over
-a local TCP connection (see [python.md](python.md#the-live-bot-server)):
+With `--bot1=SPEC` / `--bot2=SPEC` (from the menu, or `play.bat --vs`), that
+player is a trained agent. SPEC is a checkpoint path (relative to the repo),
+`latest`, or a scripted bot name. Everything is per player:
 
-- `bot_update()` connects (retrying while PyTorch loads, up to 30 s), then
-  exchanges observation sizes; the game waits until this succeeds.
-- `bot_decide()` keeps the bot's last 7 observations (`get_obs(1)`); every 4
+- `start_bot(p)` starts `train/serve.py SPEC --port 5055+p` with
+  `OS.create_process` and turns off that player's input buffer.
+  `stop_bots()` (Esc, or leaving the scene) disconnects and stops them; each
+  server also quits by itself when the game disconnects.
+- `bot_update(p)` connects (retrying while PyTorch loads, up to 30 s), then
+  exchanges observation sizes (see [python.md](python.md#the-live-bot-server));
+  the game waits until every bot is ready.
+- `bot_decide(p)` keeps the bot's last 7 observations (`get_obs(p)`); every 4
   frames (`BOT_SKIP`) it sends the one from 6 frames ago (`BOT_DELAY`) and
   holds the answer until the next decision, exactly like training. The stick
   x is un-mirrored for player 2. The round trip (about 1 ms) shows on screen.
@@ -93,8 +110,8 @@ a local TCP connection (see [python.md](python.md#the-live-bot-server)):
 2. Finds Godot (the `GODOT` variable, or `Godot_v4*_win64.exe` under Downloads)
    and imports the project the first time.
 3. Reads the options (`edit`, `replay [file]`, `--vs [bot]`, `--p1`, `--p2`, any
-   order) and starts Godot with them; with `--vs` it first starts
-   `train/serve.py` in a minimized window.
+   order) and starts Godot with them (`--vs X` becomes `--bot2=X`). With no
+   options Godot opens the menu.
 
 Batch-file pitfalls met so far (comments in `play.bat` mark them): no `)` in a
 `rem` inside a `( ... )` block, and no substring of a possibly-empty variable
