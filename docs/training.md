@@ -223,6 +223,13 @@ Replays store inputs, not the game code, so a replay recorded before a game
 change desyncs on the new game. The previous version's replays play in the
 frozen copy `D:\BOOTLEG-SSM-v1` (a git worktree at commit 98cdc91).
 
+## Comparing agents
+
+The scripted bots and the league stop measuring progress once they're all
+beaten. `python tools/ladder.py <checkpoints, run folders or bot names>` plays
+every pair (128 games each, training conditions) and fits Elo ratings, e.g.
+`python tools/ladder.py runs/<run> --every 6 runs/<older run>/agent_latest.pt fighter`.
+
 ## History
 
 `runs/monitor_notes.md` is the lab notebook: every overnight run, what was

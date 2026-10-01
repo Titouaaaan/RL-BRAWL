@@ -81,6 +81,7 @@ within 2 minutes). About 1.1-1.5 ms per decision.
 | `tools/bench.py` | Throughput benchmark (about 3 million game frames per second, one thread). |
 | `tools/combos.py` | Which true combos exist: for each opener and %, thousands of frame-perfect follow-ups in parallel, against a victim who doesn't DI. |
 | `tools/sprites.py` | Source images -> game characters (see [assets.md](assets.md)). |
+| `tools/ladder.py` | Round-robin tournament between checkpoints and bots under training conditions: win matrix + Elo. `python tools/ladder.py runs/<run> --every 6` or a list of `.pt` files and bot names. |
 
 ## Tests
 
