@@ -64,8 +64,9 @@ The game picks the animation from what the fighter is doing:
 | a move name (`jab`, `forward_tilt`, `heavy`, `up_air`, ...) | doing that attack; stretched over the whole move, so the last drawing ends with it |
 | `attack` | any attack without its own animation |
 
-Looping animations show each drawing for 8 game frames (7.5 drawings per
-second). Anything without an animation uses the static sprite.
+Looping animations play at their `fps` (see [Animation timing](#animation-timing)).
+Anything without an animation uses the static sprite. Images whose name ends
+in `_old` (backups, e.g. `Titou_idle_old.png`) are ignored by the tool.
 
 
 ## Sizes and the pixel scale
@@ -94,11 +95,14 @@ Platforms are pass-through: only their top line matters for collision.
 The game runs at 60 frames per second and every move is defined in frames
 (`data/moves/*.json`, and the move list in [engine.md](engine.md#the-moves)).
 
-- **Loops** (idle, run...): each drawing shows for 8 game frames (7.5 per second).
+- **Loops** (idle, run...): play at the animation's `fps` (drawings per second),
+  set per animation in `assets/characters/characters.json` (default 7.5;
+  `python tools/sprites.py` keeps your value when it re-runs). Titou's idle: 8
+  drawings at 7 fps.
 - **Attacks** are stretched over the move: with 5 drawings for a 47-frame
   forward smash, each shows about 9 frames. Put the "hit" drawing where the
   hitbox is out (forward smash: frames 15-17, a third of the way in).
 - The code: `anim_for()` and `sprite_frame()` in `godot/main.gd` pick the
-  animation and the frame; `ANIM_TICKS` sets the loop speed.
+  animation and the frame.
 
 Sprites are drawn with nearest-neighbor filtering, so pixel art stays sharp.

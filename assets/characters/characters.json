@@ -54,7 +54,8 @@
     "anims": {
       "idle": {
         "file": "6_idle.png",
-        "frames": 4
+        "frames": 8,
+        "fps": 7
       }
     }
   }

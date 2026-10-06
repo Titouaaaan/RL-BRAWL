@@ -13,9 +13,10 @@ const SPRITE_PX := 64.0
 const SPRITE_REF_PX := 61.0
 var chars := [{}, {}]  # per player: {tex, flip, body_w, name, anims}; tex is null if missing
 # Animations: horizontal strips of 64x64 frames (assets/characters/<id>_<name>.png).
-# Looping ones show each drawing for ANIM_TICKS game frames (60 per second);
-# attacks are stretched over the whole move instead.
-const ANIM_TICKS := 8
+# Looping ones play at their "fps" from characters.json (drawings per second;
+# the game runs at 60 frames per second); attacks are stretched over the
+# whole move instead.
+const DEFAULT_FPS := 7.5
 
 # Live bots (--bot1=... / --bot2=..., from the menu or play.bat --vs): a player
 # can be a trained agent. The game starts train/serve.py for it (one Python
@@ -153,7 +154,8 @@ func load_characters(args: PackedStringArray) -> void:
 			var a: Dictionary = c.anims[anim_name]
 			var strip := Image.load_from_file(dir.path_join(a.file))
 			if strip != null:
-				anims[anim_name] = {tex = ImageTexture.create_from_image(strip), frames = int(a.frames)}
+				anims[anim_name] = {tex = ImageTexture.create_from_image(strip), frames = int(a.frames),
+					fps = float(a.get("fps", DEFAULT_FPS))}
 		chars[p] = {
 			tex = ImageTexture.create_from_image(img) if img != null else null,
 			flip = -1 if c.get("faces", "right") == "left" else 1,  # drawings are flipped to face right
@@ -193,8 +195,8 @@ func sprite_frame(i: int, f: Dictionary) -> Array:
 			var k: int
 			if f.state == ST.ATTACK and f.move >= 0:  # stretched over the move: the last drawing at its end
 				k = mini(a.frames - 1, int(f.state_frame * a.frames / max(1, cfg.move_frames[f.move])))
-			else:  # looping
-				k = int(f.state_frame / ANIM_TICKS) % a.frames
+			else:  # looping: drawing number = seconds in this state x drawings per second
+				k = int(f.state_frame * a.fps / 60.0) % a.frames
 			return [a.tex, Rect2(k * SPRITE_PX, 0, SPRITE_PX, SPRITE_PX)]
 	return [ch.tex, Rect2(0, 0, SPRITE_PX, SPRITE_PX)]
 

@@ -15,7 +15,10 @@ animation doesn't jitter. Saved as assets/characters/<id>_<animation>.png.
 
 assets/characters/characters.json lists the characters by id; ids are
 permanent: re-running keeps them and gives new characters the next free id.
-The source images are never modified.
+Each animation has an "fps" (drawings per second, default DEFAULT_FPS): edit it
+in characters.json; re-running keeps it. Images whose name ends in "_old"
+(backups, e.g. Titou_idle_old.png) are ignored. The source images are never
+modified.
 """
 import json
 from collections import deque
@@ -27,6 +30,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "assets" / "sprites"
 OUT = ROOT / "assets" / "characters"
 MANIFEST = OUT / "characters.json"
+DEFAULT_FPS = 7.5  # drawings per second for a new animation (8 game frames each)
 SIZE = 64  # the game's character canvas: drawn so 61 px = the fighter's height (godot/main.gd)
 
 # Animation names the game looks for (godot/main.gd, anim_for()). Attacks can
@@ -99,7 +103,8 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     chars = json.loads(MANIFEST.read_text()) if MANIFEST.exists() else {}
     by_source = {c["source"]: cid for cid, c in chars.items()}
-    names = {p.stem for p in SRC.glob("*.png")}
+    sources = [p for p in sorted(SRC.glob("*.png")) if not p.stem.endswith("_old")]  # *_old = backups
+    names = {p.stem for p in sources}
 
     def animation_of(stem):  # "Titou_idle" -> ("Titou", "idle") if Titou.png exists
         for anim in ANIMATIONS:
@@ -108,13 +113,14 @@ def main():
         return None
 
     # Characters first (animations need their ids).
-    for path in sorted(SRC.glob("*.png")):
+    for path in sources:
         if animation_of(path.stem):
             continue
         cid = by_source.get(path.name) or str(max((int(i) for i in chars), default=0) + 1)
         [img], bw, bh = fit_frames([clear_background(Image.open(path).convert("RGBA"))])
         img.save(OUT / f"{cid}.png")
         old = chars.get(cid, {})
+        old_anims = old.get("anims", {})
         chars[cid] = {
             "name": path.stem,
             "source": path.name,
@@ -123,12 +129,13 @@ def main():
             "body_w": bw,  # the character's size inside the 64x64 canvas, in pixels
             "body_h": bh,
             "anims": {},
+            "_old_anims": old_anims,  # to keep each animation's fps (removed below)
         }
         by_source[path.name] = cid
 
     # Then animations.
     ids_by_name = {c["name"]: cid for cid, c in chars.items()}
-    for path in sorted(SRC.glob("*.png")):
+    for path in sources:
         found = animation_of(path.stem)
         if not found:
             continue
@@ -139,11 +146,14 @@ def main():
         for i, f in enumerate(frames):
             strip.paste(f, (i * SIZE, 0))
         strip.save(OUT / f"{cid}_{anim}.png")
-        chars[cid]["anims"][anim] = {"file": f"{cid}_{anim}.png", "frames": len(frames)}
+        fps = chars[cid]["_old_anims"].get(anim, {}).get("fps", DEFAULT_FPS)
+        chars[cid]["anims"][anim] = {"file": f"{cid}_{anim}.png", "frames": len(frames), "fps": fps}
+    for c in chars.values():
+        c.pop("_old_anims", None)
 
     MANIFEST.write_text(json.dumps(dict(sorted(chars.items(), key=lambda kv: int(kv[0]))), indent=2) + "\n")
     for cid, c in sorted(chars.items(), key=lambda kv: int(kv[0])):
-        anims = ", ".join(f"{a} ({v['frames']} frames)" for a, v in c["anims"].items())
+        anims = ", ".join(f"{a} ({v['frames']} frames, {v['fps']} fps)" for a, v in c["anims"].items())
         print(f"{cid:>3}  {c['name']:<16} {c['body_w']}x{c['body_h']} px, faces {c['faces']}"
               + (f"; animations: {anims}" if anims else ""))
 
