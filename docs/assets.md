@@ -35,7 +35,7 @@ Without them, P1 is character 1 and P2 is character 2.
 | 3 | Car |
 | 4 | Justin |
 | 5 | OliverPip |
-| 6 | Titou (animated idle) |
+| 6 | Titou (animated idle and run) |
 
 **Adding a character:** put the image (any size, PNG) in `assets/sprites/`,
 then run `python tools/sprites.py`. It trims the empty space, removes a plain
@@ -97,8 +97,8 @@ The game runs at 60 frames per second and every move is defined in frames
 
 - **Loops** (idle, run...): play at the animation's `fps` (drawings per second),
   set per animation in `assets/characters/characters.json` (default 7.5;
-  `python tools/sprites.py` keeps your value when it re-runs). Titou's idle: 8
-  drawings at 7 fps.
+  `python tools/sprites.py` keeps your value when it re-runs). Titou: idle 8
+  drawings at 7 fps, run 8 drawings at 10 fps.
 - **Attacks** are stretched over the move: with 5 drawings for a 47-frame
   forward smash, each shows about 9 frames. Put the "hit" drawing where the
   hitbox is out (forward smash: frames 15-17, a third of the way in).

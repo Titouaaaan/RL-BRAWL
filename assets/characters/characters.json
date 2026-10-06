@@ -56,6 +56,11 @@
         "file": "6_idle.png",
         "frames": 8,
         "fps": 7
+      },
+      "run": {
+        "file": "6_run.png",
+        "frames": 8,
+        "fps": 10
       }
     }
   }
