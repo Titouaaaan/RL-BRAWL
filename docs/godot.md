@@ -101,7 +101,8 @@ player is a trained agent. SPEC is a checkpoint path (relative to the repo),
 - `bot_decide(p)` keeps the bot's last 7 observations (`get_obs(p)`); every 4
   frames (`BOT_SKIP`) it sends the one from 6 frames ago (`BOT_DELAY`) and
   holds the answer until the next decision, exactly like training. The stick
-  x is un-mirrored for player 2. The round trip (about 1 ms) shows on screen.
+  x is un-mirrored for player 2. Its status shows at the top left only while
+  it loads or after an error.
 
 ## `play.bat`
 

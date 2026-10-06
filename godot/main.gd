@@ -671,19 +671,16 @@ func draw_hud(font: Font) -> void:
 	draw_string(font, Vector2(size.x / 2 - 30, 30), "%d:%02d" % [seconds_left / 60, seconds_left % 60], HORIZONTAL_ALIGNMENT_LEFT, -1, 24)
 	var dim := Color(1, 1, 1, 0.6)
 	if replay.is_empty():
-		var human_keys := ["P1: WASD, Space jump, J light, K heavy, L dodge (or controller 1)",
-			"P2: arrows, Enter jump, . light, / heavy, , dodge (or controller 2)"]
+		# No help text during a fight (it's in the menu's Controls screen); a bot's
+		# line only shows while it loads, or if something went wrong.
 		for p in 2:
-			if bot_spec[p] == "":
-				draw_string(font, Vector2(16, 24 + 20 * p), human_keys[p], HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
+			if bot_spec[p] == "" or bot_state[p] == "ready":
 				continue
-			var status: String = "ready, %.2f ms per decision" % bot_ms[p] if bot_state[p] == "ready" else bot_state[p]
+			var status: String = bot_state[p]
 			if bot_state[p] == "connecting" or bot_state[p] == "handshake":
 				status = "waiting for the bot to load... (%d s)" % int(bot_wait[p])
 			draw_string(font, Vector2(16, 24 + 20 * p), "P%d: %s (%s)" % [p + 1, bot_name(bot_spec[p]), status],
-				HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim if bot_state[p] in ["ready", "connecting", "handshake"] else Color(1, 0.3, 0.3))
-		draw_string(font, Vector2(16, 64), "Attacks: light/heavy + up/down/side/neutral; keep pressing light = jab combo; hold heavy = charge a smash; light while running = dash attack.  Dodge: shield (+ side = roll, + down = spot dodge); let go as a hit lands = parry; light while shielding = grab (then light = pummel, a direction = throw).", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
-		draw_string(font, Vector2(16, 84), "Tap jump = short hop.  Down = crouch / fast-fall / drop through.  Air dodge + direction = directional.  Dodge as you land = tech.  Ledge: toward = climb, jump, attack, dodge = roll.  R: restart  Esc: %s" % ("menu" if Session.from_menu else "quit"), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim)
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 14, dim if bot_state[p] in ["connecting", "handshake"] else Color(1, 0.3, 0.3))
 	else:
 		var status := "PAUSED" if paused else "%sx" % SPEEDS[speed_i]
 		var line := "REPLAY  frame %d / %d   %s" % [replay_frame, replay.inputs.size(), status]
