@@ -19,7 +19,7 @@ const DIFFICULTIES := [
 	{name = "Latest bot", bot = "latest"},
 ]
 
-const SETTINGS_FILE := "user://settings.cfg"  # in Godot's per-user folder (%APPDATA%\Godot\app_userdata\Bootleg SSM)
+const SETTINGS_FILE := "user://settings.cfg"  # in Godot's per-user folder (%APPDATA%\Godot\app_userdata\RL-BRAWL)
 
 var from_menu := false  # the game was opened from the menu: Esc goes back to it
 var args := PackedStringArray()

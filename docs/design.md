@@ -155,7 +155,7 @@ Build a debug viewer, tests and logging early; they are how you will see what th
 ## Repo layout
 
 ```
-BOOTLEG-SSM/
+RL-BRAWL/
   core/             # C++ sim: sim (state, step), moves (JSON loader), obs (what an agent sees), vecenv (N games for RL)
   bindings/python/  # nanobind module "fightcore": VecEnv for Python
   bindings/godot/   # GDExtension: the same core for Godot

@@ -195,8 +195,8 @@ the newest agent first: `python train/record.py latest --opponent self` (or
 At the end Godot checks that its re-simulation reached exactly the recorded
 final state: "Replay verified", or "DESYNC" (see [setup.md](setup.md#when-something-goes-wrong)).
 A replay stores the inputs, not the game code, so recordings made with an
-older version of the game desync; the previous version's replays play in the
-frozen copy `D:\BOOTLEG-SSM-v1` (run its `play.bat replay <full path>`).
+older version of the game desync: regenerate them (`python train/record_vs.py`)
+after a game change.
 
 To change how the game plays (move damage, frames, knockback), see
 [engine.md](engine.md#move-files).

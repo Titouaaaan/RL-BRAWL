@@ -220,8 +220,7 @@ or `play.bat --vs runs\<run>\agent_00600.pt`. It runs `train/serve.py`
 the same reaction delay and frame skip as in training.
 
 Replays store inputs, not the game code, so a replay recorded before a game
-change desyncs on the new game. The previous version's replays play in the
-frozen copy `D:\BOOTLEG-SSM-v1` (a git worktree at commit 98cdc91).
+change desyncs on the new game: regenerate them with `python train/record_vs.py`.
 
 ## Comparing agents
 

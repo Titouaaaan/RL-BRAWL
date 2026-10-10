@@ -91,7 +91,7 @@ func spacer(h: int) -> Control:
 # --- screens -------------------------------------------------------------------
 
 func show_main() -> void:
-	new_screen("BOOTLEG SSM", "P1: %s    P2: %s" % [char_name(Session.p1_char), char_name(Session.p2_char)])
+	new_screen("RL-BRAWL", "P1: %s    P2: %s" % [char_name(Session.p1_char), char_name(Session.p2_char)])
 	add_button("Player vs Bot", show_difficulty).grab_focus()
 	add_button("Player vs Player", func(): Session.start_game(PackedStringArray()))
 	add_button("Bot vs Bot", show_bot_vs_bot)

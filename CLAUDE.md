@@ -17,7 +17,7 @@ Toolchain: MSVC from Visual Studio 2026 (it must match python.org Python's compi
 - Benchmark: `python tools/bench.py`
 - Train: `python -u train/ppo.py --opponent dummy|random|scripted|selfplay`; continue a stopped run with `--resume runs/<run>` (logs/checkpoints in `runs/`, replays in `replays/`, both gitignored). Owner-facing guide: `docs/training.md`.
 - Fight a bot live: `play.bat --vs [latest|<checkpoint.pt>|fighter|...]` (starts `train/serve.py`, PyTorch over local TCP; Godot sends `write_obs` from `core/obs.cpp` with the 6-frame delay, every 4 frames; per-player `input_buffer`: human 9, bot 0).
-- Watch the newest replay: `play.bat replay`; record one first with `python train/record.py latest --opponent self|fighter|...`. Replays from before commit 6e52f52 (older game) only verify in the frozen worktree `D:\BOOTLEG-SSM-v1` (commit 98cdc91).
+- Watch the newest replay: `play.bat replay`; record one first with `python train/record.py latest --opponent self|fighter|...`. Replays desync after any game change (they store inputs only): regenerate with `python train/record_vs.py`.
 - Characters: `python tools/sprites.py` after adding/changing images in `assets/sprites/` (`<Name>.png` = character, `<Name>_<anim>.png` = horizontal strip of square frames); `play.bat ... --p1 ID --p2 ID`.
 - Combo finder: `python tools/combos.py` (which true combos exist, frame-perfect). Headless replay check: `<godot_console.exe> --headless --path godot -- --replay=FILE --verify`.
 - ASan debug smoke test: `python -m cmake -S . -B build/debug && python -m cmake --build build/debug --config Debug && build/debug/Debug/smoke.exe`
