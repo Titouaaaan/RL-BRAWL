@@ -63,7 +63,7 @@ Changing them needs a rebuild; move data doesn't.
    frames) let hitboxes pass (reported as an evade).
 7. **Streaks, counters and combos** are updated, for both players at once.
 8. **State-change events** (tech, knockdown, shield break, jumps), then
-   **KOs** (leaving the blast zone) and respawns.
+   **KOs** (leaving the blast zone) and respawns: the fighter waits `respawn_wait` (120) frames off the field (skipped by `step()`, intangible), then drops in with `respawn_invuln` (120) frames of invulnerability, which only start counting after the wait. The obs shows both as one number, (invuln + respawn_wait) / 120, which is above 1 only while waiting.
 
 Everything that happened is reported in `StepEvents` (hits, damage, KOs,
 combos, counters, parries...): rewards and statistics are built from these,

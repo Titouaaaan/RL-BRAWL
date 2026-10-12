@@ -134,7 +134,7 @@ To remap, edit the `PAD` table near the top of `godot/main.gd`.
 - While intangible, a fighter is drawn see-through with a white outline.
 
 ### Rules
-- Each player has **3 stocks**. Leave the faint blast-zone area and you lose a stock. You respawn above the stage, blinking and invulnerable for 2 seconds.
+- Each player has **3 stocks**. Leave the faint blast-zone area and you lose a stock: an explosion goes off at the edge of the screen and you're out of play for 2 seconds (untouchable, controls ignored), then you drop in above the stage, blinking and invulnerable for 2 more seconds.
 - A game ends when someone loses their last stock, or after **7 minutes** (the timer at the top, as in competitive Smash). At the time limit the player with more stocks wins, then the one with less damage.
 
 **Reading the screen:** fighters are drawn as their character's sprite (see [assets.md](assets.md)), with the character's name above the damage. Hitboxes are circles with a red rim (a grab's rim is yellow), faded once the move has already hit. The sprite is tinted to show what's happening:

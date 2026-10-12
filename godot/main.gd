@@ -24,6 +24,12 @@ const DEFAULT_FPS := 7.5
 const BACKGROUND := "orange_clouds.png"
 const SHOW_LEDGES := false  # true: yellow dots on the two grabbable ledge corners
 var map_tex := {}  # file name -> texture
+# KO explosion (assets/effects/explosion_1.png: 10 frames of 128 px, packed
+# from the Explosion_1 folder), shown where the fighter left the screen.
+const EXPLOSION_FPS := 15.0
+const EXPLOSION_SIZE := 8.0  # sim units
+var explosion_tex: Texture2D
+var explosions := []  # [{at, start}]: position on screen (-1..1 each way, so it stays put while the camera moves), game frame it started
 
 # Live bots (--bot1=... / --bot2=..., from the menu or play.bat --vs): a player
 # can be a trained agent. The game starts train/serve.py for it (one Python
@@ -113,6 +119,8 @@ func _ready() -> void:
 	var args: PackedStringArray = Session.args if Session.from_menu else OS.get_cmdline_user_args()
 	load_characters(args)
 	var maps := ProjectSettings.globalize_path("res://").path_join("../assets/maps").simplify_path()
+	var boom := Image.load_from_file(maps.path_join("../effects/explosion_1.png").simplify_path())
+	explosion_tex = ImageTexture.create_from_image(boom) if boom != null else null
 	for f in [BACKGROUND, "stage.png", "platform.png"]:
 		var img := Image.load_from_file(maps.path_join(f))
 		if img != null:
@@ -335,6 +343,13 @@ func _physics_process(_delta: float) -> void:
 			speed_acc -= 1.0
 			replay_step()
 	cur_fighters = [game.get_fighter(0), game.get_fighter(1)]
+	var half := get_viewport_rect().size / 2 / px  # half the visible area, in sim units
+	for i in 2:  # a KO this frame: an explosion where the fighter left the screen
+		var p: Dictionary = prev_fighters[i]
+		if cur_fighters[i].respawn_wait > 0 and not p.is_empty() and p.respawn_wait == 0:
+			var at := (Vector2(p.x, p.y) - cam_center) / half
+			explosions.append({at = at.clamp(Vector2(-0.85, -0.8), Vector2(0.85, 0.8)), start = game.get_frame()})
+	explosions = explosions.filter(func(e): return game.get_frame() - e.start in range(int(600 / EXPLOSION_FPS)))
 
 
 # Starts train/serve.py for player p's bot and begins connecting to it.
@@ -449,6 +464,10 @@ func shown(i: int) -> Dictionary:
 func update_camera(delta: float) -> void:
 	var a := shown(0)
 	var b := shown(1)
+	if a.respawn_wait > 0:  # off the field after a KO: follow the other fighter only
+		a = b
+	elif b.respawn_wait > 0:
+		b = a
 	var lo := Vector2(min(a.x, b.x), min(a.y, b.y))
 	var hi := Vector2(max(a.x, b.x), max(a.y, b.y) + cfg.hurtbox_h)
 	# Half the visible area, in sim units: both fighters plus a margin, but
@@ -582,6 +601,12 @@ func _draw() -> void:
 	var fighters := [shown(0), shown(1)]
 	for i in 2:
 		draw_fighter(i, fighters[i], font)
+	for e in explosions:
+		var k := mini(9, int((game.get_frame() - e.start) * EXPLOSION_FPS / 60))
+		var c: Vector2 = cam_center + e.at * get_viewport_rect().size / 2 / px  # back to sim units, for the camera now
+		if explosion_tex != null:
+			draw_texture_rect_region(explosion_tex, Rect2(to_screen(c.x - EXPLOSION_SIZE / 2, c.y + EXPLOSION_SIZE / 2),
+				Vector2(EXPLOSION_SIZE, EXPLOSION_SIZE) * px), Rect2(k * 128, 0, 128, 128))
 
 	# Hitboxes: translucent circles in the attacker's colour with a red rim.
 	# "Spent" ones (the move already hit) are drawn faded; they can't hit again.
@@ -608,6 +633,8 @@ func draw_map(name: String, x0: float, x1: float, y0: float, y1: float) -> void:
 
 
 func draw_fighter(i: int, f: Dictionary, font: Font) -> void:
+	if f.respawn_wait > 0:
+		return  # off the field after a KO
 	var w: float = cfg.hurtbox_w
 	var h: float = cfg.hurtbox_h
 	var shake := 0.0

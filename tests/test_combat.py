@@ -133,7 +133,11 @@ def test_walk_off_stage_loses_stock_and_respawns():
             break
     p2 = f(env, 1)
     assert p2["stocks"] == 2
-    assert p2["x"] == fightcore.SPAWN_X and p2["invuln"] > 0  # back at spawn, protected
+    assert p2["x"] == fightcore.SPAWN_X and p2["invuln"] == 120 and p2["respawn_wait"] > 0  # waiting off the field
+    for _ in range(p2["respawn_wait"]):
+        act(env, p2=(0, 0, 1))  # inputs are ignored while waiting
+    p2 = f(env, 1)
+    assert p2["respawn_wait"] == 0 and p2["invuln"] == 120 and p2["y"] == 14.0  # the drop-in starts with full i-frames
 
 
 def test_bad_move_file_gives_readable_error(tmp_path):

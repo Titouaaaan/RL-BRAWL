@@ -38,7 +38,8 @@ static void write_fighter(const Fighter& f, const GameConfig& cfg, float m, floa
     int lag_left = (f.state == ST_LANDING) ? f.landing_lag - f.state_frame : 0;
     *o++ = move_left / 60.0f;
     *o++ = lag_left / 60.0f;
-    *o++ = f.invuln / float(std::max(cfg.respawn_invuln, 1));
+    // Protected time left: > 1 while still waiting off the field after a KO (keeps OBS_DIM, so old checkpoints load).
+    *o++ = (f.invuln + f.respawn_wait) / float(std::max(cfg.respawn_invuln, 1));
     *o++ = intangible(f, cfg);  // hits would pass through right now
     *o++ = f.fastfall_blocked;
     *o++ = float(f.air_whiffs) / std::max(cfg.air_whiff_limit, 1);  // 1 = no more air attacks until landing

@@ -139,6 +139,7 @@ NB_MODULE(fightcore, m) {
                  d["hitstun"] = (int)f.hitstun;
                  d["stocks"] = (int)f.stocks;
                  d["invuln"] = (int)f.invuln;
+                 d["respawn_wait"] = (int)f.respawn_wait;
                  d["intangible"] = intangible(f, e.cfg);
                  d["grounded"] = f.grounded;
                  d["fastfall"] = f.fastfall;

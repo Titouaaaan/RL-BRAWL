@@ -9,6 +9,7 @@ on any `play.bat` command.
 | Folder | What | Who writes it |
 |---|---|---|
 | `assets/sprites/<Name>/` | your source images, one folder per character: `static.png` and/or animation strips | you (tools never modify it) |
+| `assets/effects/` | effects: `Explosion_1/` (10 source frames, 550 px) packed into `explosion_1.png` (10 x 128 px, the KO explosion) | you |
 | `assets/maps/` | stage art: backgrounds (2304x1296) and 32 px tiles, used as they are (no tool) | you |
 | `assets/characters/<id>/` | what the game loads: the same images processed, plus `characters.json` (ids, sizes, fps) | `python tools/sprites.py` |
 

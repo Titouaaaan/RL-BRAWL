@@ -935,6 +935,7 @@ static void respawn(Fighter& f, int player, const GameConfig& cfg) {
     fresh.jumps_left = 1;
     fresh.shield_hp = cfg.shield_max;
     fresh.invuln = static_cast<int16_t>(cfg.respawn_invuln);
+    fresh.respawn_wait = static_cast<int16_t>(cfg.respawn_wait);
     fresh.prev_button = f.prev_button;  // so a held jump doesn't fire on respawn
     f = fresh;
 }
@@ -944,7 +945,7 @@ static void respawn(Fighter& f, int player, const GameConfig& cfg) {
 static void try_ledge_grab(Fighter& f, const Fighter& other, const Input& raw_in, int p, const GameConfig& cfg,
                            StepEvents& ev) {
     Input in = sanitize(raw_in);
-    bool can = !f.grounded && f.hitlag == 0 && f.ledge_cooldown == 0 && in.stick_y >= 0 &&
+    bool can = !f.grounded && f.hitlag == 0 && f.respawn_wait == 0 && f.ledge_cooldown == 0 && in.stick_y >= 0 &&
                (f.state == ST_AIRBORNE || f.state == ST_HELPLESS || f.state == ST_AIRDODGE) &&
                f.vy + f.launch_vy <= 0 && f.ledge_grabs < cfg.ledge_max_grabs;
     if (!can) return;
@@ -991,6 +992,11 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
 
     for (int p = 0; p < 2; ++p) {
         Fighter& f = s.f[p];
+        if (f.respawn_wait > 0) {  // KO'd: off the field, frozen; invuln doesn't tick until the drop-in
+            f.respawn_wait -= 1;
+            f.prev_button = sanitize(in[p]).button;  // a button held while waiting doesn't fire on drop-in
+            continue;
+        }
         if (f.hitlag > 0) {
             // Frozen in hitlag. The victim's stick is recorded as DI and
             // applied the moment the freeze ends.
@@ -1211,7 +1217,7 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
 }
 
 bool intangible(const Fighter& f, const GameConfig& cfg) {
-    if (f.invuln > 0) return true;
+    if (f.invuln > 0 || f.respawn_wait > 0) return true;
     int t = f.state_frame;
     int shift = f.dodge_shift;
     switch (f.state) {
@@ -1291,6 +1297,7 @@ uint64_t hash_state(const GameState& s) {
         mix(h, &f.tumble, sizeof f.tumble);
         mix(h, &f.landing_lag, sizeof f.landing_lag);
         mix(h, &f.invuln, sizeof f.invuln);
+        mix(h, &f.respawn_wait, sizeof f.respawn_wait);
         mix(h, &f.hitlag, sizeof f.hitlag);
         mix(h, &f.di_x, sizeof f.di_x);
         mix(h, &f.di_y, sizeof f.di_y);

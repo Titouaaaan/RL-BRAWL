@@ -198,6 +198,7 @@ struct Fighter {
                               // the hitstun until you act (jump, attack, ledge) or land (tech or knockdown)
     int16_t landing_lag = 0;  // length of the current ST_LANDING / ST_SHIELDSTUN / ST_REBOUND
     int16_t invuln = 0;       // frames left of intangibility (respawn, ledge, climbs, get-ups)
+    int16_t respawn_wait = 0; // after a KO: frames left off the field (hidden, frozen, untouchable) before dropping in
     // Hitlag ("freeze frames"): when a hit connects, both fighters freeze for
     // a few frames. The victim's stick meanwhile is their DI.
     uint8_t hitlag = 0;
@@ -403,6 +404,7 @@ struct GameConfig {
     float stage_half_width = 17.6f;  // = surfaces[0] extent: the ledges are at +-17.6
     float spawn_x = 8.8f;
     float respawn_y = 14.0f;
+    int respawn_wait = 120;    // 2 s off the field after a KO; respawn_invuln only starts after it
     int respawn_invuln = 120;
     uint8_t stocks = 3;
     int time_limit_frames = 7 * 60 * 60;  // 7 minutes (competitive Smash: 3 stocks, 7 min)

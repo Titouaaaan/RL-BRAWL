@@ -139,6 +139,7 @@ public:
         d["move"] = f.move;
         d["hitstun"] = f.hitstun;
         d["invuln"] = f.invuln;
+        d["respawn_wait"] = f.respawn_wait;
         d["intangible"] = intangible(f, cfg);
         d["air_attack_locked"] = f.air_whiffs >= cfg.air_whiff_limit;
         d["shield_hp"] = f.shield_hp;
