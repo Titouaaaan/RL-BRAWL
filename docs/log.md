@@ -214,8 +214,9 @@ Rule: add an entry for every significant change. When the hash isn't known yet, 
 - Decisions: project allowlist (`.claude/settings.json`: tests, module/extension builds, tools; read-only git is already auto-allowed; no delete rule, since a prefix rule can't stop `runs/../`); notebook moved to `docs/runs.md`; CLAUDE.md status cut to pointers, each record has one purpose; Claude renders frames before asking the owner to test visuals; `commit-msg` hook refuses code commits without a log entry (`[no-log]` for trivial fixes, never `--no-verify`).
 - Output: `.githooks/commit-msg` (tested: refuses, escape works), rules in CLAUDE.md, setup.md step 5.
 
-### 2026-10-12 · pending · Map art: cloud background, tiled stage
+### 2026-10-12 · 258c97e, pending · Map art: cloud background, tiled stage
 - Goal: replace the grey debug stage with the owner's map assets.
 - Request: owner: orange clouds as the default background; Tile_06/07/08 for platforms, Tile_04 to thicken the main stage.
 - Decisions (Claude): one tile = 1 sim unit, tiles stretched slightly to fit each surface; main stage top row uses Tile_01/02/03 (same art without the bottom border, so it joins the Tile_04 fill seamlessly); background stretched over the window, no parallax.
+- Then (owner): main stage drawn as an inverted pyramid (corners 1 tile thick, each lower row 1 tile shorter per side: 35 -> 25 wide); ledge dots hidden (`SHOW_LEDGES = false`). Claude flagged that collision stays the full rectangle (changing it = game change + retrain); owner to decide with the bigger-stage work.
 - Output: `draw_tiles()` in `godot/main.gd`; Maps section in `docs/assets.md`. Rendered and checked: no seams.

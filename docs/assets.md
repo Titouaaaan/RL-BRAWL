@@ -133,9 +133,12 @@ and `grey_clouds.png` also fit) stretched over the window, and tiles where
 
 | Surface | Size (sim units = tiles) | Tiles |
 |---|---|---|
-| Main stage | 35.2 x 6 (35 x 6 tiles) | top row Tile_01 (left), Tile_02 (middle), Tile_03 (right); 5 rows of Tile_04 below |
+| Main stage | 35.2 x 6 (35 tiles wide at the top, 25 at the bottom) | an inverted pyramid: top row Tile_06 (left corner), Tile_02 (middle), Tile_08 (right corner); 5 rows of Tile_04 below, each one tile shorter on each side |
 | Side platforms | 7.05 x 1 (7 tiles) | Tile_06, Tile_07, Tile_08 |
 | Top platform | 7 x 1 (7 tiles) | Tile_06, Tile_07, Tile_08 |
 
-Tile_01-03 are 06-08 without the bottom border, so they join the fill below.
-Collision only uses the top edge of each surface; the art doesn't change gameplay.
+Tile_02 has no bottom border, so it joins the fill below; the corners use
+Tile_06/08 because their underside shows. Platforms only collide on their top
+edge. The main stage still collides as the full 35.2 x 6 rectangle: the
+cut-away corners are drawing only (making them real is a game change that
+needs retraining). `SHOW_LEDGES` in `main.gd` turns the ledge markers back on.

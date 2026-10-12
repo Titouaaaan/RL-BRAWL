@@ -47,7 +47,7 @@ C++ core to advance, and draws. It contains no game logic.
   recorded inputs instead, at the chosen speed.
 - **`_process()`** runs once per screen refresh (can be 144 Hz): moves the
   camera and asks for a redraw.
-- **`_draw()`**: background, stage and platforms (tiles from `assets/maps`, `draw_tiles()`), ledge markers, fighters (`draw_fighter`),
+- **`_draw()`**: background, stage and platforms (tiles from `assets/maps`, `draw_tiles()`), ledge markers (off: `SHOW_LEDGES`), fighters (`draw_fighter`),
   hitboxes, HUD (`draw_hud`).
 
 ### Input
