@@ -1,7 +1,7 @@
 # Decision log
 
 One entry per significant change, oldest first: what the owner asked for, what was decided and by whom, what came out.
-Request "—" = not recorded. Entries before 2026-10-12 were rebuilt from commit messages and `runs/monitor_notes.md`.
+Request "—" = not recorded. Entries before 2026-10-12 were rebuilt from commit messages and `docs/runs.md`.
 Rule: add an entry for every significant change. When the hash isn't known yet, write `pending`, and fill it in the next time the log is updated.
 
 ### 2026-09-28 · a8b9472 · Phase 0: build plumbing
@@ -207,3 +207,9 @@ Rule: add an entry for every significant change. When the hash isn't known yet, 
 - Request: owner: one folder per character, missing animations fall back to the static sprite.
 - Decisions (Claude): `assets/sprites/<Name>/` with `static.png` and `<anim>.png`; sheets renamed to game names (Attack_1 -> attack, Attack_2 -> air, Attack_3 -> heavy; walk/dead unused); 128 px frames kept at full resolution, Godot scales per character (`px`, `ref_h`); generated output in `assets/characters/<id>/`.
 - Output: characters 7-9 animated (idle, run, jump, hurt, shield, attacks); characters 1-6 regenerated pixel-identical. Fix after the owner's test: sprites sank to the knees (the canvas was centered on the body; 128 px sheets have the body only in the bottom 81 px), so the canvas bottom is now anchored at the feet.
+
+### 2026-10-12 · pending · Workflow: permissions, notebook in git, one record per purpose, log hook
+- Goal: fewer permission stops; no lost records; less duplicated upkeep; logging guaranteed.
+- Request: owner asked how to use Claude Code better; chose Claude's items 1-4 and 8.
+- Decisions: project allowlist (`.claude/settings.json`: tests, module/extension builds, tools; read-only git is already auto-allowed; no delete rule, since a prefix rule can't stop `runs/../`); notebook moved to `docs/runs.md`; CLAUDE.md status cut to pointers, each record has one purpose; Claude renders frames before asking the owner to test visuals; `commit-msg` hook refuses code commits without a log entry (`[no-log]` for trivial fixes, never `--no-verify`).
+- Output: `.githooks/commit-msg` (tested: refuses, escape works), rules in CLAUDE.md, setup.md step 5.

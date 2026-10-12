@@ -12,7 +12,7 @@
 | Know why things are the way they are (plan and dated decisions) | [design.md](design.md) |
 | See every change: when, why, who decided, which commit | [log.md](log.md) |
 
-`runs/monitor_notes.md` (not in git) is the lab notebook of every overnight
+[runs.md](runs.md) is the lab notebook of every
 training run.
 
 ## The project in one picture

@@ -1,0 +1,11 @@
+#!/bin/sh
+# Refuses a commit that changes code or game data without a docs/log.md entry
+# (CLAUDE.md, Development process). Enabled per clone: git config core.hooksPath .githooks
+# Escape hatch for trivial fixes (typos, comments): put [no-log] in the commit message.
+grep -q '\[no-log\]' "$1" && exit 0
+staged=$(git diff --cached --name-only)
+echo "$staged" | grep -qE '^(core|train|data|bindings|godot|tools|assets/sprites)/' || exit 0
+echo "$staged" | grep -qx 'docs/log.md' && exit 0
+echo "commit refused: code or game data changed but docs/log.md has no entry." >&2
+echo "Add an entry (CLAUDE.md, Development process), or put [no-log] in the message for a trivial fix." >&2
+exit 1

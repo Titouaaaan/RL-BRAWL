@@ -4,7 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Phases 0-2 done (build plumbing; game mechanics modeled on Smash (see SmashWiki; controls summary at the top of `core/sim.h`): 23 moves (numbers from Mario in Smash Ultimate; `pick_move` in sim.cpp, plus jab chain, forward tilt, dash attack, get-up and ledge attacks), shield / roll / spot dodge / grab + 4 throws (the attack-grab-shield triangle), hitlag + DI, stale-move negation, tech/knockdown, short hop, aerial auto-cancel windows, smash-attack charging, pummels, a 9-frame input buffer (per player: humans 9, agents 0), 7-minute games, Battlefield platforms, Smash knockback formula, tumble, crouch cancel, clank, parry, dodge staling, ledges on a solid stage, get-up options, grab mashing, directional air dodge, 24 states, fast-fall = a fresh hold of down without attacking for `fastfall_hold` frames, two whiffed air attacks lock air attacks until landing (hidden state is in the obs, except each fighter's stale-move queue, deliberately), dash/run, body pushing that never pushes off the stage, dodges; RL interface in `core/vecenv.*`: egocentric obs of `OBS_DIM`=173, layout in `vecenv.h`, actions egocentric too, player 1's stick_x mirrored). v1 done (Oct 12, 2026; next: up-B, bigger stage, retrain). Phase 3: `train/ppo.py` (CleanRL ppo.py vendored at commit fe8d8a0, changes marked `# OURS`, never modify the PPO update itself), `train/bots.py` (dummy/random/jabber/spacer/fighter, obs indices named at the top), `train/replay.py` (game recordings = per-frame inputs + move files + input_buffer + final hash; Godot verifies the hash), `train/record.py` (record a checkpoint's game), `train/serve.py` (live bot for Godot over local TCP). Best agent so far: `runs/selfplay__league__1__1790809954` (480M decisions, league of the previous run's checkpoints; Elo 2251 vs 1367 for the previous best, `runs/ladder_league.txt`); the lab notebook with every run and intervention is `runs/monitor_notes.md`. Characters are visuals only: `tools/sprites.py` turns `assets/sprites/<Name>/` (`static.png` and/or `<anim>.png` strips) into `assets/characters/<id>/` (+ `characters.json` with ids, canvas `px`, `ref_h`, fps); Godot picks them with `--p1/--p2`. Godot debug view in `bindings/godot/` + `godot/` (godot-cpp submodule in `extern/`, nlohmann/json vendored in `extern/nlohmann/`). Read `docs/design.md` before starting any phase.
+v1 done (Oct 12, 2026): a Smash-style mirror match (Mario's frame data, Battlefield stage; controls at the top of `core/sim.h`, mechanics in `docs/playing.md`) and PPO self-play agents. Best agent: `runs/selfplay__league__1__1790809954` (Elo 2251; the menu's bot levels use its checkpoints, `godot/session.gd`). Next: up-B, a bigger stage, then retrain. Read `docs/design.md` before starting a phase.
+
+Where things are recorded (keep each one current, don't duplicate between them):
+- `docs/log.md`: every significant change: why, the owner's request, who decided, commits (see Development process).
+- `docs/runs.md`: the lab notebook: every training run, its numbers, interventions and reports.
+- `docs/design.md`: the plan; its dated decisions stop at Oct 12, 2026 (later ones go to `log.md`).
+- Owner-facing docs per theme, indexed in `docs/README.md`.
 
 ## Commands
 
@@ -50,6 +56,8 @@ These are deliberate choices; don't change them without revisiting the design do
 - **Reaction delay ring buffer** (observe state k frames ago; 6 in training) and **frame skip** (default 4) must stay configurable. The Godot live bot reproduces both.
 - **Agents play without the input buffer** (`input_buffer=0` in VecEnv, the live bot, and replays recorded from Python). Turning it on for agents halved their learning speed (ablation, Sep 30, 2026).
 - **Rewards come from `StepEvents`** (hits, damage, KOs) emitted by `step()`, not from diffing state. No positional shaping.
+- **`train/ppo.py`** is CleanRL's ppo.py (commit fe8d8a0); every change is marked `# OURS`; never modify the PPO update itself.
+- **Hidden state the rules depend on is in the obs** (hold counters, locks, windows), except each fighter's stale-move queue, deliberately (it would be keyed by move ID).
 - Simulation is 60 Hz fixed timestep with an integer frame counter. Fighter logic is a state machine (state + frame-in-state + input -> next state).
 
 ## About the owner: how to explain work
@@ -76,5 +84,8 @@ Keep C++ simple: plain structs, `std::vector`, fixed-size arrays, no raw `new`/`
 ## Development process
 
 - **Decision log:** every significant change gets an entry in `docs/log.md` (date, commit, title, goal, the owner's request, decisions and who made them, output), kept terse. Write the hash as `pending` and fill it in at the next log update.
+- **Enforced by a git hook** (`.githooks/commit-msg`; enable once per clone with `git config core.hooksPath .githooks`): a commit touching `core/`, `train/`, `data/`, `bindings/`, `godot/`, `tools/` or `assets/sprites/` is refused unless it also stages `docs/log.md`. `[no-log]` in the message is allowed only for trivial fixes (typos, comments). Never bypass it with `--no-verify`.
+- **Check visuals yourself before handing over:** for any change that shows on screen, render frames and look at them: `<godot_console.exe> --path godot --write-movie <scratchpad>/f.png --quit-after 600 -- --replay=<file> [--p1=ID --p2=ID]` (one PNG per frame; crop/zoom with PIL). Only then ask the owner to test the feel.
+- **Approved destructive steps** (cleanups the owner agreed to) are run directly, not handed back as commands.
 
 Work proceeds in phases 0 to 5; each phase has a gate that must pass before the next starts. Training follows a sanity ladder: stationary dummy, random agent, scripted bots, then full self-play. Self-play reward hovers near zero, so judge progress by win rate vs scripted baselines, Elo across snapshots, and watching replays.

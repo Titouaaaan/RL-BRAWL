@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest)",
+      "Bash(python -m pytest *)",
+      "PowerShell(python -m pytest)",
+      "PowerShell(python -m pytest *)",
+      "Bash(python -m pip install --no-build-isolation .)",
+      "Bash(python -m pip install --no-build-isolation . -q)",
+      "PowerShell(python -m pip install --no-build-isolation .)",
+      "Bash(python -m cmake --build build/godot --config Release --parallel)",
+      "Bash(python -m cmake --build build/debug --config Debug)",
+      "Bash(build/debug/Debug/smoke.exe)",
+      "Bash(python tools/sprites.py)",
+      "Bash(python tools/bench.py)",
+      "Bash(python tools/combos.py)",
+      "PowerShell(Get-CimInstance Win32_Process*)"
+    ]
+  }
+}

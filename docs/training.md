@@ -104,7 +104,7 @@ env uses `input_buffer=0`. With it, agents learned about half as fast (hits/min
 4 frames and sees the game 6 frames late, so presses from earlier decisions
 fired at moments it hadn't chosen, invisible in its observation. Found by
 ablation (time limit, reward, seed, smash charge and buffer tested one at a
-time; details in `runs/monitor_notes.md`).
+time; details in [runs.md](runs.md)).
 **Rewards:** +1 for a KO, −1 for being KO'd. On top of that, two shaping
 terms give a denser learning signal early on, then fade out:
 
@@ -231,6 +231,6 @@ every pair (128 games each, training conditions) and fits Elo ratings, e.g.
 
 ## History
 
-`runs/monitor_notes.md` is the lab notebook: every overnight run, what was
+[runs.md](runs.md) is the lab notebook: every overnight run, what was
 watched, each intervention with its evidence, and the morning reports. The
 decisions it led to are summarized in `docs/design.md`.

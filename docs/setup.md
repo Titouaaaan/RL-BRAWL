@@ -10,6 +10,7 @@ This machine already has everything installed. On another PC you would need:
    (the first three build the game module; torch, tensorboard and tyro are for training and the live bot; pillow for `tools/sprites.py`), then build the module once: `python -m pip install --no-build-isolation .`
 3. **Godot 4.7** (standard build, not .NET). Unzip it anywhere under `Downloads`, or set the `GODOT` environment variable to the path of its `.exe`.
 4. `git clone` the repo. `play.bat` downloads the `godot-cpp` submodule itself if it's missing.
+5. `git config core.hooksPath .githooks` turns on the commit check (a commit that changes code without a `docs/log.md` entry is refused).
 
 ## Building
 

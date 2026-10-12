@@ -7,3 +7,5 @@ godot/bin/
 *.old
 replays/
 runs/
+.claude/*
+!.claude/settings.json
