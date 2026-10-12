@@ -196,8 +196,8 @@ Rule: add an entry for every significant change. When the hash isn't known yet, 
 - Decisions: private repo, push only when asked; v1 worktree dropped.
 - Output: README.
 
-### 2026-10-12 · pending · Decision log, cleanup, compact code
+### 2026-10-12 · ff0e60d · Decision log, cleanup, compact code
 - Goal: track why things change; free disk space.
 - Request: owner: v1 is done (up-B and a bigger stage come later); clean up `runs/`; code as compact as possible (ponytail ultra); this log.
 - Decisions: keep only the league and main runs; log rule added to CLAUDE.md.
-- Output: this file.
+- Output: this file; runs/ 876 MB -> ~350 MB.
