@@ -222,8 +222,8 @@ Rule: add an entry for every significant change. When the hash isn't known yet, 
 - Then (owner): standalone editable pictures; Claude made the game draw them (`assets/maps/stage.png` 1120x192, `platform.png` 224x32, assembled from the tiles) instead of assembling tiles at runtime, so edits show in game.
 - Output: `draw_map()` in `godot/main.gd`; Maps section in `docs/assets.md`. Rendered and checked.
 
-### 2026-10-12 · pending · 2 s respawn wait + KO explosion
+### 2026-10-12 · 5949abd, pending · 2 s respawn wait + KO explosion
 - Goal: Smash-like KOs: the fighter vanishes, an explosion plays, then it drops back in.
 - Request: owner: explosion from `assets/effects/Explosion_1` (10 PNGs -> sprite sheet); after a KO wait 2 s before dropping in; the drop-in and its i-frames exactly as before.
-- Decisions (Claude): game change in `core/`: `Fighter::respawn_wait` (`GameConfig::respawn_wait` = 120): `step()` skips the waiting fighter (frozen, intangible, inputs ignored); `invuln` (120) only starts counting at the drop-in. Obs: the invuln feature becomes (invuln + respawn_wait) / 120 (up to 2 while waiting): OBS_DIM unchanged, so old checkpoints load (they never saw values > 1, harmless for 2 s). Explosion: frames packed to 10 x 128 px; drawn at the KO point clamped into view and pinned to the screen while the camera moves; the camera ignores the waiting fighter.
+- Decisions (Claude): game change in `core/`: `Fighter::respawn_wait` (`GameConfig::respawn_wait` = 120): `step()` skips the waiting fighter (frozen, intangible, inputs ignored); `invuln` (120) only starts counting at the drop-in. Obs: the invuln feature becomes (invuln + respawn_wait) / 120 (up to 2 while waiting): OBS_DIM unchanged, so old checkpoints load (they never saw values > 1, harmless for 2 s). Explosion: frames packed to 10 x 128 px; drawn at the KO point clamped into view and pinned to the screen while the camera moves; the camera holds still until the drop-in (owner: following the survivor made the explosion drift).
 - Output: test extended (wait, ignored inputs, full i-frames after); all replays regenerated (old ones desync); KO rendered and checked.

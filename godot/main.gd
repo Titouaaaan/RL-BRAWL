@@ -464,10 +464,8 @@ func shown(i: int) -> Dictionary:
 func update_camera(delta: float) -> void:
 	var a := shown(0)
 	var b := shown(1)
-	if a.respawn_wait > 0:  # off the field after a KO: follow the other fighter only
-		a = b
-	elif b.respawn_wait > 0:
-		b = a
+	if a.respawn_wait > 0 or b.respawn_wait > 0:
+		return  # after a KO the camera holds still until the drop-in (the explosion stays put)
 	var lo := Vector2(min(a.x, b.x), min(a.y, b.y))
 	var hi := Vector2(max(a.x, b.x), max(a.y, b.y) + cfg.hurtbox_h)
 	# Half the visible area, in sim units: both fighters plus a margin, but
