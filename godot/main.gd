@@ -17,12 +17,10 @@ var chars := [{}, {}]  # per player: {tex, flip, px, ref, body_w, name, anims}; 
 # the game runs at 60 frames per second); attacks are stretched over the
 # whole move instead.
 const DEFAULT_FPS := 7.5
-# Map art (assets/maps): a background filling the window and 32 px tiles, one
-# tile = 1 sim unit. Main stage, an inverted pyramid: top row Tile_06 (left
-# corner), Tile_02 (middle), Tile_08 (right corner); each row of Tile_04 (fill)
-# below is one tile shorter on each side. Collision is still the full
-# rectangle (core/sim.h): the cut-away corners are drawing only.
-# Platforms: Tile_06/07/08, one tile thick.
+# Map art (assets/maps): a background filling the window; stage.png and
+# platform.png (made from the tiles, edit them freely) stretched over each
+# surface, platforms 1 unit thick. Collision is still the full stage rectangle
+# (core/sim.h): the stage picture's cut-away corners are drawing only.
 const BACKGROUND := "orange_clouds.png"
 const SHOW_LEDGES := false  # true: yellow dots on the two grabbable ledge corners
 var map_tex := {}  # file name -> texture
@@ -115,7 +113,7 @@ func _ready() -> void:
 	var args: PackedStringArray = Session.args if Session.from_menu else OS.get_cmdline_user_args()
 	load_characters(args)
 	var maps := ProjectSettings.globalize_path("res://").path_join("../assets/maps").simplify_path()
-	for f in [BACKGROUND, "Tile_02.png", "Tile_04.png", "Tile_06.png", "Tile_07.png", "Tile_08.png"]:
+	for f in [BACKGROUND, "stage.png", "platform.png"]:
 		var img := Image.load_from_file(maps.path_join(f))
 		if img != null:
 			map_tex[f] = ImageTexture.create_from_image(img)
@@ -572,16 +570,14 @@ func _draw() -> void:
 	var bz_br := to_screen(cfg.blast_x, cfg.blast_bottom)
 	draw_rect(Rect2(bz_tl, bz_br - bz_tl), Color(1, 1, 1, 0.15), false, 2.0)
 	# The main stage is a solid block: you can't pass through its sides or underside.
-	var tile: float = 2 * w / roundi(2 * w)  # stage tiles are stretched slightly to fit its width
-	for row in int(cfg.stage_depth):
-		draw_tiles(-w + row * tile, w - row * tile, -row, ["Tile_06.png", "Tile_02.png", "Tile_08.png"] if row == 0 else ["Tile_04.png"])
+	draw_map("stage.png", -w, w, 0, -cfg.stage_depth)
 	# Ledges: the two top corners you can hang from.
 	for side in ([-1, 1] if SHOW_LEDGES else []):
 		draw_circle(to_screen(side * w, 0), px * 0.3, Color(0.9, 0.9, 0.6))
 	# Platforms (every floor after the first): thin, pass-through from below.
 	for k in range(1, cfg.surfaces.size()):
 		var s: Array = cfg.surfaces[k]
-		draw_tiles(s[0], s[1], s[2], ["Tile_06.png", "Tile_07.png", "Tile_08.png"])
+		draw_map("platform.png", s[0], s[1], s[2], s[2] - 1)
 
 	var fighters := [shown(0), shown(1)]
 	for i in 2:
@@ -601,20 +597,14 @@ func _draw() -> void:
 	draw_hud(font)
 
 
-# One row of 1-unit tiles from x0 to x1, top edge at y, stretched to fit
-# exactly: [left, middle, right] end pieces, or [fill] for every tile.
-# Falls back to a grey bar if the art is missing.
-func draw_tiles(x0: float, x1: float, y: float, names: Array) -> void:
-	var n := maxi(1, roundi(x1 - x0))
-	var tw := (x1 - x0) / n
-	for k in n:
-		var name: String = names[0] if names.size() == 1 else names[0 if k == 0 else (2 if k == n - 1 else 1)]
-		var tl := to_screen(x0 + k * tw, y)
-		var rect := Rect2(tl, to_screen(x0 + (k + 1) * tw, y - 1) - tl).grow_individual(0, 0, 0.5, 0.5)  # overlap half a pixel: no seams
-		if map_tex.has(name):
-			draw_texture_rect(map_tex[name], rect, false)
-		else:
-			draw_rect(rect, Color(0.45, 0.45, 0.5))
+# A map picture stretched over a sim rectangle (a grey box if it's missing).
+func draw_map(name: String, x0: float, x1: float, y0: float, y1: float) -> void:
+	var tl := to_screen(x0, y0)
+	var rect := Rect2(tl, to_screen(x1, y1) - tl)
+	if map_tex.has(name):
+		draw_texture_rect(map_tex[name], rect, false)
+	else:
+		draw_rect(rect, Color(0.45, 0.45, 0.5))
 
 
 func draw_fighter(i: int, f: Dictionary, font: Font) -> void:

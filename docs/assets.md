@@ -127,18 +127,21 @@ Sprites are drawn with nearest-neighbor filtering, so pixel art stays sharp.
 ## Maps
 
 `godot/main.gd` draws the stage from `assets/maps/` directly (no tool to run):
-the background `BACKGROUND` (default `orange_clouds.png`; `blue_clouds.png`
-and `grey_clouds.png` also fit) stretched over the window, and tiles where
-**one tile = 1 sim unit**, stretched slightly so each surface fits exactly:
 
-| Surface | Size (sim units = tiles) | Tiles |
+| File | Drawn as | Size |
 |---|---|---|
-| Main stage | 35.2 x 6 (35 tiles wide at the top, 25 at the bottom) | an inverted pyramid: top row Tile_06 (left corner), Tile_02 (middle), Tile_08 (right corner); 5 rows of Tile_04 below, each one tile shorter on each side |
-| Side platforms | 7.05 x 1 (7 tiles) | Tile_06, Tile_07, Tile_08 |
-| Top platform | 7 x 1 (7 tiles) | Tile_06, Tile_07, Tile_08 |
+| `orange_clouds.png` (`BACKGROUND`; `blue_clouds.png`, `grey_clouds.png` also fit) | stretched over the window | 2304 x 1296 |
+| `stage.png` | the main stage, stretched over 35.2 x 6 sim units | 1120 x 192 (35 x 6 tiles of 32 px) |
+| `platform.png` | each of the 3 platforms, stretched over 7 x 1 units | 224 x 32 (7 tiles) |
 
-Tile_02 has no bottom border, so it joins the fill below; the corners use
-Tile_06/08 because their underside shows. Platforms only collide on their top
-edge. The main stage still collides as the full 35.2 x 6 rectangle: the
-cut-away corners are drawing only (making them real is a game change that
-needs retraining). `SHOW_LEDGES` in `main.gd` turns the ledge markers back on.
+Edit `stage.png` and `platform.png` freely (keep the proportions, or the art
+gets stretched; transparent pixels show the background). They were assembled
+from the tiles (1 tile = 1 sim unit): the platform is Tile_06, 07 x5, 08; the
+stage is an inverted pyramid, top row Tile_06, 02 x33, 08 (Tile_02 has no
+bottom border, so it joins the fill), then 5 rows of Tile_04, each one tile
+shorter on each side (35 -> 25 wide).
+
+Platforms only collide on their top edge. The main stage still collides as
+the full 35.2 x 6 rectangle: the cut-away corners are drawing only (making them
+real is a game change that needs retraining). `SHOW_LEDGES` in `main.gd` turns
+the ledge markers back on.
