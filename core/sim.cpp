@@ -983,7 +983,9 @@ static void try_ledge_grab(Fighter& f, const Fighter& other, const Input& raw_in
 
 void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev) {
     ev = StepEvents{};
-    if (s.over) return;
+    // No early return once s.over is set: the game keeps running so Godot can
+    // show the final KO and give the winner a moment. Training and recorded
+    // replays stop stepping at s.over themselves.
     uint8_t before[2] = {s.f[0].state, s.f[1].state};  // to spot state changes for the events
     for (Fighter& f : s.f) {
         if (f.combo_timer < 65535) f.combo_timer += 1;
@@ -992,6 +994,7 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
 
     for (int p = 0; p < 2; ++p) {
         Fighter& f = s.f[p];
+        if (f.stocks == 0) continue;  // out of the game: stays off the field for good
         if (f.respawn_wait > 0) {  // KO'd: off the field, frozen; invuln doesn't tick until the drop-in
             f.respawn_wait -= 1;
             f.prev_button = sanitize(in[p]).button;  // a button held while waiting doesn't fire on drop-in
@@ -1204,10 +1207,10 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
 
     for (int p = 0; p < 2; ++p) {
         Fighter& f = s.f[p];
-        if (!outside_blast_zone(f, cfg)) continue;
+        if (f.stocks == 0 || !outside_blast_zone(f, cfg)) continue;
         s.f[0].combo = s.f[1].combo = 0;  // a KO ends any combo
         ev.ko[p] = true;
-        f.stocks -= 1;
+        if (!s.over) f.stocks -= 1;  // after the game is decided, a fall costs nothing (the result can't change)
         if (f.stocks > 0) respawn(f, p, cfg);
         else s.over = true;
     }
@@ -1217,7 +1220,7 @@ void step(GameState& s, const Input in[2], const GameConfig& cfg, StepEvents& ev
 }
 
 bool intangible(const Fighter& f, const GameConfig& cfg) {
-    if (f.invuln > 0 || f.respawn_wait > 0) return true;
+    if (f.invuln > 0 || f.respawn_wait > 0 || f.stocks == 0) return true;
     int t = f.state_frame;
     int shift = f.dodge_shift;
     switch (f.state) {

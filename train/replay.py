@@ -30,7 +30,7 @@ def play_and_record(moves_dir, policy0, policy1, frame_skip=4, reaction_delay=0,
         real = a[0].copy()
         real[1, 0] = -np.clip(real[1, 0], -1, 1)  # undo player 1's mirroring, as vecenv.cpp does
         # Each decision repeats for frame_skip frames. If the game ended partway,
-        # the extra frames are harmless: step() ignores a finished game.
+        # the extra frames are harmless: Godot stops reading at the game's end.
         inputs.extend([real.reshape(-1).tolist()] * frame_skip)
         if env.terminated[0] or env.truncated[0]:
             break

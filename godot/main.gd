@@ -31,6 +31,12 @@ const EXPLOSION_SIZE := 8.0  # sim units
 var explosion_tex: Texture2D
 var explosions := []  # [{at, start}]: position on screen (-1..1 each way, so it stays put while the camera moves), game frame it started
 
+# After the last stock is taken the game runs on for END_DELAY frames: the
+# camera holds on the explosion for the first half, then follows the winner,
+# who keeps control; then everything freezes on "Px wins!".
+const END_DELAY := 240
+var ko_frame := -1  # game frame of the final KO; -1 while both still have stocks
+
 # Live bots (--bot1=... / --bot2=..., from the menu or play.bat --vs): a player
 # can be a trained agent. The game starts train/serve.py for it (one Python
 # process per bot, ports BOT_PORT and BOT_PORT + 1) and talks to it over a
@@ -253,15 +259,17 @@ func restart_replay() -> void:
 	replay_result = ""
 
 
-# Feeds the next recorded frame to the sim. Returns false once the recording is over.
+# Feeds the next recorded frame to the sim. Returns false once the recording
+# is over: at its end or at the game's end (the last decision is padded to 4
+# frames, and the sim no longer ignores frames after the game ends).
 func replay_step() -> bool:
 	var inputs: Array = replay.inputs
-	if replay_frame >= inputs.size():
+	if replay_frame >= inputs.size() or game.is_over():
 		return false
 	var i: Array = inputs[replay_frame]
 	game.step(int(i[0]), int(i[1]), int(i[2]), int(i[3]), int(i[4]), int(i[5]))
 	replay_frame += 1
-	if replay_frame == inputs.size():
+	if replay_frame == inputs.size() or game.is_over():
 		# Same inputs + same code must give the exact same final state.
 		replay_result = "verified" if game.get_hash() == replay.final_hash else "DESYNC"
 	return true
@@ -333,7 +341,7 @@ func _physics_process(_delta: float) -> void:
 		for p in 2:  # the game waits until every bot is connected
 			if bot_spec[p] != "" and not bot_update(p):
 				all_ready = false
-		if all_ready:
+		if all_ready and not frozen():
 			var a: Array = bot_decide(0) if bot_spec[0] != "" else human_input(0, merge(read_input(KEYS[0]), read_pad(0)))
 			var b: Array = bot_decide(1) if bot_spec[1] != "" else human_input(1, merge(read_input(KEYS[1]), read_pad(1)))
 			game.step(a[0], a[1], a[2], b[0], b[1], b[2])
@@ -341,15 +349,26 @@ func _physics_process(_delta: float) -> void:
 		speed_acc += SPEEDS[speed_i]
 		while speed_acc >= 1.0:
 			speed_acc -= 1.0
-			replay_step()
+			if not replay_step() and not frozen():
+				game.step(0, 0, 0, 0, 0, 0)  # the recording stops at the KO: play the ending with nobody pressing anything
 	cur_fighters = [game.get_fighter(0), game.get_fighter(1)]
+	if game.get_frame() < ko_frame:
+		ko_frame = -1  # restarted
+	if ko_frame < 0 and (cur_fighters[0].stocks == 0 or cur_fighters[1].stocks == 0):
+		ko_frame = game.get_frame()
 	var half := get_viewport_rect().size / 2 / px  # half the visible area, in sim units
 	for i in 2:  # a KO this frame: an explosion where the fighter left the screen
 		var p: Dictionary = prev_fighters[i]
-		if cur_fighters[i].respawn_wait > 0 and not p.is_empty() and p.respawn_wait == 0:
+		var c: Dictionary = cur_fighters[i]
+		if not p.is_empty() and ((c.respawn_wait > 0 and p.respawn_wait == 0) or (c.stocks == 0 and p.stocks > 0)):  # the last KO has no respawn wait
 			var at := (Vector2(p.x, p.y) - cam_center) / half
 			explosions.append({at = at.clamp(Vector2(-0.85, -0.8), Vector2(0.85, 0.8)), start = game.get_frame()})
 	explosions = explosions.filter(func(e): return game.get_frame() - e.start in range(int(600 / EXPLOSION_FPS)))
+
+
+# The result screen: the sim stops. A time-out freezes at once; a KO after END_DELAY.
+func frozen() -> bool:
+	return game.is_over() and (ko_frame < 0 or game.get_frame() - ko_frame >= END_DELAY)
 
 
 # Starts train/serve.py for player p's bot and begins connecting to it.
@@ -464,8 +483,12 @@ func shown(i: int) -> Dictionary:
 func update_camera(delta: float) -> void:
 	var a := shown(0)
 	var b := shown(1)
-	if a.respawn_wait > 0 or b.respawn_wait > 0:
+	if a.respawn_wait > 0 or b.respawn_wait > 0 or (ko_frame >= 0 and game.get_frame() - ko_frame < END_DELAY / 2):
 		return  # after a KO the camera holds still until the drop-in (the explosion stays put)
+	if a.stocks == 0:  # game over: follow the winner alone
+		a = b
+	if b.stocks == 0:
+		b = a
 	var lo := Vector2(min(a.x, b.x), min(a.y, b.y))
 	var hi := Vector2(max(a.x, b.x), max(a.y, b.y) + cfg.hurtbox_h)
 	# Half the visible area, in sim units: both fighters plus a margin, but
@@ -631,7 +654,7 @@ func draw_map(name: String, x0: float, x1: float, y0: float, y1: float) -> void:
 
 
 func draw_fighter(i: int, f: Dictionary, font: Font) -> void:
-	if f.respawn_wait > 0:
+	if f.respawn_wait > 0 or f.stocks == 0:
 		return  # off the field after a KO
 	var w: float = cfg.hurtbox_w
 	var h: float = cfg.hurtbox_h
@@ -744,7 +767,7 @@ func draw_hud(font: Font) -> void:
 
 	if load_error != "":
 		draw_string(font, Vector2(16, 80), "Move file error: " + load_error, HORIZONTAL_ALIGNMENT_LEFT, size.x - 32, 18, Color(1, 0.3, 0.3))
-	if game.is_over():
+	if frozen():
 		draw_string(font, Vector2(0, size.y / 2 - 100), winner_text() + "   (R to restart, Esc for %s)" % ("the menu" if Session.from_menu else "quit"), HORIZONTAL_ALIGNMENT_CENTER, size.x, 40)
 
 

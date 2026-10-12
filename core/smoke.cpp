@@ -42,6 +42,24 @@ int main(int argc, char** argv) {
         std::printf("FAIL: not deterministic\n");
         return 1;
     }
+    // After the last stock the game keeps running (Godot's ending): the loser
+    // stays out for good (no second KO, no stock underflow); the winner can
+    // still move, and running off the stage costs it nothing.
+    GameState s;
+    reset(s, cfg);
+    s.f[1].stocks = 1;
+    s.f[1].x = 1000;  // past the blast zone
+    Input in[2] = {{1, 0, 0}, {}};  // P1 holds right: off the stage and KO'd
+    StepEvents ev;
+    int kos = 0;
+    for (int t = 0; t < 400; ++t) {
+        step(s, in, cfg, ev);
+        kos += ev.ko[0];
+    }
+    if (!s.over || s.f[1].stocks != 0 || kos == 0 || s.f[0].stocks != cfg.stocks || winner(s) != 0) {
+        std::printf("FAIL: game ending (over %d, P2 stocks %d, P1 KOs %d, P1 stocks %d)\n", s.over, s.f[1].stocks, kos, s.f[0].stocks);
+        return 1;
+    }
     // Also run the RL layer (observations are the most index-heavy code, so
     // the likeliest place for an out-of-bounds bug) with delay and frame skip.
     VecEnv env(16, cfg, EnvParams{4, 3, 0.01f});
