@@ -7,7 +7,7 @@
 | Art | By | Reuse |
 |---|---|---|
 | Characters DinoSailor, DinoSailorP2, Titou (`sprites/`) | homemade: [@Titouaaaan](https://github.com/Titouaaaan) | Not available for reuse (for now). |
-| Characters Car, Justin, OliverPip | homemade: [@raigeki49](https://github.com/raigeki49) | Not available for reuse, not my license. |
+| Characters Car, Justin, OliverPip (`sprites/`) | homemade: [@raigeki49](https://github.com/raigeki49) | Not available for reuse, not my license. |
 | Characters Fighter, Samurai, Shinobi (`sprites/`) | [craftpix.net](https://craftpix.net) (free, royalty-free) | Get them from craftpix.net under [their license](https://craftpix.net/file-licenses/), not from here. |
 | Stage tiles and cloud backgrounds (`maps/`) | [craftpix.net](https://craftpix.net) | Same: get them from craftpix.net. |
 | KO explosion (`effects/Explosion_1/`) | [craftpix.net](https://craftpix.net) | Same: get it from craftpix.net. |
