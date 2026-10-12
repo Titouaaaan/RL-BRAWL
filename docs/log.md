@@ -208,7 +208,7 @@ Rule: add an entry for every significant change. When the hash isn't known yet, 
 - Decisions (Claude): `assets/sprites/<Name>/` with `static.png` and `<anim>.png`; sheets renamed to game names (Attack_1 -> attack, Attack_2 -> air, Attack_3 -> heavy; walk/dead unused); 128 px frames kept at full resolution, Godot scales per character (`px`, `ref_h`); generated output in `assets/characters/<id>/`.
 - Output: characters 7-9 animated (idle, run, jump, hurt, shield, attacks); characters 1-6 regenerated pixel-identical. Fix after the owner's test: sprites sank to the knees (the canvas was centered on the body; 128 px sheets have the body only in the bottom 81 px), so the canvas bottom is now anchored at the feet.
 
-### 2026-10-12 · pending · Workflow: permissions, notebook in git, one record per purpose, log hook
+### 2026-10-12 · 57b70d3 · Workflow: permissions, notebook in git, one record per purpose, log hook
 - Goal: fewer permission stops; no lost records; less duplicated upkeep; logging guaranteed.
 - Request: owner asked how to use Claude Code better; chose Claude's items 1-4 and 8.
 - Decisions: project allowlist (`.claude/settings.json`: tests, module/extension builds, tools; read-only git is already auto-allowed; no delete rule, since a prefix rule can't stop `runs/../`); notebook moved to `docs/runs.md`; CLAUDE.md status cut to pointers, each record has one purpose; Claude renders frames before asking the owner to test visuals; `commit-msg` hook refuses code commits without a log entry (`[no-log]` for trivial fixes, never `--no-verify`).
