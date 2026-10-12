@@ -1,66 +1,225 @@
 {
   "1": {
     "name": "DinoSailor",
-    "source": "DinoSailor.png",
-    "file": "1.png",
+    "file": "1/static.png",
     "faces": "right",
+    "px": 64,
+    "ref_h": 61,
     "body_w": 47,
     "body_h": 61,
     "anims": {}
   },
   "2": {
     "name": "DinoSailorP2",
-    "source": "DinoSailorP2.png",
-    "file": "2.png",
+    "file": "2/static.png",
     "faces": "right",
+    "px": 64,
+    "ref_h": 61,
     "body_w": 47,
     "body_h": 61,
     "anims": {}
   },
   "3": {
     "name": "Car",
-    "source": "Car.png",
-    "file": "3.png",
+    "file": "3/static.png",
     "faces": "right",
+    "px": 64,
+    "ref_h": 61,
     "body_w": 64,
     "body_h": 30,
     "anims": {}
   },
   "4": {
     "name": "Justin",
-    "source": "Justin.png",
-    "file": "4.png",
+    "file": "4/static.png",
     "faces": "right",
+    "px": 64,
+    "ref_h": 61,
     "body_w": 41,
     "body_h": 64,
     "anims": {}
   },
   "5": {
     "name": "OliverPip",
-    "source": "OliverPip.png",
-    "file": "5.png",
+    "file": "5/static.png",
     "faces": "right",
+    "px": 64,
+    "ref_h": 61,
     "body_w": 37,
     "body_h": 64,
     "anims": {}
   },
   "6": {
     "name": "Titou",
-    "source": "Titou.png",
-    "file": "6.png",
+    "file": "6/static.png",
     "faces": "right",
+    "px": 64,
+    "ref_h": 61,
     "body_w": 29,
     "body_h": 63,
     "anims": {
       "idle": {
-        "file": "6_idle.png",
+        "file": "6/idle.png",
         "frames": 8,
         "fps": 7
       },
       "run": {
-        "file": "6_run.png",
+        "file": "6/run.png",
         "frames": 8,
         "fps": 10
+      }
+    }
+  },
+  "7": {
+    "name": "Fighter",
+    "file": "7/static.png",
+    "faces": "right",
+    "px": 128,
+    "ref_h": 82,
+    "body_w": 30,
+    "body_h": 81,
+    "anims": {
+      "air": {
+        "file": "7/air.png",
+        "frames": 3,
+        "fps": 7.5
+      },
+      "attack": {
+        "file": "7/attack.png",
+        "frames": 4,
+        "fps": 7.5
+      },
+      "heavy": {
+        "file": "7/heavy.png",
+        "frames": 4,
+        "fps": 7.5
+      },
+      "hurt": {
+        "file": "7/hurt.png",
+        "frames": 3,
+        "fps": 7.5
+      },
+      "idle": {
+        "file": "7/idle.png",
+        "frames": 6,
+        "fps": 7.5
+      },
+      "jump": {
+        "file": "7/jump.png",
+        "frames": 10,
+        "fps": 7.5
+      },
+      "run": {
+        "file": "7/run.png",
+        "frames": 8,
+        "fps": 7.5
+      },
+      "shield": {
+        "file": "7/shield.png",
+        "frames": 2,
+        "fps": 7.5
+      }
+    }
+  },
+  "8": {
+    "name": "Samurai",
+    "file": "8/static.png",
+    "faces": "right",
+    "px": 128,
+    "ref_h": 83,
+    "body_w": 46,
+    "body_h": 81,
+    "anims": {
+      "air": {
+        "file": "8/air.png",
+        "frames": 4,
+        "fps": 7.5
+      },
+      "attack": {
+        "file": "8/attack.png",
+        "frames": 6,
+        "fps": 7.5
+      },
+      "heavy": {
+        "file": "8/heavy.png",
+        "frames": 3,
+        "fps": 7.5
+      },
+      "hurt": {
+        "file": "8/hurt.png",
+        "frames": 2,
+        "fps": 7.5
+      },
+      "idle": {
+        "file": "8/idle.png",
+        "frames": 6,
+        "fps": 7.5
+      },
+      "jump": {
+        "file": "8/jump.png",
+        "frames": 12,
+        "fps": 7.5
+      },
+      "run": {
+        "file": "8/run.png",
+        "frames": 8,
+        "fps": 7.5
+      },
+      "shield": {
+        "file": "8/shield.png",
+        "frames": 2,
+        "fps": 7.5
+      }
+    }
+  },
+  "9": {
+    "name": "Shinobi",
+    "file": "9/static.png",
+    "faces": "right",
+    "px": 128,
+    "ref_h": 79,
+    "body_w": 36,
+    "body_h": 79,
+    "anims": {
+      "air": {
+        "file": "9/air.png",
+        "frames": 3,
+        "fps": 7.5
+      },
+      "attack": {
+        "file": "9/attack.png",
+        "frames": 5,
+        "fps": 7.5
+      },
+      "heavy": {
+        "file": "9/heavy.png",
+        "frames": 4,
+        "fps": 7.5
+      },
+      "hurt": {
+        "file": "9/hurt.png",
+        "frames": 2,
+        "fps": 7.5
+      },
+      "idle": {
+        "file": "9/idle.png",
+        "frames": 6,
+        "fps": 7.5
+      },
+      "jump": {
+        "file": "9/jump.png",
+        "frames": 12,
+        "fps": 7.5
+      },
+      "run": {
+        "file": "9/run.png",
+        "frames": 8,
+        "fps": 7.5
+      },
+      "shield": {
+        "file": "9/shield.png",
+        "frames": 4,
+        "fps": 7.5
       }
     }
   }

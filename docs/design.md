@@ -34,6 +34,7 @@ v0 is one character in a mirror match on one flat stage. This is enough to produ
 - **Input buffer for humans only (Sep 30, 2026):** ablations at 21M decisions (time limit, reward, seed, smash charge, buffer, one at a time) showed the buffer alone halved learning speed: an agent deciding every 4 frames with a 6-frame reaction delay has presses from earlier decisions fire unseen. `GameConfig::input_buffer` is per player: 9 for humans, 0 for agents (training env and live bot); replays record it.
 - **Live bot over Python (Sep 30, 2026):** `play.bat --vs` runs the policy in PyTorch (`train/serve.py`) and Godot talks to it over local TCP, sending the same observation as training (`core/obs.cpp`, shared by both) with the same delay and frame skip. Chosen over running the network in C++ inside the game: the bot is exactly the training code, any future architecture works unchanged, and games can be logged for learning from humans later. About 1.1-1.5 ms per decision, far below the 16.7 ms frame.
 - **Characters and animations (Sep 30 - Oct 1, 2026):** characters are visuals only (every character has the same hurtbox and moves). `tools/sprites.py` turns images of any size into 64x64 characters with permanent ids and horizontal-strip animations picked from the fighter's state (idle, run, jump/fall, hurt, shield, crouch, a move name, attack).
+- **Character folders (Oct 12, 2026):** one folder per character in `assets/sprites/` (`static.png` + `<anim>.png` strips); bigger frames (128x128 sheets) are kept at their resolution and scaled per character (`px`, `ref_h`) instead of shrunk to 64x64.
 - **Clank slide (Oct 1, 2026):** agent-vs-self replays showed jab-vs-jab clank loops for up to 20 s (96% of the time both jabbed again on the frame the rebound ended: the same network on both sides of an exactly mirrored game, and a clank costs nothing). Rebounding fighters now slide 0.75 apart (stopping at the edge), so each clank widens the gap and the loop ends within 3 clanks. Self-play replays went from 244 rebounds in 3 minutes to 0-6.
 - **Dodge:** on the ground a spot dodge (i-frames, short recovery); in the air an air dodge (i-frames, then helpless until landing, as in Smash).
 
@@ -161,8 +162,8 @@ RL-BRAWL/
   bindings/godot/   # GDExtension: the same core for Godot
   godot/            # the Godot project: main.gd (input, drawing, replays, live bot client)
   data/moves/       # JSON move definitions, shared by core and Godot
-  assets/sprites/   # source character images and animation strips (any size)
-  assets/characters/# processed 64x64 characters + characters.json (made by tools/sprites.py)
+  assets/sprites/   # source images, one folder per character (static.png, animation strips)
+  assets/characters/# processed characters, one folder per id, + characters.json (made by tools/sprites.py)
   train/            # ppo.py, bots.py, replay.py, record.py, serve.py (live bot)
   tools/            # bench.py, combos.py, sprites.py
   tests/            # pytest through the bindings

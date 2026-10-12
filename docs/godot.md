@@ -69,8 +69,8 @@ C++ core to advance, and draws. It contains no game logic.
   may refresh faster, so fighters are drawn between the last two game frames.
 - **Camera** (`update_camera()`): follows both fighters and zooms out as they
   separate; it eases 10% of the way per 60 Hz frame.
-- **Sprites** (`draw_fighter()`): the character's 64x64 canvas is scaled so
-  61 px = the body height, centered on the fighter, mirrored to face left,
+- **Sprites** (`draw_fighter()`): the character's canvas (`px`, 64 by default) is scaled so
+  `ref_h` px (61 by default) = the body height, centered on the fighter, mirrored to face left,
   squashed when crouching, rotated when knocked down or tumbling, and tinted
   for states (hit flash, charge glow, parry window...). `sprite_frame()` picks
   the animation frame (see [assets.md](assets.md)). Nearest-neighbor filtering

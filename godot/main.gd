@@ -4,15 +4,15 @@ extends Node2D
 
 const COLORS := [Color(0.35, 0.6, 1.0), Color(1.0, 0.45, 0.35)]
 
-# Characters: assets/characters/<id>.png, listed in characters.json (made by
-# tools/sprites.py from the images in assets/sprites). Every character is a
-# 64x64 canvas, feet on the bottom row; the canvas is drawn at the same size
-# for everyone, with 61 px = the fighter's height (the DinoSailor's height).
+# Characters: assets/characters/<id>/, listed in characters.json (made by
+# tools/sprites.py from the folders in assets/sprites). Each character is a
+# square canvas of "px" pixels (64 by default), feet on the bottom row, drawn
+# so "ref_h" pixels (61 by default) = the fighter's height.
 # Pick them with --p1=ID --p2=ID (play.bat passes them on).
 const SPRITE_PX := 64.0
 const SPRITE_REF_PX := 61.0
-var chars := [{}, {}]  # per player: {tex, flip, body_w, name, anims}; tex is null if missing
-# Animations: horizontal strips of 64x64 frames (assets/characters/<id>_<name>.png).
+var chars := [{}, {}]  # per player: {tex, flip, px, ref, body_w, name, anims}; tex is null if missing
+# Animations: horizontal strips of px-by-px frames (assets/characters/<id>/<name>.png).
 # Looping ones play at their "fps" from characters.json (drawings per second;
 # the game runs at 60 frames per second); attacks are stretched over the
 # whole move instead.
@@ -159,6 +159,8 @@ func load_characters(args: PackedStringArray) -> void:
 		chars[p] = {
 			tex = ImageTexture.create_from_image(img) if img != null else null,
 			flip = -1 if c.get("faces", "right") == "left" else 1,  # drawings are flipped to face right
+			px = float(c.get("px", SPRITE_PX)),
+			ref = float(c.get("ref_h", SPRITE_REF_PX)),
 			body_w = float(c.get("body_w", 47)),
 			name = c.get("name", "(no character %s)" % ids[p]),
 			anims = anims,
@@ -197,8 +199,8 @@ func sprite_frame(i: int, f: Dictionary) -> Array:
 				k = mini(a.frames - 1, int(f.state_frame * a.frames / max(1, cfg.move_frames[f.move])))
 			else:  # looping: drawing number = seconds in this state x drawings per second
 				k = int(f.state_frame * a.fps / 60.0) % a.frames
-			return [a.tex, Rect2(k * SPRITE_PX, 0, SPRITE_PX, SPRITE_PX)]
-	return [ch.tex, Rect2(0, 0, SPRITE_PX, SPRITE_PX)]
+			return [a.tex, Rect2(k * ch.px, 0, ch.px, ch.px)]
+	return [ch.tex, Rect2(0, 0, ch.px, ch.px)]
 
 
 func load_replay(path: String) -> void:
@@ -615,13 +617,13 @@ func draw_fighter(i: int, f: Dictionary, font: Font) -> void:
 	# and rotated in place: flipped to face left, squashed when crouching,
 	# lying on its side when knocked down, spinning while tumbling.
 	var ch: Dictionary = chars[i]
-	var size: float = SPRITE_PX * h / SPRITE_REF_PX  # the 64 px canvas, in sim units (same for every character)
+	var size: float = ch.px * h / ch.ref  # the canvas, in sim units
 	var center_y: float = f.y + h / 2
 	var angle := 0.0
 	var squash := 1.0
 	if f.state == ST.KNOCKDOWN:
 		angle = -f.facing * PI / 2
-		center_y = f.y + ch.body_w / SPRITE_REF_PX * h / 2  # lying on its side on the floor
+		center_y = f.y + ch.body_w / ch.ref * h / 2  # lying on its side on the floor
 		w = h * 1.1
 		h = cfg.lying_h
 	elif f.state == ST.CROUCH:
@@ -632,7 +634,7 @@ func draw_fighter(i: int, f: Dictionary, font: Font) -> void:
 		angle = f.state_frame * 0.35
 	var center := to_screen(f.x + shake, center_y)
 	if ch.tex != null:
-		var frame := sprite_frame(i, f)  # [texture, the 64x64 region of it to draw]
+		var frame := sprite_frame(i, f)  # [texture, the region of it to draw]
 		draw_set_transform(center, angle, Vector2(f.facing * ch.flip, squash))  # -1 mirrors it to face left
 		draw_texture_rect_region(frame[0], Rect2(-Vector2(size, size) * px / 2, Vector2(size, size) * px), frame[1], tint)
 		draw_set_transform(Vector2.ZERO)

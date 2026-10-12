@@ -2,23 +2,21 @@
 
     python tools/sprites.py
 
-Characters: each image <Name>.png becomes a 64x64 character in
-assets/characters/<id>.png: a plain background (like a white page) made
-transparent, empty space trimmed and the character scaled to fit, feet on the
-bottom row, centered. Art already drawn at exactly 64x64 is kept pixel for
-pixel where it was placed.
+One folder per character: assets/sprites/<Name>/. Inside, <animation>.png is a
+horizontal strip of square frames (names in ANIMATIONS; anything else, like
+walk.png or *_old.png backups, is ignored) and static.png is the still image.
+Without static.png, the first idle frame is the still image.
 
-Animations: <Name>_<animation>.png (e.g. Titou_idle.png) is a horizontal strip
-of square frames for character <Name>; see ANIMATIONS for the names the game
-uses. Every frame of a strip gets the same crop, scale and position, so the
-animation doesn't jitter. Saved as assets/characters/<id>_<animation>.png.
+- 64x64 art is kept exactly as drawn (61 px = the fighter's height).
+- Bigger frames (e.g. 128x128 sheets) are kept at their resolution, shifted so
+  the idle body is centered; "ref_h" (the idle body's height in pixels) tells
+  the game how to scale them to the fighter's height.
+- A static.png alone (any size) gets its plain background cleared, is trimmed
+  and fitted to 64x64, feet on the bottom row.
 
-assets/characters/characters.json lists the characters by id; ids are
-permanent: re-running keeps them and gives new characters the next free id.
-Each animation has an "fps" (drawings per second, default DEFAULT_FPS): edit it
-in characters.json; re-running keeps it. Images whose name ends in "_old"
-(backups, e.g. Titou_idle_old.png) are ignored. The source images are never
-modified.
+Output: assets/characters/<id>/ + characters.json. Ids are permanent (matched
+by name); each animation's "fps" (drawings per second, default DEFAULT_FPS) can
+be edited in characters.json and is kept on re-runs. Sources are never modified.
 """
 import json
 from collections import deque
@@ -31,6 +29,7 @@ SRC = ROOT / "assets" / "sprites"
 OUT = ROOT / "assets" / "characters"
 MANIFEST = OUT / "characters.json"
 DEFAULT_FPS = 7.5  # drawings per second for a new animation (8 game frames each)
+REF = 61  # pixels of fighter height on a 64x64 canvas
 SIZE = 64  # the game's character canvas: drawn so 61 px = the fighter's height (godot/main.gd)
 
 # Animation names the game looks for (godot/main.gd, anim_for()). Attacks can
@@ -99,63 +98,62 @@ def load_strip(path):
     return [clear_background(im.crop((i * side, 0, (i + 1) * side, side))) for i in range(n)]
 
 
+def place(frames, px, dx):
+    """Frames on px-by-px canvases, all shifted dx pixels right."""
+    out = []
+    for f in frames:
+        c = Image.new("RGBA", (px, px), (0, 0, 0, 0))
+        c.paste(f, (dx, 0))
+        out.append(c)
+    return out
+
+
+def bbox(frames):
+    boxes = [f.split()[-1].getbbox() for f in frames if f.split()[-1].getbbox()]
+    return min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes)
+
+
 def main():
-    OUT.mkdir(parents=True, exist_ok=True)
     chars = json.loads(MANIFEST.read_text()) if MANIFEST.exists() else {}
-    by_source = {c["source"]: cid for cid, c in chars.items()}
-    sources = [p for p in sorted(SRC.glob("*.png")) if not p.stem.endswith("_old")]  # *_old = backups
-    names = {p.stem for p in sources}
-
-    def animation_of(stem):  # "Titou_idle" -> ("Titou", "idle") if Titou.png exists
-        for anim in ANIMATIONS:
-            if stem.endswith("_" + anim) and stem[: -len(anim) - 1] in names:
-                return stem[: -len(anim) - 1], anim
-        return None
-
-    # Characters first (animations need their ids).
-    for path in sources:
-        if animation_of(path.stem):
+    ids = {c["name"]: cid for cid, c in chars.items()}
+    for d in sorted(p for p in SRC.iterdir() if p.is_dir()):
+        strips = {p.stem: load_strip(p) for p in sorted(d.glob("*.png")) if p.stem in ANIMATIONS}
+        static = clear_background(Image.open(d / "static.png").convert("RGBA")) if (d / "static.png").exists() else None
+        if not strips and not static:
+            print(f"skipped {d.name}: no static.png or animation")
             continue
-        cid = by_source.get(path.name) or str(max((int(i) for i in chars), default=0) + 1)
-        [img], bw, bh = fit_frames([clear_background(Image.open(path).convert("RGBA"))])
-        img.save(OUT / f"{cid}.png")
+        cid = ids.get(d.name) or str(max(map(int, chars), default=0) + 1)
+        ids[d.name] = cid
+        if strips:
+            px = next(iter(strips.values()))[0].width
+            l, t, r, b = bbox(strips.get("idle") or next(iter(strips.values())))
+            dx, ref = (0, REF) if px == SIZE else (px // 2 - (l + r) // 2, b - t)
+            strips = {a: place(fr, px, dx) for a, fr in strips.items()}
+            still = place([static], px, dx)[0] if static and static.size == (px, px) else (strips.get("idle") or next(iter(strips.values())))[0]
+        else:
+            px, ref = SIZE, REF
+            [still], _, _ = fit_frames([static])
+        out = OUT / cid
+        out.mkdir(parents=True, exist_ok=True)
+        still.save(out / "static.png")
         old = chars.get(cid, {})
-        old_anims = old.get("anims", {})
-        chars[cid] = {
-            "name": path.stem,
-            "source": path.name,
-            "file": f"{cid}.png",
-            "faces": old.get("faces", "right"),  # which way the drawing faces; edit to "left" if needed
-            "body_w": bw,  # the character's size inside the 64x64 canvas, in pixels
-            "body_h": bh,
-            "anims": {},
-            "_old_anims": old_anims,  # to keep each animation's fps (removed below)
-        }
-        by_source[path.name] = cid
-
-    # Then animations.
-    ids_by_name = {c["name"]: cid for cid, c in chars.items()}
-    for path in sources:
-        found = animation_of(path.stem)
-        if not found:
-            continue
-        name, anim = found
-        cid = ids_by_name[name]
-        frames, _, _ = fit_frames(load_strip(path))
-        strip = Image.new("RGBA", (SIZE * len(frames), SIZE), (0, 0, 0, 0))
-        for i, f in enumerate(frames):
-            strip.paste(f, (i * SIZE, 0))
-        strip.save(OUT / f"{cid}_{anim}.png")
-        fps = chars[cid]["_old_anims"].get(anim, {}).get("fps", DEFAULT_FPS)
-        chars[cid]["anims"][anim] = {"file": f"{cid}_{anim}.png", "frames": len(frames), "fps": fps}
-    for c in chars.values():
-        c.pop("_old_anims", None)
+        anims = {}
+        for a, frames in strips.items():
+            strip = Image.new("RGBA", (px * len(frames), px), (0, 0, 0, 0))
+            for i, f in enumerate(frames):
+                strip.paste(f, (i * px, 0))
+            strip.save(out / f"{a}.png")
+            anims[a] = {"file": f"{cid}/{a}.png", "frames": len(frames),
+                        "fps": old.get("anims", {}).get(a, {}).get("fps", DEFAULT_FPS)}
+        l, t, r, b = bbox([still])
+        chars[cid] = {"name": d.name, "file": f"{cid}/static.png",
+                      "faces": old.get("faces", "right"),  # which way the drawing faces; edit to "left" if needed
+                      "px": px, "ref_h": ref, "body_w": r - l, "body_h": b - t, "anims": anims}
 
     MANIFEST.write_text(json.dumps(dict(sorted(chars.items(), key=lambda kv: int(kv[0]))), indent=2) + "\n")
     for cid, c in sorted(chars.items(), key=lambda kv: int(kv[0])):
-        anims = ", ".join(f"{a} ({v['frames']} frames, {v['fps']} fps)" for a, v in c["anims"].items())
-        print(f"{cid:>3}  {c['name']:<16} {c['body_w']}x{c['body_h']} px, faces {c['faces']}"
-              + (f"; animations: {anims}" if anims else ""))
+        anims = ", ".join(f"{a} ({v['frames']})" for a, v in c["anims"].items())
+        print(f"{cid:>3}  {c['name']:<14} {c['px']} px canvas, faces {c['faces']}" + (f"; {anims}" if anims else ""))
 
 
 if __name__ == "__main__":

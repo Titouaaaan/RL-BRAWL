@@ -8,8 +8,12 @@ on any `play.bat` command.
 
 | Folder | What | Who writes it |
 |---|---|---|
-| `assets/sprites/` | your source images: characters and animation strips, any size | you (tools never modify it) |
-| `assets/characters/` | the processed 64x64 characters, animation strips and `characters.json` | `python tools/sprites.py` |
+| `assets/sprites/<Name>/` | your source images, one folder per character: `static.png` and/or animation strips | you (tools never modify it) |
+| `assets/characters/<id>/` | what the game loads: the same images processed, plus `characters.json` (ids, sizes, fps) | `python tools/sprites.py` |
+
+`sprites/` is what you edit; `characters/` is generated from it (like a build
+output) and is never edited by hand, except the `fps` and `faces` values in
+`characters.json`.
 
 After adding or changing anything in `assets/sprites/`, run
 `python tools/sprites.py` (it prints the list of ids).
@@ -36,21 +40,33 @@ Without them, P1 is character 1 and P2 is character 2.
 | 4 | Justin |
 | 5 | OliverPip |
 | 6 | Titou (animated idle and run) |
+| 7 | Fighter (animated) |
+| 8 | Samurai (animated) |
+| 9 | Shinobi (animated) |
 
-**Adding a character:** put the image (any size, PNG) in `assets/sprites/`,
-then run `python tools/sprites.py`. It trims the empty space, removes a plain
-white page background, scales the character to fit a 64x64 canvas (feet at the
-bottom), saves it as `assets/characters/<id>.png` and prints the new id. Ids
+**Adding a character:** make a folder `assets/sprites/<Name>/` with a
+`static.png` (any size) and/or animation strips (below), then run
+`python tools/sprites.py`. A lone `static.png` gets its empty space trimmed, a
+plain white page background removed and is fitted to 64x64 (feet at the
+bottom). Without `static.png`, the first idle frame is the still image. The
+tool saves `assets/characters/<id>/` and prints the new id. Ids
 never change: new images get the next number. Your originals are not modified.
 Draw characters facing **right** (or set `"faces": "left"` for that character
 in `assets/characters/characters.json`).
 
 ## Animations
 
-Name a horizontal strip of square frames `<Character>_<animation>.png`
-(for example `Titou_idle.png`: 4 frames of 64x64 side by side, 256x64) and run
-`python tools/sprites.py`. Every frame gets the same crop and position, so
-nothing jitters (frames already drawn at 64x64 are kept exactly as drawn).
+Put a horizontal strip of square frames in the character's folder, named
+after the animation (for example `Titou/idle.png`: 8 frames of 64x64 side by
+side, 512x64) and run `python tools/sprites.py`. Frames are kept exactly as
+drawn: 64x64 art at 61 px = the fighter's height; bigger frames (the
+Fighter/Samurai/Shinobi sheets are 128x128) are centered on the idle body and
+scaled so the idle body's height = the fighter's height (`ref_h` in
+`characters.json`). All strips of a character must have the same frame size.
+The Fighter, Samurai and Shinobi sheets were renamed to these names:
+Attack_1 -> `attack` (every attack without its own animation), Attack_2 -> `air`,
+Attack_3 -> `heavy`. Their `walk` and `dead` strips are unused (the game has no
+walk or KO animation state). Rename a file to retarget it, e.g. `heavy.png` -> `up_heavy.png`.
 The game picks the animation from what the fighter is doing:
 
 | Animation | Shown when |
@@ -65,8 +81,8 @@ The game picks the animation from what the fighter is doing:
 | `attack` | any attack without its own animation |
 
 Looping animations play at their `fps` (see [Animation timing](#animation-timing)).
-Anything without an animation uses the static sprite. Images whose name ends
-in `_old` (backups, e.g. `Titou_idle_old.png`) are ignored by the tool.
+Anything without an animation uses the static sprite. Other file names
+(`walk.png`, backups like `idle_old.png`) are ignored by the tool.
 
 
 ## Sizes and the pixel scale
