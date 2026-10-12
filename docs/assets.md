@@ -9,6 +9,7 @@ on any `play.bat` command.
 | Folder | What | Who writes it |
 |---|---|---|
 | `assets/sprites/<Name>/` | your source images, one folder per character: `static.png` and/or animation strips | you (tools never modify it) |
+| `assets/maps/` | stage art: backgrounds (2304x1296) and 32 px tiles, used as they are (no tool) | you |
 | `assets/characters/<id>/` | what the game loads: the same images processed, plus `characters.json` (ids, sizes, fps) | `python tools/sprites.py` |
 
 `sprites/` is what you edit; `characters/` is generated from it (like a build
@@ -122,3 +123,19 @@ The game runs at 60 frames per second and every move is defined in frames
   animation and the frame.
 
 Sprites are drawn with nearest-neighbor filtering, so pixel art stays sharp.
+
+## Maps
+
+`godot/main.gd` draws the stage from `assets/maps/` directly (no tool to run):
+the background `BACKGROUND` (default `orange_clouds.png`; `blue_clouds.png`
+and `grey_clouds.png` also fit) stretched over the window, and tiles where
+**one tile = 1 sim unit**, stretched slightly so each surface fits exactly:
+
+| Surface | Size (sim units = tiles) | Tiles |
+|---|---|---|
+| Main stage | 35.2 x 6 (35 x 6 tiles) | top row Tile_01 (left), Tile_02 (middle), Tile_03 (right); 5 rows of Tile_04 below |
+| Side platforms | 7.05 x 1 (7 tiles) | Tile_06, Tile_07, Tile_08 |
+| Top platform | 7 x 1 (7 tiles) | Tile_06, Tile_07, Tile_08 |
+
+Tile_01-03 are 06-08 without the bottom border, so they join the fill below.
+Collision only uses the top edge of each surface; the art doesn't change gameplay.
