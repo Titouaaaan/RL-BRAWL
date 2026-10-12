@@ -202,7 +202,7 @@ Rule: add an entry for every significant change. When the hash isn't known yet, 
 - Decisions: keep only the league and main runs; log rule added to CLAUDE.md.
 - Output: this file; runs/ 876 MB -> ~350 MB.
 
-### 2026-10-12 · 1f154f6, pending · Character folders + 3 animated characters
+### 2026-10-12 · 1f154f6, d25c680 · Character folders + 3 animated characters
 - Goal: easier navigation of assets; use the owner's 3 royalty-free sprite sheets (Fighter, Samurai, Shinobi).
 - Request: owner: one folder per character, missing animations fall back to the static sprite.
 - Decisions (Claude): `assets/sprites/<Name>/` with `static.png` and `<anim>.png`; sheets renamed to game names (Attack_1 -> attack, Attack_2 -> air, Attack_3 -> heavy; walk/dead unused); 128 px frames kept at full resolution, Godot scales per character (`px`, `ref_h`); generated output in `assets/characters/<id>/`.
