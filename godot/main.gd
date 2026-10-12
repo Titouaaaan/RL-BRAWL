@@ -618,6 +618,7 @@ func draw_fighter(i: int, f: Dictionary, font: Font) -> void:
 	# lying on its side when knocked down, spinning while tumbling.
 	var ch: Dictionary = chars[i]
 	var size: float = ch.px * h / ch.ref  # the canvas, in sim units
+	var body_h := h  # the body is the canvas's bottom ref_h px, centered on the pivot
 	var center_y: float = f.y + h / 2
 	var angle := 0.0
 	var squash := 1.0
@@ -636,7 +637,7 @@ func draw_fighter(i: int, f: Dictionary, font: Font) -> void:
 	if ch.tex != null:
 		var frame := sprite_frame(i, f)  # [texture, the region of it to draw]
 		draw_set_transform(center, angle, Vector2(f.facing * ch.flip, squash))  # -1 mirrors it to face left
-		draw_texture_rect_region(frame[0], Rect2(-Vector2(size, size) * px / 2, Vector2(size, size) * px), frame[1], tint)
+		draw_texture_rect_region(frame[0], Rect2(Vector2(-size / 2, body_h / 2 - size) * px, Vector2(size, size) * px), frame[1], tint)
 		draw_set_transform(Vector2.ZERO)
 	else:  # sprite missing: the old colored box
 		var box := Color(COLORS[i], tint.a)
