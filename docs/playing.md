@@ -19,6 +19,7 @@ Cross, Circle = back).
 | Character Select | Pick P1's and P2's characters; saved for next time |
 | Controls | Keyboard and controller bindings |
 | Replays | Every recording under `replays/`, newest first, with who won: select one to watch it |
+| Training | Every training run: open one for its regime, network, Elo of its checkpoints, results vs the ladder, settings, and every TensorBoard curve (one tab per group). Data comes from `tools/run_summary.py`, started in the background when the screen opens; Refresh re-reads. |
 
 In a game, **Esc** goes back to the menu.
 

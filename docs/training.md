@@ -5,7 +5,7 @@
 ```
 python -u train/ppo.py --opponent scripted --total-timesteps 20000000    # sanity check, ~10 min
 python -u train/ppo.py --opponent selfplay --total-timesteps 150000000   # the real run, ~2.5 h
-python -m tensorboard.main --logdir runs   # curves, at http://localhost:6006
+python -m tensorboard.main --logdir runs   # curves, at http://localhost:6006 (or the game menu's Training screen)
 play.bat replay                            # watch the newest recorded game in Godot
 ```
 

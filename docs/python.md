@@ -83,6 +83,7 @@ within 2 minutes). About 1.1-1.5 ms per decision.
 | `tools/combos.py` | Which true combos exist: for each opener and %, thousands of frame-perfect follow-ups in parallel, against a victim who doesn't DI. |
 | `tools/sprites.py` | Source images -> game characters (see [assets.md](assets.md)). |
 | `tools/ladder.py` | Round-robin tournament between checkpoints and bots under training conditions: win matrix + Elo. `python tools/ladder.py runs/<run> --every 6` or a list of `.pt` files and bot names. |
+| `tools/run_summary.py` | Caches each run's curves (300 points each), settings, network size and ladder Elo in `runs/<run>/summary.json` for the menu's Training screen (Godot can't read TensorBoard files; parsing one takes ~1 min). Only redoes runs whose logs or ladder changed; the menu runs it automatically. |
 
 ## Tests
 
