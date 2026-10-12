@@ -10,6 +10,7 @@
 | Use the game from Python, the bots, tools and tests | [python.md](python.md) |
 | Train agents, read the training charts | [training.md](training.md) |
 | Know why things are the way they are (plan and dated decisions) | [design.md](design.md) |
+| See every change: when, why, who decided, which commit | [log.md](log.md) |
 
 `runs/monitor_notes.md` (not in git) is the lab notebook of every overnight
 training run.
