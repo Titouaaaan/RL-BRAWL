@@ -11,3 +11,7 @@ Start with [`docs/README.md`](docs/README.md): playing, setup, assets, the engin
 .\play.bat                                     # build and open the game (menu)
 python -u train/ppo.py --opponent selfplay     # train agents
 ```
+
+## License
+
+All rights reserved: the code and art are public to view, not to reuse (see [`LICENSE`](LICENSE)). Art credits: [`assets/README.md`](assets/README.md).

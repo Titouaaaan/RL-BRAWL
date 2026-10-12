@@ -1,0 +1,10 @@
+Copyright (c) 2026 Titouan (https://github.com/Titouaaaan). All rights reserved.
+
+This repository is public so it can be viewed. No permission is granted to
+copy, modify, distribute or otherwise reuse its code or art, beyond what
+GitHub's Terms of Service allow (viewing and forking on GitHub).
+
+Exceptions, under their own licenses:
+- train/ppo.py is adapted from CleanRL (MIT): see train/LICENSE-cleanrl.
+- extern/godot-cpp is the Godot C++ bindings (MIT): see its LICENSE.md.
+- Art from craftpix.net is under craftpix.net's license: see assets/README.md.
