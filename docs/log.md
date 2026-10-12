@@ -240,7 +240,7 @@ Rule: add an entry for every significant change. When the hash isn't known yet, 
 - Decisions (Claude): `step()` no longer returns early once `over` (VecEnv never steps a finished game, so training is unchanged; smoke hashes identical); a fighter with 0 stocks is skipped and intangible; after `over` a fall costs no stock (the smoke test caught the winner self-destructing, which could flip a 1-stock result). Godot: `END_DELAY` 240 frames (camera holds 120, then follows the winner), time-outs freeze at once; the final KO now triggers the explosion; replays stop reading at the game's end (recordings pad the last decision to 4 frames, which the sim used to ignore).
 - Output: smoke test checks the ending; 66 tests pass; all 84 replays verify; ending rendered and checked.
 
-### 2026-10-12 · pending · Repo made public
+### 2026-10-12 · 0a14142 · Repo made public
 - Request: owner made https://github.com/Titouaaaan/RL-BRAWL public (it was private, see the 2026-10-10 entry).
 - Decisions (owner): public; pushing still only when the owner asks.
 - Then (owner): keep the art in the public repo (shown, not offered for download, as in public slides); credits + "don't reuse" in `assets/README.md` (homemade characters by the owner and @raigeki49, the rest from craftpix.net); root `LICENSE` = all rights reserved (CleanRL and godot-cpp stay MIT). Claude had flagged that craftpix.net's free license forbids redistributing the files in a way that makes them usable by others.
