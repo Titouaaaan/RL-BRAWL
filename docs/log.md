@@ -277,8 +277,9 @@ Rule: add an entry for every significant change. When the hash isn't known yet, 
 - Decisions (Claude, on the site side): page at `/rl-brawl`, files at `/rl-brawl/play/`, served by the site's FastAPI from `~/rl-brawl-web` (live on `--deploy`, no site rebuild); the backend sets the game's headers (Next.js doesn't add its headers to forwarded responses): CSP `'wasm-unsafe-eval'`, `img-src blob:`, `frame-ancestors 'self'`, `Cache-Control: no-cache`, plus gzip (the `.pck` went out raw). The earlier "no special headers" wording now says a strict host CSP must allow these.
 - Output: tested in headless Chromium on the Pi through the site's dev build: boots without CSP errors, Latest vs Latest Bot vs Bot plays. Found: the main menu is cut off in the site's ~845x475 frame (fixed-pixel layout); recorded as a known issue in web.md.
 
-### 2026-10-13 · pending · Default characters: Fighter vs Samurai
+### 2026-10-13 · a0633ee · Default characters: Fighter vs Samurai
 - Goal: the game opens on the animated characters, on the website especially (a first visit has no saved choice).
 - Request: owner: P1 = 7 (Fighter), P2 = 8 (Samurai) by default.
 - Decisions (Claude): defaults set once in `session.gd` and reused as the fallback when the settings file lacks them; a choice saved by Character Select still wins. Characters only change drawing, so replays are unaffected.
 - Output: not rendered here (no Godot on the machine that made the change); the website gets it with the next `web_export.py --deploy`.
+- Then: the cut-off menu in the site's frame was fixed in the site's frontend (owner); web.md's known issue marked fixed. Stretch mode and pre-compressed `.gz` files offered, not needed.

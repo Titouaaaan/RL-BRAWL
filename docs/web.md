@@ -187,12 +187,14 @@ compress on the Pi.
 game (console: Godot 4.7.2, `single-threaded, GDExtension support`, no CSP
 errors), Bot vs Bot with Latest bot on both sides plays.
 
-**Known issue, on the game side:** in the site's content column the frame is
-about 845 x 475 px, and the main menu doesn't fit: the buttons from
-*Replays* down are cut off at the bottom (the Bot vs Bot screen and the
-fight fit). The menu seems laid out in fixed pixels; Godot's stretch setting
-(Project Settings > Display > Window > Stretch, mode `canvas_items`, aspect
-`expand`) would scale it to the frame. Not changed yet.
+**Small frames (fixed):** the game's menus are laid out in fixed pixels for a
+1280 x 720 window, so in a frame much smaller than that (the site's content
+column was about 845 x 475) the main menu got cut off below *Replays*. Fixed
+on the site's side (2026-10-13), in its frontend; the game is unchanged. If
+another site embeds it, give the frame enough room, or turn on Godot's
+stretch mode (Project Settings > Display > Window > Stretch: `canvas_items`,
+aspect `expand`), which scales everything to the frame but also stops
+desktop full screen from using the extra space.
 
 **What would need a change on the site side** (tell the owner, it's not
 automatic):
