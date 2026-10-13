@@ -43,8 +43,12 @@ func save_characters() -> void:
 	cfg.save(SETTINGS_FILE)
 
 
-# The repository folder (the Godot project is its godot/ subfolder).
+# The repository folder (the Godot project is its godot/ subfolder). A web
+# export has no repo: tools/web_export.py packs the files the game reads
+# into res://repo/, in the same layout.
 func repo_root() -> String:
+	if OS.has_feature("web"):
+		return "res://repo"
 	return ProjectSettings.globalize_path("res://").path_join("..").simplify_path()
 
 

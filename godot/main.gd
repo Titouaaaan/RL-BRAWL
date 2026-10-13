@@ -124,8 +124,8 @@ func _ready() -> void:
 	# Options: from the menu (Session.args) or whatever came after "--" on the command line.
 	var args: PackedStringArray = Session.args if Session.from_menu else OS.get_cmdline_user_args()
 	load_characters(args)
-	var maps := ProjectSettings.globalize_path("res://").path_join("../assets/maps").simplify_path()
-	var boom := Image.load_from_file(maps.path_join("../effects/explosion_1.png").simplify_path())
+	var maps := Session.repo_root().path_join("assets/maps")
+	var boom := Image.load_from_file(Session.repo_root().path_join("assets/effects/explosion_1.png"))
 	explosion_tex = ImageTexture.create_from_image(boom) if boom != null else null
 	for f in [BACKGROUND, "stage.png", "platform.png"]:
 		var img := Image.load_from_file(maps.path_join(f))
@@ -162,7 +162,7 @@ func _ready() -> void:
 
 # Loads the two players' characters: --p1=ID / --p2=ID, default 1 and 2.
 func load_characters(args: PackedStringArray) -> void:
-	var dir := ProjectSettings.globalize_path("res://").path_join("../assets/characters").simplify_path()
+	var dir := Session.repo_root().path_join("assets/characters")
 	var manifest = JSON.parse_string(FileAccess.get_file_as_string(dir.path_join("characters.json")))
 	if typeof(manifest) != TYPE_DICTIONARY:
 		manifest = {}
@@ -279,7 +279,7 @@ func replay_step() -> bool:
 func find_latest_replay() -> String:
 	var best := ""
 	var best_time := 0
-	var stack := [ProjectSettings.globalize_path("res://").path_join("../replays").simplify_path()]
+	var stack := [Session.repo_root().path_join("replays")]
 	while not stack.is_empty():
 		var dir: String = stack.pop_back()
 		for sub in DirAccess.get_directories_at(dir):
@@ -293,10 +293,13 @@ func find_latest_replay() -> String:
 
 
 # Re-reads data/moves/*.json and restarts. Bound to R, so you can edit a move
-# file, press R, and try the change without restarting Godot.
+# file, press R, and try the change without restarting Godot. GDScript reads
+# the files (the C++ core can't see inside a web export's packed files).
 func reload() -> void:
-	var dir := ProjectSettings.globalize_path("res://").path_join("../data/moves").simplify_path()
-	load_error = game.load_moves(dir)
+	var texts := PackedStringArray()
+	for n in move_names:
+		texts.append(FileAccess.get_file_as_string(Session.repo_root().path_join("data/moves/%s.json" % n)))
+	load_error = game.load_moves_from_text(texts)
 	cfg = game.get_config()
 	for p in 2:
 		bot_hist[p].clear()  # a restart: the bots' memory of past frames starts over

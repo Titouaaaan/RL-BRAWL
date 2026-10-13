@@ -33,7 +33,6 @@ class FightGame : public RefCounted {
 protected:
     // Godot calls this once, to learn which methods scripts may call.
     static void _bind_methods() {
-        ClassDB::bind_method(D_METHOD("load_moves", "dir"), &FightGame::load_moves);
         ClassDB::bind_method(D_METHOD("load_moves_from_text", "texts"), &FightGame::load_moves_from_text);
         ClassDB::bind_method(D_METHOD("get_move_names"), &FightGame::get_move_names);
         ClassDB::bind_method(D_METHOD("get_state_names"), &FightGame::get_state_names);
@@ -58,15 +57,9 @@ protected:
 public:
     FightGame() { ::reset(state, cfg); }
 
-    // Loads data/moves/*.json and restarts the game. Returns "" on success,
-    // otherwise the error text (Godot shows it on screen instead of crashing).
-    String load_moves(const String& dir) {
-        std::string err = ::load_moves(cfg, dir.utf8().get_data());
-        ::reset(state, cfg);
-        return String::utf8(err.c_str());
-    }
-
-    // Same, from the files' contents in get_move_names() order (replays carry their own copy).
+    // Loads the move files' contents, in get_move_names() order, and restarts
+    // the game (replays carry their own copy). Returns "" on success, otherwise
+    // the error text (Godot shows it on screen instead of crashing).
     String load_moves_from_text(const PackedStringArray& in) {
         if (in.size() != NUM_MOVES) return "expected one text per move in get_move_names()";
         std::string texts[NUM_MOVES];

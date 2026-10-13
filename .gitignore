@@ -4,6 +4,7 @@ __pycache__/
 .pytest_cache/
 godot/.godot/
 godot/bin/
+godot/repo/
 *.old
 replays/
 runs/

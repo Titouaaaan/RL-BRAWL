@@ -27,6 +27,31 @@ Studio 2026. The root `CMakeLists.txt` builds the Python module when pip runs
 it and the `smoke` test program otherwise; `bindings/godot/CMakeLists.txt`
 builds the Godot extension. `build/` is generated and safe to delete.
 
+## Web export (the game in a browser)
+
+`python tools/web_export.py` writes the whole game to `build/web_export/`
+(`index.html` plus its files, about 52 MB, 14 MB compressed). Try it with
+`python -m http.server -d build/web_export 8000` and http://localhost:8000.
+Any static web server can host the folder: the game runs in each visitor's
+browser (WebAssembly + WebGL 2; checked in Chromium, Firefox and WebKit, the
+engine of Safari), the server only sends files.
+
+What the script does: builds the extension with Emscripten (a compiler from
+C++ to WebAssembly), copies the files the game reads (characters, stage art,
+moves, `data/bots/`) into `godot/repo/` (where `Session.repo_root()` points
+on the web), exports with the "Web" preset (`godot/export_presets.cfg`:
+single-threaded, so no special server headers are needed; GDExtension on),
+then deletes `godot/repo/`.
+
+One-time setup:
+- Emscripten **4.0.20**, the exact version Godot 4.7.2's web engine was built
+  with (the browser console prints it): `git clone
+  https://github.com/emscripten-core/emsdk` next to the repo (`D:\emsdk`), then
+  `emsdk install 4.0.20` and `emsdk activate 4.0.20` inside it. Elsewhere: set
+  `EMSDK`.
+- Godot's export templates for 4.7.2 (Editor > Manage Export Templates; only
+  `web_dlink_nothreads_*.zip` are needed).
+
 ## Commands
 
 | What | Command |
@@ -55,4 +80,6 @@ builds the Godot extension. `build/` is generated and safe to delete.
 | `no agent_X.bin (export it: ...)` / `no trained run yet` | A network bot needs its exported `.bin` (`latest` = the newest `runs/*/agent_latest.bin`). | Run the command shown: `python tools/export_bot.py runs/<run>`. |
 | `this bot sees N inputs, the game gives M` | The checkpoint was trained on an older game version (the observation changed). | Use a newer checkpoint, or retrain. |
 | `the bot expects N inputs, this game gives M` | The Python module and the Godot DLL were built from different code (the observation size differs). | Rebuild both: `python -m pip install --no-build-isolation .` and `play.bat`. |
+| Web: `undefined symbol: main` when linking | The extension was linked as a program instead of a library Godot loads (a "side module"). | `bindings/godot/CMakeLists.txt` applies godot-cpp's `emsdkHack.cmake`; delete `build/web` and rerun. |
+| Web: the game ignores clicks or keys in Chrome/Firefox | A controller connected to the PC is steering the menu (browsers pass controllers to pages). | Leave the controller alone, or unplug it. |
 | The build is weird after pulling big changes | Stale build folder. | Delete `build/godot` (it's safe; it's all generated) and rerun. |

@@ -15,13 +15,15 @@ C++ core to advance, and draws. It contains no game logic.
    | `step(p1x, p1y, p1b, p2x, p2y, p2b)` | advance one frame with both inputs |
    | `get_fighter(i)`, `get_hitboxes()`, `get_frame()`, `is_over()`, `get_winner()` | read the state for drawing |
    | `get_config()` | stage, sizes, time limit, move lengths... |
-   | `load_moves(dir)`, `load_moves_from_text(texts)` | load moves (and reset) |
+   | `load_moves_from_text(texts)` | load moves (and reset); GDScript reads the files, since C++ can't see inside a web export's packed files |
    | `get_move_names()`, `get_state_names()` | the names, from C++ |
    | `get_hash()` | the state hash, to verify replays |
    | `set_input_buffer(player, frames)` | 9 for humans, 0 for a bot or a Python replay |
    | `get_obs(player)`, `get_obs_dim()` | what an agent sees (for the live bot) |
+   | `load_bot(player, bytes)`, `bot_act(player, obs, u)` | a network bot (`core/net.cpp`): load an exported `.bin`, pick an action |
 
-2. **`godot/fightgame.gdextension`** tells Godot where the DLL is.
+2. **`godot/fightgame.gdextension`** tells Godot where the DLL is (and the
+   `.wasm` of the web export, see [setup.md](setup.md#web-export-the-game-in-a-browser)).
 3. **`godot/menu.tscn` + `menu.gd`** is the first scene: the menu. Each screen
    is built in code by one `show_*()` function. Starting a game calls
    `Session.start_game(options)` and switches to `main.tscn`. If Godot was

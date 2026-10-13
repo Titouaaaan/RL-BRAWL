@@ -17,6 +17,13 @@ Session="*res://session.gd"
 window/size/viewport_width=1280
 window/size/viewport_height=720
 
+[rendering]
+
+; Compatibility (OpenGL / WebGL 2): the only renderer web exports support,
+; and the safest on small GPUs. The game is 2D, so it looks the same.
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+
 [physics]
 ; The sim runs at 60 Hz, and _physics_process runs at this rate.
 common/physics_ticks_per_second=60

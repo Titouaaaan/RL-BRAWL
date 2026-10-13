@@ -4,6 +4,9 @@
 #   python -m cmake -S bindings/godot -B build/godot
 #   python -m cmake --build build/godot --config Release
 cmake_minimum_required(VERSION 3.26)
+# For the web build: godot-cpp's fix that lets Emscripten build a library that
+# Godot loads at runtime (a "side module") instead of a program with a main().
+set(CMAKE_PROJECT_fightgame_INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/../../extern/godot-cpp/cmake/emsdkHack.cmake")
 project(fightgame LANGUAGES CXX)
 
 set(REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../..")
@@ -31,3 +34,8 @@ set_target_properties(fightgame PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "$<1:${REPO_ROOT}/godot/bin>"
     PDB_OUTPUT_DIRECTORY "$<1:${REPO_ROOT}/godot/bin>"
 )
+# Emscripten (the web build, tools/web_export.py) leaves the file extension
+# empty and would add a "lib" prefix.
+if(EMSCRIPTEN)
+    set_target_properties(fightgame PROPERTIES PREFIX "" SUFFIX ".wasm")
+endif()
