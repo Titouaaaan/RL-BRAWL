@@ -42,6 +42,55 @@ not in use can still steer the menu if it's sending input (a held trigger, a
 drifting stick): see [Troubleshooting](#troubleshooting). Phones and tablets
 can watch (Bot vs Bot, Replays), but there are no on-screen controls to play.
 
+## For the agent putting this on a website: start here
+
+You don't need to build anything or know the game. What you need to know:
+
+- **The files.** The finished web version is the folder `build/web_export/`
+  (`index.html` plus about 10 files). It is **not in git**: `build/` is ignored,
+  and so are the training runs and replays it packs. It is built on the
+  owner's Windows training PC (`D:\RL-BRAWL\build\web_export\`) by
+  `python tools/web_export.py`, and has to be copied to the website machine.
+  Don't try to build it on the server: that needs the toolchain below plus
+  the PC's `runs/` and `replays/` folders.
+- **Copying it to the Pi** (the owner's site runs on a Raspberry Pi 5, Next.js
+  frontend + FastAPI backend), from the PC, in the repo folder:
+  ```
+  scp -r build/web_export/* <user>@<pi-host>:<where the site serves it>/
+  ```
+  (Windows 11 has `scp` built in; `<pi-host>` is the Pi's name or IP.)
+- **Where to serve it from**, two options:
+  - **Next.js `public/rl-brawl/`**: simplest, but `next start` only serves
+    files that existed in `public/` when `next build` ran, so every update
+    means copy + `next build` + restart.
+  - **Outside Next.js** (recommended if updates should be just a copy): a
+    static route in front of it (nginx/Caddy `location /rl-brawl/`) or in the
+    FastAPI backend: `app.mount("/rl-brawl", StaticFiles(directory="<folder>",
+    html=True), name="rl-brawl")` (FastAPI's `StaticFiles`). Then the Next.js
+    page only embeds `/rl-brawl/index.html` in an iframe (from the same origin
+    or another one: both work).
+- **The page component** (Next.js, App Router or Pages, no client code needed):
+  ```tsx
+  export default function RlBrawl() {
+    return (
+      <iframe
+        src="/rl-brawl/index.html"
+        title="RL-BRAWL"
+        style={{ width: "100%", aspectRatio: "16 / 9", border: 0 }}
+        allow="fullscreen; gamepad; autoplay"
+      />
+    );
+  }
+  ```
+- **How to check it works:** open the page and the browser console (F12). It
+  should print `Godot Engine v4.7.2` and `Build configuration: Emscripten
+  4.0.20, single-threaded, GDExtension support`, with no red errors except
+  WebKit's harmless `glBlitFramebuffer` ones. Then in the game: Bot vs Bot >
+  Start: two fighters move and fight.
+
+The next section has the details: serving requirements (MIME types,
+compression, caching, no special headers).
+
 ## Putting it on a website
 
 The output is plain static files. Any web server or static host works; no
@@ -80,8 +129,12 @@ multi-threaded build; this one is single-threaded on purpose.
 
 ## Updating the content
 
-The export is a snapshot of the repo. Re-run `python tools/web_export.py`
-and re-upload the folder whenever something changes:
+The export is a snapshot of the repo, and **nothing updates the website by
+itself**: the export only rewrites `build/web_export/` on the PC. After any
+change, re-run `python tools/web_export.py`, copy the folder to the site again
+(see [above](#for-the-agent-putting-this-on-a-website-start-here); plus
+`next build` if it's served from Next.js `public/`), and visitors get it on
+their next load (see Caching above). Re-export when:
 
 - **A new training run or new checkpoints** ("Latest bot" = the newest
   `runs/*/agent_latest.bin`): also run `python tools/run_summary.py` first,
