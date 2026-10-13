@@ -15,7 +15,7 @@ PORT = 5077
 
 
 def connect():
-    for _ in range(200):  # the server needs a moment to start (it imports PyTorch)
+    for _ in range(200):  # the server needs a moment to start
         try:
             return socket.create_connection(("127.0.0.1", PORT), timeout=5)
         except OSError:

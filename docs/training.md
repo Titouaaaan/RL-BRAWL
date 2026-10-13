@@ -215,9 +215,9 @@ the viewer. Add `--p1 ID --p2 ID` to `play.bat replay` to pick the
 characters ([assets.md](assets.md)).
 
 To **play against** a trained agent yourself: `play.bat --vs` (the newest run)
-or `play.bat --vs runs\<run>\agent_00600.pt`. It runs `train/serve.py`
-(the network in PyTorch, over a local connection, about 1 ms per decision) with
-the same reaction delay and frame skip as in training.
+or `play.bat --vs runs\<run>\agent_00600.pt`. The game runs the
+network itself (`core/net.cpp`, from the `agent_00600.bin` that ppo.py writes
+next to the `.pt`) with the same reaction delay and frame skip as in training.
 
 Replays store inputs, not the game code, so a replay recorded before a game
 change desyncs on the new game: regenerate them with `python train/record_vs.py`.

@@ -5,10 +5,12 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <nanobind/stl/string.h>  // lets Python str convert to std::string
+#include <nanobind/stl/vector.h>  // std::vector -> Python list
 
 #include <new>        // placement new, see __init__ below
 #include <stdexcept>  // std::invalid_argument (nanobind turns it into a Python ValueError)
 
+#include "../../core/net.h"
 #include "../../core/vecenv.h"
 
 namespace nb = nanobind;
@@ -17,6 +19,7 @@ namespace nb = nanobind;
 // raises TypeError on a mismatch. c_contig = one plain block of memory in
 // row-major order, which is NumPy's default layout.
 using ActionArray = nb::ndarray<const int8_t, nb::shape<-1, 2, 3>, nb::c_contig, nb::device::cpu>;
+using ObsArray = nb::ndarray<const float, nb::shape<OBS_DIM>, nb::c_contig, nb::device::cpu>;
 using HashArray = nb::ndarray<uint64_t, nb::shape<-1>, nb::c_contig, nb::device::cpu>;
 
 // Wraps one of VecEnv's buffers as a NumPy array *view*: no copy. Returned with
@@ -53,6 +56,21 @@ NB_MODULE(fightcore, m) {
     nb::list states;
     for (const char* n : STATE_NAMES) states.append(n);
     m.attr("STATE_NAMES") = nb::tuple(states);
+
+    // The game's C++ bot network (core/net.cpp), so tests can check it against PyTorch.
+    auto net = [](nb::bytes data) {
+        Net n;
+        std::string err = load_net(n, (const uint8_t*)data.c_str(), data.size());
+        if (!err.empty()) throw std::invalid_argument(err);
+        return n;
+    };
+    m.def("net_logits", [net](nb::bytes data, ObsArray obs) {
+        std::vector<float> out(NET_ACTIONS);
+        net_logits(net(data), obs.data(), out.data());
+        return out;
+    }, nb::arg("bot"), nb::arg("obs"), "Logits of an exported bot (.bin bytes) for one observation.");
+    m.def("net_act", [net](nb::bytes data, ObsArray obs, float u) { return net_act(net(data), obs.data(), u); },
+          nb::arg("bot"), nb::arg("obs"), nb::arg("u"), "Action index the game's bot picks for uniform u in [0, 1).");
 
     nb::class_<VecEnv>(m, "VecEnv")
         // A custom __init__: nanobind hands us raw memory for the object and

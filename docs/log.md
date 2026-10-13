@@ -244,3 +244,9 @@ Rule: add an entry for every significant change. When the hash isn't known yet, 
 - Request: owner made https://github.com/Titouaaaan/RL-BRAWL public (it was private, see the 2026-10-10 entry).
 - Decisions (owner): public; pushing still only when the owner asks.
 - Then (owner): keep the art in the public repo (shown, not offered for download, as in public slides); credits + "don't reuse" in `assets/README.md` (homemade characters by the owner and @raigeki49, the rest from craftpix.net); root `LICENSE` = all rights reserved (CleanRL and godot-cpp stay MIT). Claude had flagged that craftpix.net's free license forbids redistributing the files in a way that makes them usable by others.
+
+### 2026-10-13 · pending · Network bots run in C++ (no Python to play)
+- Goal: the game runs without Python/PyTorch: first step to a web export for the owner's site (spectate bot vs bot, replays), and to Linux.
+- Request: owner wants the game on Windows and Linux, training staying on the Windows PC; then a page on their self-hosted Next.js site (Pi 5) to watch replays or spectate bots (playing later), working in all browsers, not only Chromium.
+- Decisions: Claude proposed running the actor in C++ instead of PyTorch on the Pi; owner agreed. `core/net.cpp` (forward pass, then sampling by inverse CDF on a Godot `randf()`); weights as `.bin` (int32 obs/hidden/actions header, float32 layers), written by `ppo.py save_bot` next to every checkpoint and by `tools/export_bot.py`; menu levels exported to `data/bots/` (committed, 5 x 0.5 MB, since `runs/` isn't in git). Network bots take the C++ path on Windows too (one code path); `serve.py` keeps only the scripted bots and no longer imports PyTorch. Supersedes design.md's "Live bot over Python" (Sep 30). Unused `bot_ms` removed.
+- Output: `tests/test_net.py` (C++ logits within 1e-4 of PyTorch, sampling, old-version refusal); a real checkpoint differs by 2e-5; 68 tests pass; headless and rendered bot vs bot checked.

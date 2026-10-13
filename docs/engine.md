@@ -11,6 +11,7 @@ Python trains on it, but neither contains game logic.
 | `sim.cpp` | The game: `step()` and everything it calls. |
 | `moves.cpp` | Loads `data/moves/*.json` into `GameConfig::moves`; `MOVE_NAMES` is the single list of moves. Never throws (the Godot build has C++ exceptions off); returns an error string instead. |
 | `obs.h` / `obs.cpp` | `write_obs()`: what an agent sees (173 numbers). Shared by the Python env and the Godot live bot. |
+| `net.h` / `net.cpp` | A trained agent's actor network (173 -> 256 -> 256 -> 45, tanh), so the game plays network bots without Python. Loads the `.bin` that `ppo.py` / `tools/export_bot.py` write; `tests/test_net.py` checks it matches PyTorch. |
 | `vecenv.h` / `vecenv.cpp` | The RL layer: N games stepped together, frame skip, reaction delay, rewards, stats, auto-reset (see [python.md](python.md)). |
 | `smoke.cpp` | A small native program run under AddressSanitizer (a compiler mode that catches memory bugs) and checking determinism. |
 

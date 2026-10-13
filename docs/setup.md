@@ -38,7 +38,8 @@ builds the Godot extension. `build/` is generated and safe to delete.
 | Record a game of the newest agent (then `play.bat replay`) | `python train/record.py latest --opponent self` (or `fighter`, `spacer`, ...) |
 | Process new or changed character images | `python tools/sprites.py` (see [assets.md](assets.md)) |
 | Which true combos the game allows (frame-perfect search) | `python tools/combos.py` |
-| Run the bot server by hand (normally `play.bat --vs` does it) | `python train/serve.py latest --port 5055`, then `godot --path godot -- --vs=5055` |
+| Run the scripted bot server by hand (normally `play.bat --vs fighter` does it) | `python train/serve.py fighter --port 5055` |
+| Make old checkpoints playable in the game (new ones already are) | `python tools/export_bot.py runs/<run>` |
 | Memory-bug check (AddressSanitizer) | `python -m cmake -S . -B build/debug` then `python -m cmake --build build/debug --config Debug` then `build\debug\Debug\smoke.exe` |
 
 ## When something goes wrong
@@ -50,6 +51,8 @@ builds the Godot extension. `build/` is generated and safe to delete.
 | Godot says `FightGame` is not declared / "Identifier not found" | Godot doesn't know about the extension. Either the DLL didn't build, or the project was never imported. | Delete the `godot/.godot` folder and run `play.bat` again; it re-imports. |
 | `could not create CMAKE_GENERATOR "Visual Studio 18 2026"` | The old Strawberry CMake was used. | Use `python -m cmake ...`. |
 | `DESYNC` at the end of a replay | Godot's re-simulation didn't end in the recorded state: the Python module and the Godot DLL disagree. Usually one of them is stale. Or the replay was recorded with an older version of the game: a replay stores the inputs, not the game code. | Rebuild both (`pip install --no-build-isolation .` and `play.bat`), record again. `tests/test_replay_godot.py` checks this automatically. Replays recorded before a game change: regenerate them (`python train/record_vs.py`). |
-| `P2: could not reach the bot` / `lost the connection to the bot` | The game couldn't talk to `train/serve.py` (it crashed, or took over 30 s to load). | Look at the minimized "bot" window for its error; common causes: no trained run yet (`latest` needs a `runs/*/agent_latest.pt`), or a checkpoint from an older game version. |
+| `P2: could not reach the bot` / `lost the connection to the bot` | The game couldn't talk to `train/serve.py` (a scripted bot; it crashed, or took over 30 s to load). | Look at the minimized "bot" window for its error. |
+| `no agent_X.bin (export it: ...)` / `no trained run yet` | A network bot needs its exported `.bin` (`latest` = the newest `runs/*/agent_latest.bin`). | Run the command shown: `python tools/export_bot.py runs/<run>`. |
+| `this bot sees N inputs, the game gives M` | The checkpoint was trained on an older game version (the observation changed). | Use a newer checkpoint, or retrain. |
 | `the bot expects N inputs, this game gives M` | The Python module and the Godot DLL were built from different code (the observation size differs). | Rebuild both: `python -m pip install --no-build-isolation .` and `play.bat`. |
 | The build is weird after pulling big changes | Stale build folder. | Delete `build/godot` (it's safe; it's all generated) and rerun. |

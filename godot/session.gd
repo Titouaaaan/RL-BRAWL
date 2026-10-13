@@ -9,13 +9,15 @@ extends Node
 
 # Bot difficulties: checkpoints of the best run so far, spaced along its Elo
 # ladder (runs/ladder_league.txt): about 8M, 50M, 100M, 200M and 350M training
-# decisions, then the newest run's final agent. Paths are relative to the repo.
+# decisions, then the newest run's final agent. Paths are relative to the repo;
+# the weights are exported into data/bots/ (tools/export_bot.py), since runs/
+# isn't in git.
 const DIFFICULTIES := [
-	{name = "Very easy", bot = "runs/selfplay__league__1__1790809954/agent_00250.pt"},
-	{name = "Easy", bot = "runs/selfplay__league__1__1790809954/agent_01500.pt"},
-	{name = "Normal", bot = "runs/selfplay__league__1__1790809954/agent_03000.pt"},
-	{name = "Hard", bot = "runs/selfplay__league__1__1790809954/agent_06250.pt"},
-	{name = "Very hard", bot = "runs/selfplay__league__1__1790809954/agent_10750.pt"},
+	{name = "Very easy", bot = "data/bots/agent_00250.bin"},
+	{name = "Easy", bot = "data/bots/agent_01500.bin"},
+	{name = "Normal", bot = "data/bots/agent_03000.bin"},
+	{name = "Hard", bot = "data/bots/agent_06250.bin"},
+	{name = "Very hard", bot = "data/bots/agent_10750.bin"},
 	{name = "Latest bot", bot = "latest"},
 ]
 

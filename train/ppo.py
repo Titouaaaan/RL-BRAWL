@@ -243,6 +243,15 @@ def net_policy(net, device):
     return policy
 
 
+def save_bot(state_dict, path):  # OURS
+    """Writes the actor for the game's C++ bot (core/net.cpp): int32 obs size, hidden size,
+    actions, then each layer's weight (out x in) and bias as float32, little-endian."""
+    w = state_dict["actor.0.weight"]
+    head = np.array([w.shape[1], w.shape[0], state_dict["actor.4.weight"].shape[0]], "<i4")
+    body = [state_dict[f"actor.{i}.{k}"].detach().cpu().numpy().ravel() for i in (0, 2, 4) for k in ("weight", "bias")]
+    Path(path).write_bytes(head.tobytes() + np.concatenate(body).astype("<f4").tobytes())
+
+
 def evaluate(policy, opponent, args, n_games):  # OURS
     """Plays n_games to the end; returns (win, loss, draw) fractions for player 0."""
     env = fightcore.VecEnv(n_games, args.moves_dir, args.frame_skip, args.reaction_delay)
@@ -673,6 +682,7 @@ if __name__ == "__main__":
                 print(f"  eval vs league best ({league[-1]['name']}) win {w:.2f} loss {l:.2f} draw {d:.2f}")
                 print("  league win rates: " + "  ".join(f"{c['name']} {c['p']:.2f}" for c in league))
             torch.save(agent.state_dict(), run_dir / "agent_latest.pt")
+            save_bot(agent.state_dict(), run_dir / "agent_latest.bin")  # OURS: for the game's C++ bot
             torch.save({  # everything --resume needs
                 "args": {k: v for k, v in vars(args).items() if k != "resume"},
                 "agent": agent.state_dict(), "optimizer": optimizer.state_dict(),
@@ -683,6 +693,7 @@ if __name__ == "__main__":
             }, run_dir / "resume.pt")
             if iteration % args.keep_every == 0:
                 torch.save(agent.state_dict(), run_dir / f"agent_{iteration:05d}.pt")
+                save_bot(agent.state_dict(), run_dir / f"agent_{iteration:05d}.bin")  # OURS
 
         if iteration % args.replay_every == 0 or iteration == args.num_iterations:
             # A replay against the training opponent, to watch in Godot (play.bat replay).

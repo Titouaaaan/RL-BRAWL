@@ -15,6 +15,7 @@
 
 #include <cstdio>  // std::snprintf
 
+#include "../../core/net.h"  // the network bots
 #include "../../core/obs.h"  // write_obs: what a live bot sees
 #include "../../core/sim.h"
 
@@ -27,6 +28,7 @@ class FightGame : public RefCounted {
 
     GameConfig cfg;
     GameState state;
+    Net bot[2];  // each player's network bot, if any
 
 protected:
     // Godot calls this once, to learn which methods scripts may call.
@@ -39,6 +41,8 @@ protected:
         ClassDB::bind_method(D_METHOD("set_input_buffer", "player", "frames"), &FightGame::set_input_buffer);
         ClassDB::bind_method(D_METHOD("get_obs", "player"), &FightGame::get_obs);
         ClassDB::bind_method(D_METHOD("get_obs_dim"), &FightGame::get_obs_dim);
+        ClassDB::bind_method(D_METHOD("load_bot", "player", "data"), &FightGame::load_bot);
+        ClassDB::bind_method(D_METHOD("bot_act", "player", "obs", "u"), &FightGame::bot_act);
         ClassDB::bind_method(D_METHOD("reset"), &FightGame::reset);
         ClassDB::bind_method(
             D_METHOD("step", "p1_stick_x", "p1_stick_y", "p1_button", "p2_stick_x", "p2_stick_y", "p2_button"),
@@ -87,6 +91,25 @@ public:
         return out;
     }
     int64_t get_obs_dim() const { return OBS_DIM; }
+
+    // Gives `player` a network bot: the bytes of an exported .bin
+    // (tools/export_bot.py). Returns "" or the error text.
+    String load_bot(int64_t player, const PackedByteArray& data) {
+        if (player != 0 && player != 1) return "bad player";
+        return String::utf8(load_net(bot[player], data.ptr(), data.size()).c_str());
+    }
+
+    // That bot's decision for an observation: [stick x, stick y, button],
+    // egocentric like training. u (uniform in [0, 1)) picks the sample.
+    PackedInt32Array bot_act(int64_t player, const PackedFloat32Array& obs, double u) const {
+        PackedInt32Array out;
+        if ((player != 0 && player != 1) || bot[player].hidden == 0 || obs.size() != OBS_DIM) return out;
+        int a = net_act(bot[player], obs.ptr(), float(u));
+        out.push_back(a / 15 - 1);  // decode the index: ppo.py's ACTIONS order
+        out.push_back(a / 5 % 3 - 1);
+        out.push_back(a % 5);
+        return out;
+    }
 
     // The state hash as 16 hex digits. (A string, because GDScript integers
     // are signed and JSON numbers can't hold 64 bits exactly.)

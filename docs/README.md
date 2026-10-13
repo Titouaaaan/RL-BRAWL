@@ -30,7 +30,7 @@ training run.
                 |  (Python) |    |  draws, replays |
                 +----+------+    +--^----------^---+
    train/ppo.py      |              |          |
-   train/bots.py ----+--- replays --+          +--- train/serve.py (live bot, PyTorch)
+   train/bots.py ----+--- replays --+          +--- train/serve.py (scripted live bots)
    tools/, tests/
 ```
 

@@ -88,19 +88,24 @@ state hash. Godot loads the recorded moves, re-simulates, and compares hashes:
 ### The live bot client
 
 With `--bot1=SPEC` / `--bot2=SPEC` (from the menu, or `play.bat --vs`), that
-player is a trained agent. SPEC is a checkpoint path (relative to the repo),
-`latest`, or a scripted bot name. Everything is per player:
+player is a trained agent. SPEC is a checkpoint path (`.bin`, or a
+`.pt` whose `.bin` sits next to it; relative to the repo), `latest` (the
+newest `runs/*/agent_latest.bin`), or a scripted bot name. Everything is per
+player:
 
-- `start_bot(p)` starts `train/serve.py SPEC --port 5055+p` with
-  `OS.create_process` and turns off that player's input buffer.
+- `start_bot(p)` turns off that player's input buffer. A network bot is loaded
+  into the game (`FightGame.load_bot`, running `core/net.cpp`) and is ready at
+  once. A scripted bot is Python, so it starts `train/serve.py SPEC --port
+  5055+p` with `OS.create_process`.
   `stop_bots()` (Esc, or leaving the scene) disconnects and stops them; each
   server also quits by itself when the game disconnects.
-- `bot_update(p)` connects (retrying while PyTorch loads, up to 30 s), then
+- `bot_update(p)` (scripted bots) connects (retrying while Python starts, up to 30 s), then
   exchanges observation sizes (see [python.md](python.md#the-live-bot-server));
   the game waits until every bot is ready.
 - `bot_decide(p)` keeps the bot's last 7 observations (`get_obs(p)`); every 4
-  frames (`BOT_SKIP`) it sends the one from 6 frames ago (`BOT_DELAY`) and
-  holds the answer until the next decision, exactly like training. The stick
+  frames (`BOT_SKIP`) it decides on the one from 6 frames ago (`BOT_DELAY`):
+  `FightGame.bot_act` (the network's action, sampled with `randf()`) or the
+  server's answer. It holds that until the next decision, exactly like training. The stick
   x is un-mirrored for player 2. Its status shows at the top left only while
   it loads or after an error.
 

@@ -57,13 +57,15 @@ returns a dict of the fighter's state; `set_percent(game, player, pct)`;
 | `replay.py` | `play_and_record()` plays one game and returns a replay dict (inputs, move files, input buffer, final hash); `save()`. |
 | `record.py` | Records a checkpoint's game: `python train/record.py latest --opponent self`. |
 | `record_vs.py` | Records the latest agent (or `--agent X.pt`) against every compatible checkpoint in `runs/` and the five scripted bots, headless (about 2-3 minutes for 100 games), into `replays/latest_vs_all/<agent>_vs_<opponent>.json` (e.g. `league-480M_vs_main-150M.json`: run name + training decisions). Checkpoints from older game versions are skipped. |
-| `serve.py` | The live bot server for Godot (below). |
+| `serve.py` | The live server for scripted bots in Godot (below). |
 | `ppo.py` | Training: see [training.md](training.md). |
 
 ## The live bot server
 
-`python train/serve.py [latest | checkpoint.pt | scripted bot] --port 5055`
-(`play.bat --vs` starts it). Protocol over local TCP, little-endian:
+`python train/serve.py fighter --port 5055` (any scripted bot; `play.bat --vs
+fighter` starts it). Trained agents don't use it: the game runs their network
+itself (`core/net.cpp`) from the `.bin` that `ppo.py` writes next to each
+checkpoint (`tools/export_bot.py` for older ones). Protocol over local TCP, little-endian:
 
 1. Godot sends its observation size (int32); the server answers with its own
    and quits if they differ (the game and the module were built from
@@ -71,9 +73,7 @@ returns a dict of the fighter's state; `set_percent(game, player, pct)`;
 2. Then, per decision: Godot sends `OBS_DIM` float32 (the bot's view, already
    delayed); the server answers 3 int8 (stick x, stick y, button), egocentric.
 
-It runs the network with `net_policy()` from `ppo.py`, exactly as in training
-and recording, and exits when the game disconnects (or if nothing connects
-within 2 minutes). About 1.1-1.5 ms per decision.
+It exits when the game disconnects (or if nothing connects within 2 minutes).
 
 ## Tools
 
@@ -83,6 +83,7 @@ within 2 minutes). About 1.1-1.5 ms per decision.
 | `tools/combos.py` | Which true combos exist: for each opener and %, thousands of frame-perfect follow-ups in parallel, against a victim who doesn't DI. |
 | `tools/sprites.py` | Source images -> game characters (see [assets.md](assets.md)). |
 | `tools/ladder.py` | Round-robin tournament between checkpoints and bots under training conditions: win matrix + Elo. `python tools/ladder.py runs/<run> --every 6` or a list of `.pt` files and bot names. |
+| `tools/export_bot.py` | Checkpoints -> `.bin` for the game's C++ bot (the actor only, about 0.5 MB): `python tools/export_bot.py runs/<run>` (all, next to each `.pt`) or `... agent_X.pt --out data/bots`. `ppo.py` does this itself for new checkpoints. |
 | `tools/run_summary.py` | Caches each run's curves (300 points each), settings, network size and ladder Elo in `runs/<run>/summary.json` for the menu's Training screen (Godot can't read TensorBoard files; parsing one takes ~1 min). Only redoes runs whose logs or ladder changed; the menu runs it automatically. |
 
 ## Tests
@@ -97,4 +98,5 @@ module:
 | `test_env.py`, `test_counter.py` | the RL interface: mirrored observations and actions, rewards, streaks, counters, time limit, reaction delay |
 | `test_bots.py` | the scripted bots and the named observation indices |
 | `test_replay_godot.py` | a Python recording verifies in Godot (skipped if Godot isn't found) |
-| `test_serve.py` | the live bot server: handshake, one decision, clean exit |
+| `test_serve.py` | the scripted bot server: handshake, one decision, clean exit |
+| `test_net.py` | the game's C++ bot network matches PyTorch (logits and sampling); bots from another game version are refused |

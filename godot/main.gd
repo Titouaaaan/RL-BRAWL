@@ -38,22 +38,22 @@ const END_DELAY := 240
 var ko_frame := -1  # game frame of the final KO; -1 while both still have stocks
 
 # Live bots (--bot1=... / --bot2=..., from the menu or play.bat --vs): a player
-# can be a trained agent. The game starts train/serve.py for it (one Python
-# process per bot, ports BOT_PORT and BOT_PORT + 1) and talks to it over a
-# local TCP connection. A bot plays under the same conditions as in training:
+# can be a trained agent, run inside the game (core/net.cpp), or a scripted
+# bot, for which the game starts train/serve.py (one Python process per bot,
+# ports BOT_PORT and BOT_PORT + 1) and talks to it over a local TCP
+# connection. A bot plays under the same conditions as in training:
 # it sees the game BOT_DELAY frames late and picks an action every BOT_SKIP
 # frames, which is held in between. Everything below is per player.
 const BOT_DELAY := 6  # reaction delay, frames (train/ppo.py --reaction-delay)
 const BOT_SKIP := 4   # frame skip (train/ppo.py --frame-skip)
 const BOT_PORT := 5055
-var bot_spec := ["", ""]   # what each bot is ("latest", a .pt path, a scripted bot); "" = a human
+var bot_spec := ["", ""]   # what each bot is ("latest", a .bin or .pt path, a scripted bot); "" = a human
 var bot_pid := [-1, -1]    # the serve.py process, to stop it when leaving
 var bot_tcp := [StreamPeerTCP.new(), StreamPeerTCP.new()]
 var bot_state := ["", ""]  # "", "connecting", "handshake", "ready", or an error message
 var bot_wait := [0.0, 0.0]  # seconds spent connecting
 var bot_hist := [[], []]   # each bot's last BOT_DELAY + 1 observations, oldest first
 var bot_action := [[0, 0, 0], [0, 0, 0]]  # real (un-mirrored) stick x, stick y, button: held between decisions
-var bot_ms := [0.0, 0.0]   # last decision's round trip to Python, for the HUD
 
 # Keys are *physical* positions (US layout names), so on AZERTY "WASD" is ZQSD.
 # Player 1: WASD stick, Space jump, J light, K heavy, L dodge.
@@ -371,16 +371,42 @@ func frozen() -> bool:
 	return game.is_over() and (ko_frame < 0 or game.get_frame() - ko_frame >= END_DELAY)
 
 
-# Starts train/serve.py for player p's bot and begins connecting to it.
+# A network bot (a checkpoint or "latest") runs inside the game (core/net.cpp,
+# weights exported to .bin by ppo.py or tools/export_bot.py); a scripted bot
+# (fighter, spacer, ...) is Python code, so it runs in train/serve.py.
+func is_net(spec: String) -> bool:
+	return spec == "latest" or spec.ends_with(".bin") or spec.ends_with(".pt")
+
+
+# Starts player p's bot: loads its network, or starts serve.py and begins connecting to it.
 func start_bot(p: int) -> void:
 	var spec: String = bot_spec[p]
-	if spec.ends_with(".pt") and not spec.is_absolute_path():
-		spec = Session.repo_root().path_join(spec)
+	game.set_input_buffer(p, 0)  # bots were trained without the input buffer (humans keep 9)
+	if is_net(spec):
+		var path := newest_bot() if spec == "latest" else spec.get_basename() + ".bin"
+		if not path.is_absolute_path():
+			path = Session.repo_root().path_join(path)
+		if not FileAccess.file_exists(path):
+			bot_state[p] = "no trained run yet" if spec == "latest" else "no %s (export it: python tools/export_bot.py %s)" % [path.get_file(), spec]
+			return
+		var err: String = game.load_bot(p, FileAccess.get_file_as_bytes(path))
+		bot_state[p] = err if err != "" else "ready"
+		return
 	var serve := Session.repo_root().path_join("train/serve.py")
 	bot_pid[p] = OS.create_process("python", [serve, spec, "--port", str(BOT_PORT + p)])
-	game.set_input_buffer(p, 0)  # bots were trained without the input buffer (humans keep 9)
 	bot_state[p] = "connecting" if bot_pid[p] > 0 else "could not start python (is it on the PATH?)"
 	bot_tcp[p].connect_to_host("127.0.0.1", BOT_PORT + p)
+
+
+# The newest runs/*/agent_latest.bin (ppo.py rewrites it at every eval), or "".
+func newest_bot() -> String:
+	var best := ""
+	var root := Session.repo_root().path_join("runs")
+	for d in DirAccess.get_directories_at(root):
+		var f := root.path_join(d).path_join("agent_latest.bin")
+		if FileAccess.file_exists(f) and (best == "" or FileAccess.get_modified_time(f) > FileAccess.get_modified_time(best)):
+			best = f
+	return best
 
 
 # Disconnects and stops the bot servers (each also quits by itself when the game disconnects).
@@ -407,7 +433,7 @@ func bot_update(p: int) -> bool:
 	tcp.poll()
 	var status := tcp.get_status()
 	if status == StreamPeerTCP.STATUS_ERROR or status == StreamPeerTCP.STATUS_NONE:
-		# The server is probably still loading PyTorch: try again.
+		# The server is probably still starting: try again.
 		if bot_wait[p] > 30.0:
 			bot_state[p] = "could not reach the bot (try: python train/serve.py %s)" % bot_spec[p]
 			return false
@@ -440,24 +466,35 @@ func bot_decide(p: int) -> Array:
 		hist.pop_front()
 	if game.get_frame() % BOT_SKIP != 0:
 		return bot_action[p]
+	var seen: PackedFloat32Array = hist[0]  # the oldest = BOT_DELAY frames ago (the start, early on)
+	var act := []
+	if is_net(bot_spec[p]):
+		act = Array(game.bot_act(p, seen, randf()))
+	else:
+		act = serve_decide(p, seen)
+		if act.is_empty():
+			return [0, 0, 0]
+	# Actions are egocentric like observations: player 2's "right" is the real left.
+	bot_action[p] = [act[0] if p == 0 else -act[0], act[1], act[2]]
+	return bot_action[p]
+
+
+# A scripted bot's decision, from serve.py: [stick x, stick y, button], or [] if the connection broke.
+func serve_decide(p: int, seen: PackedFloat32Array) -> Array:
 	var tcp: StreamPeerTCP = bot_tcp[p]
 	var t := Time.get_ticks_usec()
-	var seen: PackedFloat32Array = hist[0]  # the oldest = BOT_DELAY frames ago (the start, early on)
 	tcp.put_data(seen.to_byte_array())
 	while tcp.get_available_bytes() < 3:  # wait for the answer (well under a millisecond)
 		tcp.poll()
 		if tcp.get_status() != StreamPeerTCP.STATUS_CONNECTED or Time.get_ticks_usec() - t > 500000:
 			bot_state[p] = "lost the connection to the bot"
-			return [0, 0, 0]
+			return []
 	var got: Array = tcp.get_data(3)  # [error, bytes]
 	var raw: PackedByteArray = got[1]
 	var act := []
 	for k in 3:
 		act.append(raw[k] - 256 if raw[k] > 127 else raw[k])  # bytes are unsigned; the stick is -1..1
-	# Actions are egocentric like observations: player 2's "right" is the real left.
-	bot_action[p] = [act[0] if p == 0 else -act[0], act[1], act[2]]
-	bot_ms[p] = (Time.get_ticks_usec() - t) / 1000.0
-	return bot_action[p]
+	return act
 
 
 # Runs once per screen refresh (can be more often than 60 Hz).
@@ -791,7 +828,7 @@ func bot_name(spec: String) -> String:
 	for d in Session.DIFFICULTIES:
 		if d.bot == spec:
 			return d.name if d.name.ends_with("bot") else d.name + " bot"
-	return "bot " + (spec.get_file().get_basename() if spec.ends_with(".pt") else spec)
+	return "bot " + spec.get_file().get_basename()
 
 
 func winner_text() -> String:

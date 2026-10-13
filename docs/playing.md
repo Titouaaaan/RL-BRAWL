@@ -165,15 +165,16 @@ play.bat --vs fighter          # a scripted bot: dummy, random, jabber, spacer, 
 play.bat --vs runs\<run>\agent_00600.pt --p1 1 --p2 5
 ```
 
-You are P1 (keyboard or controller 1); the bot is P2. The game starts the bot
-in the background (`train/serve.py`, running the network in PyTorch, about 1
-ms per decision) and connects to it on this machine; it waits until the bot
-has loaded (a few seconds, shown at the top left; the line disappears once the
-bot is ready). The bot plays exactly as in training: it sees the game 0.1 s
+You are P1 (keyboard or controller 1); the bot is P2. A trained agent runs
+inside the game (its network in C++, `core/net.cpp`, well under 1 ms per
+decision). A scripted bot is Python, so the game starts it in the background
+(`train/serve.py`) and waits until it has loaded (a few seconds, shown at the
+top left). The bot plays exactly as in training: it sees the game 0.1 s
 late and picks an action every 4 frames, and it has no input buffer (it was
 trained without one); you keep yours. Leaving the game stops the bot. If it
-can't connect, the top left says why in red (for example the game and the
-Python module were built from different code: rebuild both).
+can't start, the top left says why in red (for example a checkpoint from an
+older game version, or a `.pt` without its `.bin`: `python tools/export_bot.py
+runs/<run>`).
 
 ## Watching replays
 
