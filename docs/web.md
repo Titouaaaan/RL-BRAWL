@@ -71,6 +71,9 @@ You don't need to build anything or know the game. What you need to know:
   that were there at `next build`, so every game update would need a rebuild.)
   Then make `/rl-brawl/` reachable from the site's domain (same origin or
   not: the iframe works either way).
+
+  The owner's site does it the FastAPI way, under a different path and with
+  a few header changes: see [On titouanguerin.com](#on-titouanguerincom).
 - **HTTPS is required.** Godot's web build only starts in a "secure context":
   a page served over `https://`, or from `localhost`. Over plain `http://`
   to an IP or hostname it stops with "Secure Context - Check web server
@@ -98,12 +101,16 @@ You don't need to build anything or know the game. What you need to know:
   Start: two fighters move and fight.
 
 The next section has the details: serving requirements (MIME types,
-compression, caching, no special headers).
+compression, caching, headers).
 
 ## Putting it on a website
 
 The output is plain static files. Any web server or static host works; no
-server-side code, database or special headers are needed.
+server-side code or database is needed, and the game asks for no special
+headers. But a site that already sends security headers can block it: a
+`Content-Security-Policy` must let WebAssembly compile, and anti-framing
+headers must let the site frame its own game (see
+[On titouanguerin.com](#on-titouanguerincom) for the exact list).
 
 1. **Serve** the exported folder under a path such as `/rl-brawl/`
    (`--deploy` puts it on the server; see the start-here section for where to
@@ -136,6 +143,68 @@ server-side code, database or special headers are needed.
 Needed: HTTPS (or `localhost`), see the start-here section. Not needed: the `Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy`
 headers that many Godot web guides mention. They are only for the
 multi-threaded build; this one is single-threaded on purpose.
+
+## On titouanguerin.com
+
+What the owner's site actually needed, so changes on this side can be
+checked against it. Status: built and tested in a development copy of the
+site on 2026-10-13, not live yet. The site's own repo documents its side in full;
+this is the part that touches the game.
+
+**Addresses.** The page is `/rl-brawl` (a normal page of the site: title,
+sections, a note that phones and tablets can only watch, then the game in an
+iframe). The game's files are under `/rl-brawl/play/`, so the iframe loads
+`/rl-brawl/play/index.html`. (Not `/rl-brawl/` as in the examples above:
+that's the page's own address.)
+
+**Serving.** The site's FastAPI backend mounts `~/rl-brawl-web/` with
+`StaticFiles` at `/rl-brawl/play`, and Next.js forwards `/rl-brawl/play/*` to
+it, the same way it already forwards the site's API. A `--deploy` is
+therefore live at once, with no site rebuild. The mount uses
+`check_dir=False`, so the backend still starts when the folder is missing
+(the frame then shows "Not Found").
+
+**Headers, set by the backend.** Next.js does not add its configured headers
+to responses it forwards, so the backend sets the game's own:
+
+| Header | Value | Why |
+|---|---|---|
+| `Content-Security-Policy` | `script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'` | Without `'wasm-unsafe-eval'` the browser refuses to compile any `.wasm` and the game never starts. `'unsafe-inline'`: the loader script inside `index.html`. |
+| | `img-src 'self' data: blob:` | Godot builds some images in memory (`blob:` URLs); blocked, it logs a CSP error. |
+| | `frame-ancestors 'self'` | Only the site's own page may frame the game (not other sites, on the Pi's bandwidth). |
+| | `default-src 'self'` | Everything else (the `.pck`, `.wasm`, audio worklets) must come from the same folder. |
+| `X-Frame-Options` | `SAMEORIGIN` | Same as `frame-ancestors`, for older browsers. |
+| `Cache-Control` | `no-cache` | File names never change between exports: browsers re-check every file and get a `304` (no download) when it hasn't changed. |
+
+The site's own pages gained `frame-src 'self'` so the page may frame the game.
+
+**Compression, also by the backend** (gzip): Next.js only compressed the
+`.wasm` and `.js`, not the 16 MB `.pck` (`application/octet-stream`). With
+it, a first visit downloads 16.7 MB; the 44 MB engine takes about 3 s to
+compress on the Pi.
+
+**Checked** (2026-10-13, headless Chromium on the Pi): the page boots the
+game (console: Godot 4.7.2, `single-threaded, GDExtension support`, no CSP
+errors), Bot vs Bot with Latest bot on both sides plays.
+
+**Known issue, on the game side:** in the site's content column the frame is
+about 845 x 475 px, and the main menu doesn't fit: the buttons from
+*Replays* down are cut off at the bottom (the Bot vs Bot screen and the
+fight fit). The menu seems laid out in fixed pixels; Godot's stretch setting
+(Project Settings > Display > Window > Stretch, mode `canvas_items`, aspect
+`expand`) would scale it to the frame. Not changed yet.
+
+**What would need a change on the site side** (tell the owner, it's not
+automatic):
+- loading anything from another domain (fonts, scripts, a CDN): the CSP only
+  allows the site itself;
+- the multi-threaded build (it needs the COOP/COEP headers above);
+- a different folder name than `rl-brawl-web`, or the entry page no longer
+  being `index.html` at the folder's root;
+- turning on Godot's PWA / service worker export option.
+
+Anything else (new characters, bots, replays, code) is just a re-export with
+`--deploy`.
 
 ## Deploying from the PC
 
