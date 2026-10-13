@@ -71,6 +71,13 @@ You don't need to build anything or know the game. What you need to know:
   that were there at `next build`, so every game update would need a rebuild.)
   Then make `/rl-brawl/` reachable from the site's domain (same origin or
   not: the iframe works either way).
+- **HTTPS is required.** Godot's web build only starts in a "secure context":
+  a page served over `https://`, or from `localhost`. Over plain `http://`
+  to an IP or hostname it stops with "Secure Context - Check web server
+  configuration (use HTTPS)". If the site is already HTTPS and the game is
+  served from the same domain, nothing to do. To test on the Pi before it's
+  public, tunnel it to the PC's localhost: `ssh -N -L 8767:localhost:<port>
+  <user>@<pi>` and open http://localhost:8767/.
 - **The page component** (Next.js, App Router or Pages, no client code needed):
   ```tsx
   export default function RlBrawl() {
@@ -126,7 +133,7 @@ server-side code, database or special headers are needed.
    only downloads what changed), or put each export in a new folder
    (`/rl-brawl/2026-10-13/`).
 
-Not needed: the `Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy`
+Needed: HTTPS (or `localhost`), see the start-here section. Not needed: the `Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy`
 headers that many Godot web guides mention. They are only for the
 multi-threaded build; this one is single-threaded on purpose.
 
@@ -307,6 +314,7 @@ windows on Windows, so run them headless.
 | Console: `failed to load GDExtension` / the game's menu shows but "FightGame" errors | The extension was built with a different Emscripten version than the engine, or is missing. | Check the version the console prints, `emsdk activate` it, delete `build/web/`, export again. |
 | Linking fails: `undefined symbol: main` | CMake built the extension as a program, not a side module. | `bindings/godot/CMakeLists.txt` must include `emsdkHack.cmake`; delete `build/web/` and export again. |
 | Export fails: no export template found | Godot's templates aren't installed. | [One-time setup](#one-time-setup), step 2. |
+| "Secure Context - Check web server configuration (use HTTPS)" | The page was opened over plain `http://` from another machine. | Serve it over HTTPS (or test through `localhost`, e.g. an SSH tunnel). |
 | `--deploy`: `Permission denied (publickey,password)` | The Pi doesn't know the PC's SSH key. | [Deploying](#deploying-from-the-pc), step 2. |
 | The site still shows the old version | Browser cache. | Ctrl+F5; on the server, see Caching in [Putting it on a website](#putting-it-on-a-website). |
 | A replay ends with DESYNC | It was recorded on an older version of the game (replays store inputs, not code). | Regenerate replays (`python train/record_vs.py`), export again. |
