@@ -285,7 +285,7 @@ func find_latest_replay() -> String:
 		for sub in DirAccess.get_directories_at(dir):
 			stack.append(dir.path_join(sub))
 		for f in DirAccess.get_files_at(dir):
-			var t := FileAccess.get_modified_time(dir.path_join(f))
+			var t := Session.modified_time(dir.path_join(f))
 			if f.ends_with(".json") and t >= best_time:
 				best = dir.path_join(f)
 				best_time = t
@@ -407,7 +407,7 @@ func newest_bot() -> String:
 	var root := Session.repo_root().path_join("runs")
 	for d in DirAccess.get_directories_at(root):
 		var f := root.path_join(d).path_join("agent_latest.bin")
-		if FileAccess.file_exists(f) and (best == "" or FileAccess.get_modified_time(f) > FileAccess.get_modified_time(best)):
+		if FileAccess.file_exists(f) and (best == "" or Session.modified_time(f) > Session.modified_time(best)):
 			best = f
 	return best
 
@@ -828,7 +828,7 @@ func state_label(f: Dictionary) -> String:
 
 # A bot's display name: the difficulty it belongs to, or the file / bot name.
 func bot_name(spec: String) -> String:
-	for d in Session.difficulties:
+	for d in Session.DIFFICULTIES:
 		if d.bot == spec:
 			return d.name if d.name.ends_with("bot") else d.name + " bot"
 	return "bot " + spec.get_file().get_basename()

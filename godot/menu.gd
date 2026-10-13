@@ -114,14 +114,15 @@ func show_main() -> void:
 	screen.add_child(spacer(14))
 	add_button("Replays", show_replays)
 	add_button("Training", show_runs)
-	add_button("Quit", func(): get_tree().quit())
-	back_action = func(): get_tree().quit()
+	if not OS.has_feature("web"):  # in a browser, quitting would only freeze the page
+		add_button("Quit", func(): get_tree().quit())
+		back_action = func(): get_tree().quit()
 
 
 func show_difficulty() -> void:
 	new_screen("Player vs Bot", "You are P1. Choose the bot's level:")
 	var first := true
-	for d in Session.difficulties:
+	for d in Session.DIFFICULTIES:
 		var b := add_button(d.name, func(): Session.start_game(PackedStringArray(["--bot2=" + d.bot])))
 		if first:
 			b.grab_focus()
@@ -144,16 +145,16 @@ func show_bot_vs_bot() -> void:
 		var opt := OptionButton.new()
 		opt.custom_minimum_size = Vector2(220, 40)
 		opt.add_theme_font_size_override("font_size", 18)
-		for d in Session.difficulties:
+		for d in Session.DIFFICULTIES:
 			opt.add_item(d.name)
-		opt.select(Session.difficulties.size() - 1)  # the latest bot by default (Very hard on the web)
+		opt.select(Session.DIFFICULTIES.size() - 1)  # the latest bot by default
 		col.add_child(opt)
 		picks.append(opt)
 	screen.add_child(spacer(10))
 	add_button("Start", func():
 		Session.start_game(PackedStringArray([
-			"--bot1=" + Session.difficulties[picks[0].selected].bot,
-			"--bot2=" + Session.difficulties[picks[1].selected].bot]))).grab_focus()
+			"--bot1=" + Session.DIFFICULTIES[picks[0].selected].bot,
+			"--bot2=" + Session.DIFFICULTIES[picks[1].selected].bot]))).grab_focus()
 	add_button("Back", show_main)
 	back_action = show_main
 
@@ -261,7 +262,7 @@ var summary_pid := 0
 
 
 func show_runs() -> void:
-	if summary_pid == 0:
+	if summary_pid == 0 and not OS.has_feature("web"):  # the web export packs the summaries instead
 		summary_pid = OS.create_process("python", [Session.repo_root().path_join("tools/run_summary.py")])
 	new_screen("Training", "Every training run in runs/, newest first. Enter / double-click to open one.", true)
 	var runs := find_runs()
@@ -491,13 +492,13 @@ func fmt(v: float) -> String:
 	return "%.3f" % v
 
 
-# Every run folder that has a TensorBoard log, newest first: [{path, summary or null}].
+# Every run folder that has a TensorBoard log (or, in a web export, its summary), newest first: [{path, summary or null}].
 func find_runs() -> Array:
 	var root := Session.repo_root().path_join("runs")
 	var out := []
 	for d in DirAccess.get_directories_at(root):
 		var path := root.path_join(d)
-		if Array(DirAccess.get_files_at(path)).any(func(f): return f.begins_with("events.out.tfevents")):
+		if Array(DirAccess.get_files_at(path)).any(func(f): return f.begins_with("events.out.tfevents") or f == "summary.json"):
 			var json := path.path_join("summary.json")
 			out.append({path = path, summary = JSON.parse_string(FileAccess.get_file_as_string(json)) if FileAccess.file_exists(json) else null})
 	out.sort_custom(func(x, y): return x.path.get_slice("__", 3) > y.path.get_slice("__", 3))  # run names end in their start time
@@ -556,6 +557,6 @@ func find_replays() -> Array:
 		for f in DirAccess.get_files_at(dir):
 			if f.ends_with(".json"):
 				var path := dir.path_join(f)
-				out.append({path = path, label = path.trim_prefix(root + "/"), time = FileAccess.get_modified_time(path)})
+				out.append({path = path, label = path.trim_prefix(root + "/"), time = Session.modified_time(path)})
 	out.sort_custom(func(a, b): return a.time > b.time)
 	return out

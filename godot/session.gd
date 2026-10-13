@@ -21,8 +21,6 @@ const DIFFICULTIES := [
 	{name = "Very hard", bot = "data/bots/agent_10750.bin"},
 	{name = "Latest bot", bot = "latest"},
 ]
-# The levels the menus offer: no "latest" on the web (runs/ isn't packed).
-var difficulties: Array = DIFFICULTIES.filter(func(d): return d.bot != "latest" or not OS.has_feature("web"))
 
 const SETTINGS_FILE := "user://settings.cfg"  # in Godot's per-user folder (%APPDATA%\Godot\app_userdata\RL-BRAWL)
 
@@ -53,6 +51,20 @@ func repo_root() -> String:
 	if OS.has_feature("web"):
 		return "res://repo"
 	return ProjectSettings.globalize_path("res://").path_join("..").simplify_path()
+
+
+# A file's modification time (newest bot, newest replays). Files packed in a
+# web export have none, so tools/web_export.py saves the originals' times in
+# repo/mtimes.json.
+var mtimes = null
+func modified_time(path: String) -> int:
+	if not OS.has_feature("web"):
+		return FileAccess.get_modified_time(path)
+	if mtimes == null:
+		mtimes = JSON.parse_string(FileAccess.get_file_as_string("res://repo/mtimes.json"))
+		if typeof(mtimes) != TYPE_DICTIONARY:
+			mtimes = {}
+	return int(mtimes.get(path.trim_prefix("res://repo/"), 0))
 
 
 # Opens the game with these options (same format as the command line).

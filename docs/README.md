@@ -8,6 +8,7 @@
 | Understand the C++ game engine (the simulation), tune moves | [engine.md](engine.md) |
 | Understand the Godot side (drawing, input, replays, the live bot) | [godot.md](godot.md) |
 | Use the game from Python, the bots, tools and tests | [python.md](python.md) |
+| Run the game in a browser, put it on a website | [web.md](web.md) |
 | Train agents, read the training charts | [training.md](training.md) |
 | Know why things are the way they are (plan and dated decisions) | [design.md](design.md) |
 | See every change: when, why, who decided, which commit | [log.md](log.md) |

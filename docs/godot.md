@@ -23,7 +23,7 @@ C++ core to advance, and draws. It contains no game logic.
    | `load_bot(player, bytes)`, `bot_act(player, obs, u)` | a network bot (`core/net.cpp`): load an exported `.bin`, pick an action |
 
 2. **`godot/fightgame.gdextension`** tells Godot where the DLL is (and the
-   `.wasm` of the web export, see [setup.md](setup.md#web-export-the-game-in-a-browser)).
+   `.wasm` of the web export, see [setup.md](web.md)).
 3. **`godot/menu.tscn` + `menu.gd`** is the first scene: the menu. Each screen
    is built in code by one `show_*()` function. Starting a game calls
    `Session.start_game(options)` and switches to `main.tscn`. If Godot was

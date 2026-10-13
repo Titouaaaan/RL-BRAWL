@@ -1,0 +1,238 @@
+# The game in a browser (web export)
+
+The whole game, exactly as on desktop, as a folder of static files that runs
+in the visitor's browser. The web server only sends files: the simulation,
+the bots (their neural networks) and the drawing all run on the visitor's
+machine, so hosting costs nothing beyond bandwidth, and any number of people
+can watch or play at once.
+
+Checked in Chromium (Chrome, Edge, Brave...), Firefox and WebKit (the engine
+of Safari) on Windows. Real Safari on a Mac or iPhone hasn't been tried yet.
+
+## Quick start
+
+```
+python tools/web_export.py                          # -> build/web_export/
+python -m http.server -d build/web_export 8000      # serve it on this PC
+```
+
+Open http://localhost:8000. The first load takes a few seconds (about 17 MB
+compressed, see [Files](#files)). Opening `index.html` directly from disk
+doesn't work: browsers only run WebAssembly fetched over HTTP.
+
+## What's in it
+
+Everything the desktop menu has: Player vs Bot (all levels, including
+"Latest bot"), Player vs Player (both players on one keyboard, or
+controllers), Bot vs Bot, Character Select, Controls, Replays (every
+replay in `replays/`), Training (every run's charts and stats). Settings
+(character choices) are saved in the browser.
+
+The few differences come from the browser itself:
+
+| Desktop | Web | Why |
+|---|---|---|
+| Quit button, Esc on the main menu quits | not shown | Quitting would only freeze the page. |
+| Training screen rebuilds summaries (`run_summary.py`) | shows the summaries as they were at export time | No Python in a browser. |
+| Command-line options (`play.bat --vs fighter`, `replay FILE`, `--p1 3`) | the menu equivalents | No command line. The scripted bots (fighter, spacer...) are only reachable from the command line on desktop too. |
+| Files read live from the repo | a snapshot packed at export time | See [Updating](#updating-the-content). |
+
+Mouse, keyboard and controllers all work. A controller that is connected but
+not in use can still steer the menu if it's sending input (a held trigger, a
+drifting stick): see [Troubleshooting](#troubleshooting). Phones and tablets
+can watch (Bot vs Bot, Replays), but there are no on-screen controls to play.
+
+## Putting it on a website
+
+The output is plain static files. Any web server or static host works; no
+server-side code, database or special headers are needed.
+
+1. **Copy** `build/web_export/` to the site, e.g. into a Next.js app's
+   `public/rl-brawl/` folder (served as `/rl-brawl/index.html`). Keep the
+   files together; they load each other by relative path.
+2. **Embed** it in a page with an iframe. The game fills whatever size it's
+   given (it resizes with the frame; 16:9 looks best):
+   ```html
+   <iframe src="/rl-brawl/index.html" title="RL-BRAWL"
+           style="width: 100%; aspect-ratio: 16 / 9; border: 0"
+           allow="fullscreen; gamepad; autoplay"></iframe>
+   ```
+   `gamepad` lets controllers work inside the frame. Keyboard input goes to the
+   game once the visitor has clicked into it (browsers give keys to the
+   focused frame). Linking straight to `index.html` (full page) also works.
+3. **Check the server sends the right types:** `.wasm` as `application/wasm`
+   (browsers refuse to compile it otherwise), `.pck` as anything (e.g.
+   `application/octet-stream`). Next.js, nginx, Caddy and Python's
+   `http.server` already do this.
+4. **Compression** (recommended): 65 MB raw becomes about 17 MB with gzip or
+   Brotli. Most servers compress automatically (Next.js with `next start`:
+   gzip on by default; behind nginx: `gzip on; gzip_types application/wasm
+   application/octet-stream application/javascript;`).
+5. **Caching:** the file names never change between exports, so after
+   uploading a new export, browsers may keep the old one. Either serve
+   `/rl-brawl/` with `Cache-Control: no-cache` (the browser re-checks, and
+   only downloads what changed), or put each export in a new folder
+   (`/rl-brawl/2026-10-13/`).
+
+Not needed: the `Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy`
+headers that many Godot web guides mention. They are only for the
+multi-threaded build; this one is single-threaded on purpose.
+
+## Updating the content
+
+The export is a snapshot of the repo. Re-run `python tools/web_export.py`
+and re-upload the folder whenever something changes:
+
+- **A new training run or new checkpoints** ("Latest bot" = the newest
+  `runs/*/agent_latest.bin`): also run `python tools/run_summary.py` first,
+  so the Training screen has the new run's charts.
+- **New ladder results** (`python tools/ladder.py`): `run_summary.py`, then export.
+- **New replays** (anything under `replays/`).
+- **New characters, moves, bot levels, or any code change.**
+
+What gets packed is the `PACK` list at the top of `tools/web_export.py`.
+
+## Files
+
+| File | Size | Gzipped | What |
+|---|---|---|---|
+| `index.html` | 0.01 MB | | The page: a canvas plus the loader. |
+| `index.js` | 2.86 MB | 0.36 MB | Godot's JavaScript glue (loading, input, audio). |
+| `index.wasm` | 1.51 MB | 0.58 MB | The engine's entry module. |
+| `index.side.wasm` | 44.08 MB | 10.55 MB | The Godot engine itself, in the build that can load extensions. |
+| `fightgame.web.template_release.wasm32.nothreads.wasm` | 0.35 MB | 0.08 MB | Our C++ game (`core/` + the Godot binding), compiled to WebAssembly. |
+| `index.pck` | 15.76 MB | 4.97 MB | Godot's packed data: scenes, scripts, and the repo snapshot (characters, stage art, moves, bots, run summaries, replays). |
+| `index.png`, `index.icon.png`, `index.apple-touch-icon.png`, `index.audio*.js` | small | | Splash image, icons, audio worklets. |
+
+Total about 65 MB, about 17 MB compressed. Most of it is the engine; the
+game's own code and data are about 16 MB (5 MB compressed).
+
+## Building
+
+### One-time setup
+
+1. **Emscripten 4.0.20**, the compiler that turns C++ into WebAssembly. It
+   must be the exact version Godot 4.7.2's web engine was built with (the
+   browser console prints it at startup: `Build configuration: Emscripten
+   4.0.20`). A different version can fail to load our extension.
+   ```
+   cd D:\
+   git clone https://github.com/emscripten-core/emsdk
+   cd emsdk
+   emsdk install 4.0.20
+   emsdk activate 4.0.20
+   ```
+   `tools/web_export.py` looks for it next to the repo (`D:\emsdk`); set the
+   `EMSDK` environment variable if it's elsewhere.
+2. **Godot's export templates for 4.7.2**: the pre-built engine that an
+   export reuses. In the Godot editor: Editor > Manage Export Templates >
+   Download. (Only `web_dlink_nothreads_release.zip` and `_debug.zip` are
+   used; they go in `%APPDATA%\Godot\export_templates\4.7.2.stable\`.)
+3. CMake and Ninja (the build tool CMake drives here): CMake comes from pip
+   (`python -m cmake`); Ninja is already on this PC (Strawberry Perl).
+
+### What `tools/web_export.py` does
+
+1. **Builds the extension for the web** into
+   `godot/bin/fightgame.web.template_release.wasm32.nothreads.wasm`: CMake
+   with Emscripten's toolchain file, godot-cpp in `template_release` mode
+   with threads off (build folder `build/web/`).
+2. **Packs the repo files the game reads** into `godot/repo/`, keeping their
+   layout (`assets/characters/...`, `data/moves/...`, `runs/<run>/summary.json`,
+   `replays/...`), plus `mtimes.json` with each file's modification date.
+3. **Exports** with Godot's command line: `godot --headless --path godot
+   --export-release Web build/web_export/index.html`, using the "Web" preset
+   in `godot/export_presets.cfg`.
+4. **Deletes `godot/repo/`**, so the desktop project never sees the copies.
+
+A full build takes about a minute (godot-cpp is compiled once; later builds
+only recompile what changed).
+
+## How it works (and why it was built this way)
+
+The game was already split so that this was possible: one C++ core (the
+simulation) and Godot only drawing and reading input. Making it run in a
+browser needed four things.
+
+**1. No Python at play time.** The bots used to run in PyTorch, in a Python
+process the game talked to over a local network connection. A browser can't
+run either. Now the bot's network (173 -> 256 -> 256 -> 45, tanh) runs in C++
+inside the game (`core/net.cpp`), from the actor's weights saved as a small
+`.bin` (0.5 MB). `ppo.py` writes a `.bin` next to every checkpoint, and
+`tools/export_bot.py` converts older ones. `tests/test_net.py` checks the C++
+network gives the same outputs as PyTorch. (Scripted bots are still Python,
+which is why they stay desktop-only.)
+
+**2. The C++ compiled to WebAssembly.** WebAssembly is a compact machine-code
+format that browsers run at close to native speed. Emscripten compiles our
+C++ to it. Godot loads our code as a *side module*: a library loaded at
+runtime by the engine (the browser's equivalent of the Windows DLL). That
+needs the engine build that supports it (Godot's "dlink" templates, hence the
+44 MB engine) and our library compiled with the same Emscripten version as
+the engine. `bindings/godot/CMakeLists.txt` reuses godot-cpp's
+`emsdkHack.cmake` so CMake agrees to build a shared library with Emscripten
+(without it the linker treats it as a program and asks for `main()`).
+
+**3. The repo inside the page.** On desktop the game reads files from the repo
+folder (`D:\RL-BRAWL\assets\...`). A browser has no such folder, only what was
+packed into `index.pck`, which Godot exposes under `res://`. So every file
+access goes through `Session.repo_root()` (`godot/session.gd`): the repo
+folder on desktop, `res://repo` on the web, filled by the export script.
+Details that made this work:
+- Move files are read by GDScript and handed to C++ as text
+  (`load_moves_from_text`), because C++ file functions can't see inside the
+  `.pck`.
+- PNGs are packed raw (Godot's "keep" importer, set by the script) so the game
+  can load them the same way on both platforms (`Image.load_from_file`).
+- Packed files have no dates, but the game sorts by them (newest bot, newest
+  replays first): `Session.modified_time()` reads the dates the export saved in
+  `mtimes.json`.
+
+**4. A renderer browsers support.** Browsers offer WebGL 2 (a version of
+OpenGL), so the project uses Godot's Compatibility renderer, on desktop too
+(it's a 2D game; it looks the same, checked frame by frame).
+
+**Single-threaded on purpose.** A multi-threaded Godot web build needs the
+server to send special security headers (COOP/COEP) and has been the usual
+source of trouble in Safari. The game needs only one thread (the simulation
+costs microseconds per frame, a bot decision well under a millisecond), so
+the single-threaded build costs nothing and works on any host.
+
+**Determinism holds.** A replay stores only inputs and checks the final state
+hash at the end. Replays recorded on Windows (MSVC-compiled simulation)
+verify in all three browsers (Emscripten-compiled), so the browser's
+simulation matches the training one bit for bit.
+
+## Testing a new export
+
+1. Serve it (`python -m http.server -d build/web_export 8000`), open
+   http://localhost:8000.
+2. Bot vs Bot with "Latest bot" on both sides: the fight starts and the bots move.
+3. Replays: open one, press Up three times (8x speed), wait for the end: it
+   must say "Replay verified" in green.
+4. Training: open a run; the charts show.
+5. Try more than one browser (at least one Chromium-based and Firefox).
+
+The browser console (F12 > Console) shows Godot's messages and any error.
+
+How it was tested during development: Playwright (`pip install playwright`,
+`python -m playwright install chromium firefox webkit`) drove the three
+browsers headless, clicked through the menu and took screenshots. Two lessons:
+a real controller connected to the PC steers the menu during automated tests
+(hide it with `page.add_init_script("navigator.getGamepads = () => []")`),
+and headed (visible) Chromium/Firefox windows pause when covered by other
+windows on Windows, so run them headless.
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| The menu shows but clicks do nothing, or the selection jumps around | A controller is sending input (a held trigger, a drifting stick, a pressed button). Browsers pass controllers to pages. | Put the controller down, switch it off, or unplug it. |
+| Blank page, nothing loads | Opened from disk (`file://`), or the server sends `.wasm` with the wrong type. | Serve over HTTP; check the console for the failing file. |
+| Console: `failed to load GDExtension` / the game's menu shows but "FightGame" errors | The extension was built with a different Emscripten version than the engine, or is missing. | Check the version the console prints, `emsdk activate` it, delete `build/web/`, export again. |
+| Linking fails: `undefined symbol: main` | CMake built the extension as a program, not a side module. | `bindings/godot/CMakeLists.txt` must include `emsdkHack.cmake`; delete `build/web/` and export again. |
+| Export fails: no export template found | Godot's templates aren't installed. | [One-time setup](#one-time-setup), step 2. |
+| The site still shows the old version | Browser cache. | Ctrl+F5; on the server, see Caching in [Putting it on a website](#putting-it-on-a-website). |
+| A replay ends with DESYNC | It was recorded on an older version of the game (replays store inputs, not code). | Regenerate replays (`python train/record_vs.py`), export again. |
+| "no trained run yet" on Latest bot | No `runs/*/agent_latest.bin` when exporting. | Train, or export older checkpoints (`python tools/export_bot.py runs/<run>`), then export again. |
+| Safari: repeated `glBlitFramebuffer` WebGL errors in the console | A known harmless WebKit message with Godot's renderer. | None needed: the game draws correctly. |
