@@ -12,6 +12,7 @@ extends Node
 # decisions, then the newest run's final agent. Paths are relative to the repo;
 # the weights are exported into data/bots/ (tools/export_bot.py), since runs/
 # isn't in git.
+const LEVELS_RUN := "selfplay__league__1__1790809954"  # the run data/bots/ comes from
 const DIFFICULTIES := [
 	{name = "Very easy", bot = "data/bots/agent_00250.bin"},
 	{name = "Easy", bot = "data/bots/agent_01500.bin"},
@@ -20,6 +21,8 @@ const DIFFICULTIES := [
 	{name = "Very hard", bot = "data/bots/agent_10750.bin"},
 	{name = "Latest bot", bot = "latest"},
 ]
+# The levels the menus offer: no "latest" on the web (runs/ isn't packed).
+var difficulties: Array = DIFFICULTIES.filter(func(d): return d.bot != "latest" or not OS.has_feature("web"))
 
 const SETTINGS_FILE := "user://settings.cfg"  # in Godot's per-user folder (%APPDATA%\Godot\app_userdata\RL-BRAWL)
 

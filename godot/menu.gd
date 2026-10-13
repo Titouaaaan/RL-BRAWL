@@ -121,7 +121,7 @@ func show_main() -> void:
 func show_difficulty() -> void:
 	new_screen("Player vs Bot", "You are P1. Choose the bot's level:")
 	var first := true
-	for d in Session.DIFFICULTIES:
+	for d in Session.difficulties:
 		var b := add_button(d.name, func(): Session.start_game(PackedStringArray(["--bot2=" + d.bot])))
 		if first:
 			b.grab_focus()
@@ -144,16 +144,16 @@ func show_bot_vs_bot() -> void:
 		var opt := OptionButton.new()
 		opt.custom_minimum_size = Vector2(220, 40)
 		opt.add_theme_font_size_override("font_size", 18)
-		for d in Session.DIFFICULTIES:
+		for d in Session.difficulties:
 			opt.add_item(d.name)
-		opt.select(Session.DIFFICULTIES.size() - 1)  # the latest bot by default
+		opt.select(Session.difficulties.size() - 1)  # the latest bot by default (Very hard on the web)
 		col.add_child(opt)
 		picks.append(opt)
 	screen.add_child(spacer(10))
 	add_button("Start", func():
 		Session.start_game(PackedStringArray([
-			"--bot1=" + Session.DIFFICULTIES[picks[0].selected].bot,
-			"--bot2=" + Session.DIFFICULTIES[picks[1].selected].bot]))).grab_focus()
+			"--bot1=" + Session.difficulties[picks[0].selected].bot,
+			"--bot2=" + Session.difficulties[picks[1].selected].bot]))).grab_focus()
 	add_button("Back", show_main)
 	back_action = show_main
 
@@ -265,7 +265,6 @@ func show_runs() -> void:
 		summary_pid = OS.create_process("python", [Session.repo_root().path_join("tools/run_summary.py")])
 	new_screen("Training", "Every training run in runs/, newest first. Enter / double-click to open one.", true)
 	var runs := find_runs()
-	var bots := Session.DIFFICULTIES.map(func(d): return d.bot.get_slice("/", 1))
 	var list := ItemList.new()
 	list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	list.add_theme_font_size_override("font_size", 15)
@@ -278,7 +277,7 @@ func show_runs() -> void:
 			var best = s.elo.map(func(e): return e[0]).max()
 			list.add_item("%s    %-34s %5.0fM decisions   %4.1f h   gen %3d   Elo %s%s" % [
 				Time.get_date_string_from_unix_time(s.started), name, s.global_step / 1e6, s.wall_hours,
-				s.generation, "-" if best == null else str(int(best)), "   (bot levels)" if name in bots else ""])
+				s.generation, "-" if best == null else str(int(best)), "   (bot levels)" if name == Session.LEVELS_RUN else ""])
 		list.set_item_metadata(list.item_count - 1, r.path if s != null else "")
 	list.item_activated.connect(func(i):
 		if list.get_item_metadata(i) != "":

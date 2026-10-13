@@ -828,7 +828,7 @@ func state_label(f: Dictionary) -> String:
 
 # A bot's display name: the difficulty it belongs to, or the file / bot name.
 func bot_name(spec: String) -> String:
-	for d in Session.DIFFICULTIES:
+	for d in Session.difficulties:
 		if d.bot == spec:
 			return d.name if d.name.ends_with("bot") else d.name + " bot"
 	return "bot " + spec.get_file().get_basename()
