@@ -18,7 +18,7 @@ Toolchain: MSVC from Visual Studio 2026 (it must match python.org Python's compi
 
 - **Play the game (build + launch Godot):** `play.bat` opens the menu (`godot/menu.gd`: PvB with difficulty levels, PvP, BvB, character select, controls, replays, training dashboard; levels in `godot/session.gd`); `play.bat edit` opens the editor. Owner-facing docs, one per theme, indexed in `docs/README.md`: `playing.md` (controls, mechanics, bot, replays), `setup.md` (install, build, commands, troubleshooting), `assets.md` (characters, sprites, animations), `engine.md` (C++ core, move files), `godot.md`, `web.md` (browser export, hosting), `python.md` (VecEnv API, bots, serve protocol, tools, tests), `training.md` (RL), `design.md` (plan + dated decisions). Keep the relevant one current when behavior, controls or commands change.
 - Godot extension only: `python -m cmake -S bindings/godot -B build/godot && python -m cmake --build build/godot --config Release --parallel` (fails with LNK1104 if Godot is running: the DLL is locked).
-- Web export (the game in a browser, for the owner's site): `python tools/web_export.py` -> `build/web_export/` (Emscripten 4.0.20 in `../emsdk`, Godot web templates; `docs/web.md`).
+- Web export (the game in a browser, for the owner's site): `python tools/web_export.py [--deploy]` -> `build/web_export/` (`--deploy`: scp to `$WEB_DEPLOY`, the owner's Pi) (Emscripten 4.0.20 in `../emsdk`, Godot web templates; `docs/web.md`).
 - Build/rebuild Python module after any C++ change: `python -m pip install --no-build-isolation .`
 - Tests: `python -m pytest -q`
 - Benchmark: `python tools/bench.py`

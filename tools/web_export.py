@@ -2,6 +2,7 @@
 
     python tools/web_export.py            # -> build/web_export/ (index.html + files)
     python -m http.server -d build/web_export 8000   # then open http://localhost:8000
+    python tools/web_export.py --deploy   # export, then copy to the website ($WEB_DEPLOY = user@host:folder)
 
 1. Builds the extension with Emscripten (the C++ -> WebAssembly compiler). It
    must be the version Godot's web templates were built with: 4.0.20 for
@@ -10,8 +11,11 @@
 2. Copies the files the game reads from the repo into godot/repo/ (where
    Session.repo_root() points on the web), then Godot's export packs them.
 3. Exports with the "Web" preset (godot/export_presets.cfg) and removes godot/repo/.
+4. With --deploy: copies build/web_export/ to the server over SSH (scp), as
+   <folder>.new, then swaps it in, so visitors never load half old, half new.
 Needs Godot's export templates installed (Editor > Manage Export Templates).
 """
+import argparse
 import json
 import os
 import shutil
@@ -37,7 +41,22 @@ def godot():
     return str(exe)
 
 
+def deploy(target):
+    host, folder = target.split(":", 1)
+    subprocess.run(["ssh", host, f"rm -rf {folder}.new"], check=True)  # a leftover from a failed copy
+    subprocess.run(["scp", "-C", "-r", "-q", str(OUT), f"{host}:{folder}.new"], check=True)  # -C: compress (wasm shrinks 4x)
+    subprocess.run(["ssh", host, f"rm -rf {folder}.old; mv {folder} {folder}.old 2>/dev/null; "
+                                 f"mv {folder}.new {folder} && rm -rf {folder}.old"], check=True)
+    print(f"deployed to {target}")
+
+
 def main():
+    p = argparse.ArgumentParser(description="Exports the game for the web (docs/web.md).")
+    p.add_argument("--deploy", nargs="?", const=os.environ.get("WEB_DEPLOY", ""), metavar="USER@HOST:FOLDER",
+                   help="then copy it to a server over SSH (default: the WEB_DEPLOY environment variable)")
+    args = p.parse_args()
+    if args.deploy == "" or (args.deploy and ":" not in args.deploy):
+        sys.exit("--deploy needs USER@HOST:FOLDER, or WEB_DEPLOY set to it (see docs/web.md)")
     toolchain = EMSDK / "upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake"
     if not toolchain.exists():
         sys.exit(f"Emscripten not found in {EMSDK} (set EMSDK): see docs/web.md")
@@ -70,6 +89,8 @@ def main():
     finally:
         shutil.rmtree(pack, ignore_errors=True)
     print(f"exported to {OUT}")
+    if args.deploy:
+        deploy(args.deploy)
 
 
 if __name__ == "__main__":

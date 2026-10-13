@@ -50,25 +50,27 @@ You don't need to build anything or know the game. What you need to know:
   (`index.html` plus about 10 files). It is **not in git**: `build/` is ignored,
   and so are the training runs and replays it packs. It is built on the
   owner's Windows training PC (`D:\RL-BRAWL\build\web_export\`) by
-  `python tools/web_export.py`, and has to be copied to the website machine.
-  Don't try to build it on the server: that needs the toolchain below plus
-  the PC's `runs/` and `replays/` folders.
-- **Copying it to the Pi** (the owner's site runs on a Raspberry Pi 5, Next.js
-  frontend + FastAPI backend), from the PC, in the repo folder:
-  ```
-  scp -r build/web_export/* <user>@<pi-host>:<where the site serves it>/
-  ```
-  (Windows 11 has `scp` built in; `<pi-host>` is the Pi's name or IP.)
-- **Where to serve it from**, two options:
-  - **Next.js `public/rl-brawl/`**: simplest, but `next start` only serves
-    files that existed in `public/` when `next build` ran, so every update
-    means copy + `next build` + restart.
-  - **Outside Next.js** (recommended if updates should be just a copy): a
-    static route in front of it (nginx/Caddy `location /rl-brawl/`) or in the
-    FastAPI backend: `app.mount("/rl-brawl", StaticFiles(directory="<folder>",
-    html=True), name="rl-brawl")` (FastAPI's `StaticFiles`). Then the Next.js
-    page only embeds `/rl-brawl/index.html` in an iframe (from the same origin
-    or another one: both work).
+  `python tools/web_export.py --deploy`, which also copies it to the website
+  machine (the owner's Raspberry Pi 5: Next.js frontend + FastAPI backend).
+  Don't build it on the server: that needs the toolchain below plus the PC's
+  `runs/` and `replays/` folders.
+- **Where it lands:** the folder `~/rl-brawl-web/` on the Pi (whatever
+  `WEB_DEPLOY` says, see [Deploying](#deploying-from-the-pc)). Each deploy
+  replaces the whole folder at once (copied next to it, then swapped), so
+  **serve that folder directly and don't put your own files in it.**
+- **Serve it as a static route, outside the Next.js build**, so that a deploy
+  is live immediately with nothing to rebuild or restart:
+  - in the FastAPI backend: `app.mount("/rl-brawl",
+    StaticFiles(directory="/home/titouan/rl-brawl-web", html=True),
+    name="rl-brawl")`. `StaticFiles` re-reads the folder on every request,
+    so a deploy that swaps it is picked up at once;
+  - or in the reverse proxy in front of the site, if there is one (nginx:
+    `location /rl-brawl/ { alias /home/titouan/rl-brawl-web/; }`).
+
+  (Avoid copying it into Next.js `public/`: `next start` only serves files
+  that were there at `next build`, so every game update would need a rebuild.)
+  Then make `/rl-brawl/` reachable from the site's domain (same origin or
+  not: the iframe works either way).
 - **The page component** (Next.js, App Router or Pages, no client code needed):
   ```tsx
   export default function RlBrawl() {
@@ -96,9 +98,10 @@ compression, caching, no special headers).
 The output is plain static files. Any web server or static host works; no
 server-side code, database or special headers are needed.
 
-1. **Copy** `build/web_export/` to the site, e.g. into a Next.js app's
-   `public/rl-brawl/` folder (served as `/rl-brawl/index.html`). Keep the
-   files together; they load each other by relative path.
+1. **Serve** the exported folder under a path such as `/rl-brawl/`
+   (`--deploy` puts it on the server; see the start-here section for where to
+   serve it from). Keep the files together; they load each other by relative
+   path.
 2. **Embed** it in a page with an iframe. The game fills whatever size it's
    given (it resizes with the frame; 16:9 looks best):
    ```html
@@ -127,14 +130,33 @@ Not needed: the `Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy`
 headers that many Godot web guides mention. They are only for the
 multi-threaded build; this one is single-threaded on purpose.
 
+## Deploying from the PC
+
+```
+python tools/web_export.py --deploy
+```
+
+builds the export, then copies it to the server over SSH: `scp` the folder as
+`<folder>.new`, then on the server move the old one away and the new one in,
+so a visitor never loads half old, half new files. About 17 MB goes over the
+network (scp compresses).
+
+One-time setup on the PC:
+1. Where to deploy, as `user@host:folder` (folder relative to the home
+   directory), in an environment variable so the address stays out of this
+   public repo: `setx WEB_DEPLOY titouan@<pi address>:rl-brawl-web` (then open
+   a new terminal). `--deploy user@host:folder` overrides it once.
+2. Log in without a password (SSH key): if `ssh <user>@<pi address>` asks for a
+   password, add the PC's key to the Pi once, in PowerShell:
+   `type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh <user>@<pi address> "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"`
+   (it asks for the password one last time). No key yet: `ssh-keygen -t ed25519` first.
+
 ## Updating the content
 
 The export is a snapshot of the repo, and **nothing updates the website by
-itself**: the export only rewrites `build/web_export/` on the PC. After any
-change, re-run `python tools/web_export.py`, copy the folder to the site again
-(see [above](#for-the-agent-putting-this-on-a-website-start-here); plus
-`next build` if it's served from Next.js `public/`), and visitors get it on
-their next load (see Caching above). Re-export when:
+itself**. After any change, run `python tools/web_export.py --deploy`;
+visitors get the new version on their next load (see Caching above).
+Re-export when:
 
 - **A new training run or new checkpoints** ("Latest bot" = the newest
   `runs/*/agent_latest.bin`): also run `python tools/run_summary.py` first,
@@ -285,6 +307,7 @@ windows on Windows, so run them headless.
 | Console: `failed to load GDExtension` / the game's menu shows but "FightGame" errors | The extension was built with a different Emscripten version than the engine, or is missing. | Check the version the console prints, `emsdk activate` it, delete `build/web/`, export again. |
 | Linking fails: `undefined symbol: main` | CMake built the extension as a program, not a side module. | `bindings/godot/CMakeLists.txt` must include `emsdkHack.cmake`; delete `build/web/` and export again. |
 | Export fails: no export template found | Godot's templates aren't installed. | [One-time setup](#one-time-setup), step 2. |
+| `--deploy`: `Permission denied (publickey,password)` | The Pi doesn't know the PC's SSH key. | [Deploying](#deploying-from-the-pc), step 2. |
 | The site still shows the old version | Browser cache. | Ctrl+F5; on the server, see Caching in [Putting it on a website](#putting-it-on-a-website). |
 | A replay ends with DESYNC | It was recorded on an older version of the game (replays store inputs, not code). | Regenerate replays (`python train/record_vs.py`), export again. |
 | "no trained run yet" on Latest bot | No `runs/*/agent_latest.bin` when exporting. | Train, or export older checkpoints (`python tools/export_bot.py runs/<run>`), then export again. |
