@@ -26,15 +26,15 @@ const SETTINGS_FILE := "user://settings.cfg"  # in Godot's per-user folder (%APP
 
 var from_menu := false  # the game was opened from the menu: Esc goes back to it
 var args := PackedStringArray()
-var p1_char := "1"  # saved character choices (Character Select)
-var p2_char := "2"
+var p1_char := "7"  # saved character choices (Character Select); default Fighter vs Samurai
+var p2_char := "8"
 
 
 func _ready() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(SETTINGS_FILE) == OK:
-		p1_char = str(cfg.get_value("characters", "p1", "1"))
-		p2_char = str(cfg.get_value("characters", "p2", "2"))
+		p1_char = str(cfg.get_value("characters", "p1", p1_char))
+		p2_char = str(cfg.get_value("characters", "p2", p2_char))
 
 
 func save_characters() -> void:

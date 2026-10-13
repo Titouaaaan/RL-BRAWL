@@ -160,13 +160,13 @@ func _ready() -> void:
 		get_tree().quit(0 if replay_result == "verified" else 1)
 
 
-# Loads the two players' characters: --p1=ID / --p2=ID, default 1 and 2.
+# Loads the two players' characters: --p1=ID / --p2=ID, default 7 and 8.
 func load_characters(args: PackedStringArray) -> void:
 	var dir := Session.repo_root().path_join("assets/characters")
 	var manifest = JSON.parse_string(FileAccess.get_file_as_string(dir.path_join("characters.json")))
 	if typeof(manifest) != TYPE_DICTIONARY:
 		manifest = {}
-	var ids := [Session.p1_char, Session.p2_char]  # the saved choice (Character Select), or 1 and 2
+	var ids := [Session.p1_char, Session.p2_char]  # the saved choice (Character Select), or 7 and 8
 	for a in args:
 		if a.begins_with("--p1="):
 			ids[0] = a.trim_prefix("--p1=")

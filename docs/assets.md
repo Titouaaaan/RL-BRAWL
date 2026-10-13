@@ -32,7 +32,8 @@ play.bat replay --p1 4 --p2 1
 play.bat replay path\to\game.json --p2 5
 ```
 
-Without them, P1 is character 1 and P2 is character 2.
+Without them, P1 is character 7 (Fighter) and P2 is character 8 (Samurai),
+unless Character Select saved another choice.
 
 | ID | Character |
 |---|---|

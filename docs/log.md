@@ -271,8 +271,14 @@ Rule: add an entry for every significant change. When the hash isn't known yet, 
 - Decisions: Claude recommended building on the PC and copying instead: `runs/` and `replays/` (Latest bot, Training, Replays) aren't in git, and the Pi would need its own version-locked toolchain (Emscripten, Godot ARM, newer CMake) on an untested path; owner agreed and asked for `--deploy`. scp to `$WEB_DEPLOY` (`user@host:folder`, an environment variable so the Pi's address stays out of the public repo) as `<folder>.new`, then swapped in over ssh. web.md: the site should serve `~/rl-brawl-web` as a static route (FastAPI `StaticFiles` or the proxy), not from Next.js `public/` (needs `next build` per update).
 - Output: the owner added the PC's SSH key to the Pi and set `WEB_DEPLOY`; export + deploy takes about 16 s, a second deploy swaps cleanly. Served from the Pi, the game refused to start over plain http to its IP: Godot needs a secure context (HTTPS or localhost), now in web.md; through an SSH tunnel (localhost) it loads and Bot vs Bot plays.
 
-### 2026-10-13 · pending · web.md: what titouanguerin.com actually needed
+### 2026-10-13 · 68c6e90 · web.md: what titouanguerin.com actually needed
 - Goal: the agent working on this repo can see what hosting the export on the owner's site required.
 - Request: owner: record the real web requirements in web.md while the site's game page is built.
 - Decisions (Claude, on the site side): page at `/rl-brawl`, files at `/rl-brawl/play/`, served by the site's FastAPI from `~/rl-brawl-web` (live on `--deploy`, no site rebuild); the backend sets the game's headers (Next.js doesn't add its headers to forwarded responses): CSP `'wasm-unsafe-eval'`, `img-src blob:`, `frame-ancestors 'self'`, `Cache-Control: no-cache`, plus gzip (the `.pck` went out raw). The earlier "no special headers" wording now says a strict host CSP must allow these.
 - Output: tested in headless Chromium on the Pi through the site's dev build: boots without CSP errors, Latest vs Latest Bot vs Bot plays. Found: the main menu is cut off in the site's ~845x475 frame (fixed-pixel layout); recorded as a known issue in web.md.
+
+### 2026-10-13 · pending · Default characters: Fighter vs Samurai
+- Goal: the game opens on the animated characters, on the website especially (a first visit has no saved choice).
+- Request: owner: P1 = 7 (Fighter), P2 = 8 (Samurai) by default.
+- Decisions (Claude): defaults set once in `session.gd` and reused as the fallback when the settings file lacks them; a choice saved by Character Select still wins. Characters only change drawing, so replays are unaffected.
+- Output: not rendered here (no Godot on the machine that made the change); the website gets it with the next `web_export.py --deploy`.
